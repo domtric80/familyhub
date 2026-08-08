@@ -278,5 +278,6 @@ sudo supervisorctl restart familyhub-worker:*
 ## Documentazione aggiuntiva
 - Hardening produzione: docs/security/2026-08-08-production-deploy-hardening.md
 - Deploy nuovo ambiente Debian/Docker: docs/operations/2026-08-08-debian-docker-new-environment-checklist.md
-
+- Template .env.prod: infra/env/backend.prod.env.template
+- Primo accesso VPS OVH/Aruba: docs/operations/2026-08-08-ovh-aruba-first-access-checklist.md
 
