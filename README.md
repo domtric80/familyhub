@@ -4,13 +4,13 @@ Applicativo gestionale per strutture residenziali e servizi educativi, con backe
 
 ## Requisiti
 
-### Opzione A — Avvio con Docker
+### Opzione A ï¿½ Avvio con Docker
 - Docker Engine 24+
 - Docker Compose v2+
 - 8 GB RAM consigliati
 - porte libere: `8100`, `5173`, `5432`, `6379`, `9000`, `9001`
 
-### Opzione B — Installazione Linux senza Docker
+### Opzione B ï¿½ Installazione Linux senza Docker
 - Debian 12 / Ubuntu 24.04 LTS consigliati
 - PHP 8.3 con estensioni: `bcmath`, `ctype`, `curl`, `fileinfo`, `intl`, `json`, `mbstring`, `openssl`, `pdo_pgsql`, `redis`, `tokenizer`, `xml`, `zip`
 - Composer 2.7+
@@ -22,11 +22,11 @@ Applicativo gestionale per strutture residenziali e servizi educativi, con backe
 - MinIO oppure storage S3 compatibile
 
 ## Struttura repository
-- `backend/` — API Laravel
-- `frontend/` — UI React/Vite
-- `infra/` — appunti e componenti infrastrutturali
-- `docs/` — documentazione funzionale, API e handoff UX
-- `vendor-assets/` — asset di progetto realmente usati
+- `backend/` ï¿½ API Laravel
+- `frontend/` ï¿½ UI React/Vite
+- `infra/` ï¿½ appunti e componenti infrastrutturali
+- `docs/` ï¿½ documentazione funzionale, API e handoff UX
+- `vendor-assets/` ï¿½ asset di progetto realmente usati
 
 ## Installazione con Docker
 
@@ -271,6 +271,9 @@ sudo supervisorctl restart familyhub-worker:*
 ```
 
 ## Note operative
-- Non versionare `.env`, dump database, backup locali, log e archivi temporanei.
+- Non versionare .env, dump database, backup locali, log e archivi temporanei.
 - Il repository non deve contenere pacchetti ZIP di template o screenshot di lavoro.
-- Per produzione è consigliato un reverse proxy/WAF dedicato davanti a Nginx.
+- Per produzione Ã¨ consigliato un reverse proxy/WAF dedicato davanti a Nginx.
+
+## Documentazione aggiuntiva
+- Hardening produzione: docs/security/2026-08-08-production-deploy-hardening.md
