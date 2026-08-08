@@ -1,16 +1,16 @@
-# FamilyHub
+﻿# FamilyHub
 
 Applicativo gestionale per strutture residenziali e servizi educativi, con backend Laravel, frontend React/Vite e stack infrastrutturale Docker.
 
 ## Requisiti
 
-### Opzione A � Avvio con Docker
+### Opzione A — Avvio con Docker
 - Docker Engine 24+
 - Docker Compose v2+
 - 8 GB RAM consigliati
 - porte libere: `8100`, `5173`, `5432`, `6379`, `9000`, `9001`
 
-### Opzione B � Installazione Linux senza Docker
+### Opzione B — Installazione Linux senza Docker
 - Debian 12 / Ubuntu 24.04 LTS consigliati
 - PHP 8.3 con estensioni: `bcmath`, `ctype`, `curl`, `fileinfo`, `intl`, `json`, `mbstring`, `openssl`, `pdo_pgsql`, `redis`, `tokenizer`, `xml`, `zip`
 - Composer 2.7+
@@ -22,11 +22,11 @@ Applicativo gestionale per strutture residenziali e servizi educativi, con backe
 - MinIO oppure storage S3 compatibile
 
 ## Struttura repository
-- `backend/` � API Laravel
-- `frontend/` � UI React/Vite
-- `infra/` � appunti e componenti infrastrutturali
-- `docs/` � documentazione funzionale, API e handoff UX
-- `vendor-assets/` � asset di progetto realmente usati
+- `backend/` — API Laravel
+- `frontend/` — UI React/Vite
+- `infra/` — appunti e componenti infrastrutturali
+- `docs/` — documentazione funzionale, API e handoff UX
+- `vendor-assets/` — asset di progetto realmente usati
 
 ## Installazione con Docker
 
@@ -276,4 +276,7 @@ sudo supervisorctl restart familyhub-worker:*
 - Per produzione è consigliato un reverse proxy/WAF dedicato davanti a Nginx.
 
 ## Documentazione aggiuntiva
-- Hardening produzione: docs/security/2026-08-08-production-deploy-hardening.md
+- Hardening produzione: docs/security/2026-08-08-production-deploy-hardening.md
+- Deploy nuovo ambiente Debian/Docker: docs/operations/2026-08-08-debian-docker-new-environment-checklist.md
+
+
