@@ -1,0 +1,4 @@
+country_iso_code;region_code;region_name;province_code;province_name;vehicle_code;city_istat_code;city_name;cadastre_code;postal_code
+IT;12;Lazio;RM;Roma;RM;058091;Roma;H501;00100
+IT;12;Lazio;RM;Roma;RM;058120;Fiumicino;M297;00054
+IT;15;Campania;NA;Napoli;NA;063049;Napoli;F839;80100

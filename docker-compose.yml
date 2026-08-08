@@ -1,0 +1,298 @@
+name: familyhub
+
+services:
+  safeline:
+    image: chaitin/safeline:latest
+    profiles: ["edge"]
+    restart: unless-stopped
+    depends_on:
+      - nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - edge_net
+    volumes:
+      - safeline_data:/data
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - app
+    networks:
+      - edge_net
+      - app_net
+    ports:
+      - "8100:80"
+    volumes:
+      - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    working_dir: /workspace/frontend
+    command: ["sh", "-lc", "npm install && npm run dev -- --host 0.0.0.0 --port 5173"]
+    networks:
+      - app_net
+    volumes:
+      - ./frontend:/workspace/frontend
+      - frontend_node_modules:/workspace/frontend/node_modules
+
+  app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: ["sh", "-lc", "sh /var/www/html/docker/app/start-app.sh"]
+    environment:
+      APP_NAME: FamilyHub
+      APP_ENV: ${APP_ENV:-local}
+      APP_DEBUG: "${APP_DEBUG:-true}"
+      APP_URL: ${APP_URL:-http://localhost:8100}
+      APP_KEY: ${APP_KEY}
+      APP_LOCALE: it
+      APP_FALLBACK_LOCALE: it
+      SANCTUM_STATEFUL_DOMAINS: localhost:8100,127.0.0.1:8100,localhost,127.0.0.1
+      AUTH_TOKEN_TTL_MINUTES: "480"
+      FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD: "${FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD:-true}"
+      FAMILYHUB_LOCAL_ADMIN_EMAIL: "${FAMILYHUB_LOCAL_ADMIN_EMAIL:-admin@familyhub.local}"
+      FAMILYHUB_LOCAL_ADMIN_PASSWORD: "${FAMILYHUB_LOCAL_ADMIN_PASSWORD:-password}"
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_DATABASE: ${DB_DATABASE:-familyhub}
+      DB_USERNAME: ${DB_USERNAME:-familyhub}
+      DB_PASSWORD: ${DB_PASSWORD:-change-me}
+      SESSION_DRIVER: redis
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      FILESYSTEM_DISK: s3
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-familyhub}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-change-me-minio}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-eu-south-1}
+      AWS_BUCKET: ${AWS_BUCKET:-familyhub-private}
+      AWS_ENDPOINT: ${AWS_ENDPOINT:-http://minio:9000}
+      AWS_USE_PATH_STYLE_ENDPOINT: "true"
+      DOCUMENT_MAX_UPLOAD_SIZE_BYTES: ${DOCUMENT_MAX_UPLOAD_SIZE_BYTES:-10485760}
+      DOCUMENT_ALLOWED_MIME_TYPES: ${DOCUMENT_ALLOWED_MIME_TYPES:-application/pdf,image/jpeg,image/png,application/msword,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet}
+      DOCUMENT_QUARANTINE_PREFIX: ${DOCUMENT_QUARANTINE_PREFIX:-quarantine}
+      DOCUMENT_RELEASED_PREFIX: ${DOCUMENT_RELEASED_PREFIX:-released}
+      ANTIVIRUS_DRIVER: ${ANTIVIRUS_DRIVER:-clamav}
+      ANTIVIRUS_FAIL_CLOSED: "${ANTIVIRUS_FAIL_CLOSED:-true}"
+      ANTIVIRUS_HOST: ${ANTIVIRUS_HOST:-clamav}
+      ANTIVIRUS_PORT: "${ANTIVIRUS_PORT:-3310}"
+      ANTIVIRUS_TIMEOUT_SECONDS: "${ANTIVIRUS_TIMEOUT_SECONDS:-20}"
+    depends_on:
+      - postgres
+      - redis
+      - minio
+      - clamav
+    networks:
+      - app_net
+      - data_net
+    volumes:
+      - ./backend:/var/www/html
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(file_exists('vendor/autoload.php') ? 0 : 1);"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: ["sh", "-lc", "sh /var/www/html/docker/app/start-worker.sh"]
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      APP_DEBUG: "${APP_DEBUG:-true}"
+      APP_URL: ${APP_URL:-http://localhost:8100}
+      APP_KEY: ${APP_KEY}
+      FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD: "${FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD:-true}"
+      FAMILYHUB_LOCAL_ADMIN_EMAIL: "${FAMILYHUB_LOCAL_ADMIN_EMAIL:-admin@familyhub.local}"
+      FAMILYHUB_LOCAL_ADMIN_PASSWORD: "${FAMILYHUB_LOCAL_ADMIN_PASSWORD:-password}"
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_DATABASE: ${DB_DATABASE:-familyhub}
+      DB_USERNAME: ${DB_USERNAME:-familyhub}
+      DB_PASSWORD: ${DB_PASSWORD:-change-me}
+      SESSION_DRIVER: redis
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      FILESYSTEM_DISK: s3
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-familyhub}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-change-me-minio}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-eu-south-1}
+      AWS_BUCKET: ${AWS_BUCKET:-familyhub-private}
+      AWS_ENDPOINT: ${AWS_ENDPOINT:-http://minio:9000}
+      AWS_USE_PATH_STYLE_ENDPOINT: "true"
+      DOCUMENT_MAX_UPLOAD_SIZE_BYTES: ${DOCUMENT_MAX_UPLOAD_SIZE_BYTES:-10485760}
+      DOCUMENT_ALLOWED_MIME_TYPES: ${DOCUMENT_ALLOWED_MIME_TYPES:-application/pdf,image/jpeg,image/png,application/msword,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet}
+      DOCUMENT_QUARANTINE_PREFIX: ${DOCUMENT_QUARANTINE_PREFIX:-quarantine}
+      DOCUMENT_RELEASED_PREFIX: ${DOCUMENT_RELEASED_PREFIX:-released}
+      ANTIVIRUS_DRIVER: ${ANTIVIRUS_DRIVER:-clamav}
+      ANTIVIRUS_FAIL_CLOSED: "${ANTIVIRUS_FAIL_CLOSED:-true}"
+      ANTIVIRUS_HOST: ${ANTIVIRUS_HOST:-clamav}
+      ANTIVIRUS_PORT: "${ANTIVIRUS_PORT:-3310}"
+      ANTIVIRUS_TIMEOUT_SECONDS: "${ANTIVIRUS_TIMEOUT_SECONDS:-20}"
+    depends_on:
+      - app
+      - clamav
+    networks:
+      - app_net
+      - data_net
+    volumes:
+      - ./backend:/var/www/html
+
+  app-init:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: "no"
+    working_dir: /var/www/html
+    command: ["sh", "-lc", "sh /var/www/html/docker/app/init-app.sh"]
+    environment:
+      APP_NAME: FamilyHub
+      APP_ENV: ${APP_ENV:-local}
+      APP_DEBUG: "${APP_DEBUG:-true}"
+      APP_URL: ${APP_URL:-http://localhost:8100}
+      APP_KEY: ${APP_KEY}
+      APP_LOCALE: it
+      APP_FALLBACK_LOCALE: it
+      SANCTUM_STATEFUL_DOMAINS: localhost:8100,127.0.0.1:8100,localhost,127.0.0.1
+      AUTH_TOKEN_TTL_MINUTES: "480"
+      FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD: "${FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD:-true}"
+      FAMILYHUB_LOCAL_ADMIN_EMAIL: "${FAMILYHUB_LOCAL_ADMIN_EMAIL:-admin@familyhub.local}"
+      FAMILYHUB_LOCAL_ADMIN_PASSWORD: "${FAMILYHUB_LOCAL_ADMIN_PASSWORD:-password}"
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_DATABASE: ${DB_DATABASE:-familyhub}
+      DB_USERNAME: ${DB_USERNAME:-familyhub}
+      DB_PASSWORD: ${DB_PASSWORD:-change-me}
+      SESSION_DRIVER: redis
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      FILESYSTEM_DISK: s3
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-familyhub}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-change-me-minio}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-eu-south-1}
+      AWS_BUCKET: ${AWS_BUCKET:-familyhub-private}
+      AWS_ENDPOINT: ${AWS_ENDPOINT:-http://minio:9000}
+      AWS_USE_PATH_STYLE_ENDPOINT: "true"
+      DOCUMENT_MAX_UPLOAD_SIZE_BYTES: ${DOCUMENT_MAX_UPLOAD_SIZE_BYTES:-10485760}
+      DOCUMENT_ALLOWED_MIME_TYPES: ${DOCUMENT_ALLOWED_MIME_TYPES:-application/pdf,image/jpeg,image/png,application/msword,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet}
+      DOCUMENT_QUARANTINE_PREFIX: ${DOCUMENT_QUARANTINE_PREFIX:-quarantine}
+      DOCUMENT_RELEASED_PREFIX: ${DOCUMENT_RELEASED_PREFIX:-released}
+      ANTIVIRUS_DRIVER: ${ANTIVIRUS_DRIVER:-clamav}
+      ANTIVIRUS_FAIL_CLOSED: "${ANTIVIRUS_FAIL_CLOSED:-true}"
+      ANTIVIRUS_HOST: ${ANTIVIRUS_HOST:-clamav}
+      ANTIVIRUS_PORT: "${ANTIVIRUS_PORT:-3310}"
+      ANTIVIRUS_TIMEOUT_SECONDS: "${ANTIVIRUS_TIMEOUT_SECONDS:-20}"
+    depends_on:
+      - postgres
+      - redis
+      - minio
+      - clamav
+      - mc
+    networks:
+      - app_net
+      - data_net
+    volumes:
+      - ./backend:/var/www/html
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-familyhub}
+      POSTGRES_USER: ${DB_USERNAME:-familyhub}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change-me}
+    expose:
+      - "5432"
+    networks:
+      - data_net
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1000"]
+    expose:
+      - "6379"
+    networks:
+      - data_net
+    volumes:
+      - redis_data:/data
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-familyhub}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    networks:
+      - data_net
+    volumes:
+      - minio_data:/data
+
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    expose:
+      - "3310"
+    networks:
+      - data_net
+    volumes:
+      - clamav_data:/var/lib/clamav
+
+  mc:
+    image: minio/mc:latest
+    restart: "no"
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-familyhub} ${MINIO_ROOT_PASSWORD:-change-me-minio}) do echo '...waiting for minio...' && sleep 2; done;
+      /usr/bin/mc mb --ignore-existing local/${AWS_BUCKET:-familyhub-private};
+      /usr/bin/mc anonymous set none local/${AWS_BUCKET:-familyhub-private};
+      exit 0;
+      "
+    networks:
+      - data_net
+
+networks:
+  edge_net:
+    driver: bridge
+  app_net:
+    driver: bridge
+  data_net:
+    driver: bridge
+    internal: true
+
+volumes:
+  frontend_node_modules:
+  safeline_data:
+  postgres_data:
+  redis_data:
+  minio_data:
+  clamav_data:

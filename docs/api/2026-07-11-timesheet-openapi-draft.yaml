@@ -1,0 +1,194 @@
+openapi: 3.1.0
+info:
+  title: FamilyHub Timesheet API
+  version: 0.2.0
+  summary: Contratto operativo aggiornato del modulo Timesheet.
+servers:
+  - url: http://localhost:8100/api
+tags:
+  - name: Timesheet Admin
+  - name: Timesheet Staff
+paths:
+  /admin/timesheets:
+    get:
+      tags: [Timesheet Admin]
+      summary: Elenco entries timesheet
+      parameters:
+        - name: facility_id
+          in: query
+          schema: { type: integer }
+        - name: staff_member_id
+          in: query
+          schema: { type: integer }
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, computed, submitted, approved, rejected, locked]
+        - name: has_anomaly
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Elenco entries timesheet
+  /admin/timesheets/export.csv:
+    get:
+      tags: [Timesheet Admin]
+      summary: Export CSV mensile delle presenze approvate o bloccate
+      parameters:
+        - name: facility_id
+          in: query
+          required: true
+          schema: { type: integer }
+        - name: year
+          in: query
+          required: true
+          schema: { type: integer }
+        - name: month
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 12 }
+        - name: format
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [csv]
+      responses:
+        '200':
+          description: File CSV scaricabile
+        '404':
+          description: Nessuna entry approvata o bloccata nel periodo
+  /admin/timesheets/{timesheet_entry}:
+    get:
+      tags: [Timesheet Admin]
+      summary: Dettaglio entry timesheet
+      parameters:
+        - name: timesheet_entry
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Dettaglio entry
+  /admin/timesheets/{timesheet_entry}/approve:
+    post:
+      tags: [Timesheet Admin]
+      summary: Approva entry timesheet
+      parameters:
+        - name: timesheet_entry
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Entry approvata
+  /admin/timesheets/{timesheet_entry}/reject:
+    post:
+      tags: [Timesheet Admin]
+      summary: Rifiuta entry timesheet
+      parameters:
+        - name: timesheet_entry
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+              required: [reason]
+      responses:
+        '200':
+          description: Entry rifiutata
+  /staff/timesheets/me:
+    get:
+      tags: [Timesheet Staff]
+      summary: Elenco timesheet dell'operatore autenticato
+      parameters:
+        - name: date_from
+          in: query
+          schema: { type: string, format: date }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, computed, submitted, approved, rejected, locked]
+      responses:
+        '200':
+          description: Elenco personale timesheet
+  /staff/timesheets/{timesheet_entry}/submit:
+    post:
+      tags: [Timesheet Staff]
+      summary: Invia una entry timesheet per approvazione
+      parameters:
+        - name: timesheet_entry
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Entry inviata
+  /staff/attendance-events/today:
+    get:
+      tags: [Timesheet Staff]
+      summary: Elenco timbrature di oggi dell'operatore autenticato
+      responses:
+        '200':
+          description: Eventi presenza di oggi
+  /staff/attendance-events:
+    get:
+      tags: [Timesheet Staff]
+      summary: Elenco eventi presenza dell'operatore autenticato
+      parameters:
+        - name: timesheet_entry_id
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Elenco eventi presenza
+    post:
+      tags: [Timesheet Staff]
+      summary: Registra evento presenza
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttendanceEventWrite'
+      responses:
+        '201':
+          description: Evento presenza registrato
+components:
+  schemas:
+    AttendanceEventWrite:
+      type: object
+      properties:
+        facility_id: { type: integer }
+        shift_assignment_id: { type: integer, nullable: true }
+        event_type:
+          type: string
+          enum: [clock_in, clock_out, break_start, break_end, manual_adjustment]
+        occurred_at: { type: string, format: date-time }
+        source_type:
+          type: string
+          enum: [web, mobile, manual, system]
+          nullable: true
+        geo_latitude: { type: number, nullable: true }
+        geo_longitude: { type: number, nullable: true }
+        geo_accuracy_meters: { type: number, nullable: true }
+        device_fingerprint: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+      required: [facility_id, event_type, occurred_at]

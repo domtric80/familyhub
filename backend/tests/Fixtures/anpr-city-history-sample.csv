@@ -1,0 +1,4 @@
+event_type;event_date;city_name;city_istat_code;related_city_name;related_city_istat_code;notes
+rename;2024-01-15;Comune Nuovo;012345;Comune Vecchio;012345;Ridenominazione ufficiale
+merge;2025-03-01;Comune Unificato;098765;Comune A;045678;Fusione amministrativa
+ceased;2025-03-01;Comune Soppresso;067890;;;Cessazione per incorporazione
