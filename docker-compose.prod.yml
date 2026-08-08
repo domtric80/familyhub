@@ -1,0 +1,217 @@
+version: "3.9"
+
+name: familyhub-prod
+
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+      - frontend-build
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - edge_net
+      - app_net
+    volumes:
+      - ./infra/nginx/familyhub.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - frontend_dist:/usr/share/nginx/html:ro
+      - ./backend/public/storage:/var/www/storage:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  frontend-build:
+    image: node:22-alpine
+    restart: "no"
+    working_dir: /workspace/frontend
+    command: >
+      sh -lc "npm ci && npm run build && rm -rf /frontend-dist/* && cp -R dist/* /frontend-dist/"
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-/api}
+      VITE_CITY_MAP_PROVIDER: ${VITE_CITY_MAP_PROVIDER:-osm}
+      VITE_MAPTILER_KEY: ${VITE_MAPTILER_KEY:-}
+    volumes:
+      - ./frontend:/workspace/frontend
+      - frontend_dist:/frontend-dist
+
+  app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: ["sh", "-lc", "sh /var/www/html/docker/app/start-app.sh"]
+    env_file:
+      - ./infra/env/backend.prod.env.example
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      AWS_ENDPOINT: http://minio:9000
+      AWS_USE_PATH_STYLE_ENDPOINT: "true"
+      ANTIVIRUS_HOST: clamav
+      ANTIVIRUS_PORT: "3310"
+      FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD: "false"
+    depends_on:
+      - postgres
+      - redis
+      - minio
+      - clamav
+    networks:
+      - app_net
+      - data_net
+    volumes:
+      - ./backend:/var/www/html
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: ["sh", "-lc", "sh /var/www/html/docker/app/start-worker.sh"]
+    env_file:
+      - ./infra/env/backend.prod.env.example
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      AWS_ENDPOINT: http://minio:9000
+      AWS_USE_PATH_STYLE_ENDPOINT: "true"
+      ANTIVIRUS_HOST: clamav
+      ANTIVIRUS_PORT: "3310"
+      FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD: "false"
+    depends_on:
+      - app
+    networks:
+      - app_net
+      - data_net
+    volumes:
+      - ./backend:/var/www/html
+
+  scheduler:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: ["sh", "-lc", "while true; do php artisan schedule:run --verbose --no-interaction; sleep 60; done"]
+    env_file:
+      - ./infra/env/backend.prod.env.example
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      AWS_ENDPOINT: http://minio:9000
+      AWS_USE_PATH_STYLE_ENDPOINT: "true"
+      ANTIVIRUS_HOST: clamav
+      ANTIVIRUS_PORT: "3310"
+      FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD: "false"
+    depends_on:
+      - app
+    networks:
+      - app_net
+      - data_net
+    volumes:
+      - ./backend:/var/www/html
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-familyhub}
+      POSTGRES_USER: ${POSTGRES_USER:-familyhub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    expose:
+      - "5432"
+    networks:
+      - data_net
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1000"]
+    expose:
+      - "6379"
+    networks:
+      - data_net
+    volumes:
+      - redis_data:/data
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-familyhub}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio}
+    expose:
+      - "9000"
+      - "9001"
+    networks:
+      - data_net
+    volumes:
+      - minio_data:/data
+
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    expose:
+      - "3310"
+    networks:
+      - data_net
+    volumes:
+      - clamav_data:/var/lib/clamav
+
+  mc:
+    image: minio/mc:latest
+    restart: "no"
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-familyhub} ${MINIO_ROOT_PASSWORD:-change-me-minio}) do echo 'waiting for minio'; sleep 2; done;
+      /usr/bin/mc mb --ignore-existing local/${AWS_BUCKET:-familyhub-private};
+      /usr/bin/mc anonymous set none local/${AWS_BUCKET:-familyhub-private};
+      exit 0;
+      "
+    networks:
+      - data_net
+
+networks:
+  edge_net:
+    driver: bridge
+  app_net:
+    driver: bridge
+  data_net:
+    driver: bridge
+    internal: true
+
+volumes:
+  frontend_dist:
+  postgres_data:
+  redis_data:
+  minio_data:
+  clamav_data:
