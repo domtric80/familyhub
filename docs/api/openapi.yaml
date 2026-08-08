@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: FamilyHub API
-  version: 0.1.0
+  version: 1.1.0
   summary: API applicative per autenticazione, anagrafiche amministrative e gestione minori.
   description: >
     Specifica iniziale delle API FamilyHub. Ogni modifica funzionale alle route o ai payload
@@ -216,6 +216,190 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/ValidationError'
+  /admin/system/storage-configs:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: adminListSystemStorageConfigs
+      responses:
+        '200':
+          description: Elenco configurazioni storage e sorgente runtime attuale
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemStorageConfigIndexResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: adminCreateSystemStorageConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SystemStorageConfigUpsertRequest'
+      responses:
+        '201':
+          description: Configurazione storage creata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemStorageConfigSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /admin/system/storage-configs/{storageConfig}:
+    put:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: adminUpdateSystemStorageConfig
+      parameters:
+        - $ref: '#/components/parameters/SystemStorageConfigId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SystemStorageConfigUpsertRequest'
+      responses:
+        '200':
+          description: Configurazione storage aggiornata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemStorageConfigSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    patch:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: adminPatchSystemStorageConfig
+      parameters:
+        - $ref: '#/components/parameters/SystemStorageConfigId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SystemStorageConfigUpsertRequest'
+      responses:
+        '200':
+          description: Configurazione storage aggiornata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemStorageConfigSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: adminDeleteSystemStorageConfig
+      parameters:
+        - $ref: '#/components/parameters/SystemStorageConfigId'
+      responses:
+        '200':
+          description: Configurazione storage eliminata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                required: [message]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/system/storage-configs/{storageConfig}/test:
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: adminTestSystemStorageConfig
+      parameters:
+        - $ref: '#/components/parameters/SystemStorageConfigId'
+      responses:
+        '200':
+          description: Esito test connessione storage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemStorageConfigTestResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/system/storage-configs/{storageConfig}/activate:
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: adminActivateSystemStorageConfig
+      parameters:
+        - $ref: '#/components/parameters/SystemStorageConfigId'
+      responses:
+        '200':
+          description: Configurazione storage attivata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  current_source: { type: string, enum: [ENV, DB] }
+                  item:
+                    $ref: '#/components/schemas/SystemStorageConfigSummary'
+                required: [message, current_source, item]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/system/health:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: adminSystemHealth
+      responses:
+        '200':
+          description: Snapshot stato servizi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemHealthSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/system/health/run:
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: adminRunSystemHealth
+      responses:
+        '200':
+          description: Snapshot stato servizi dopo esecuzione manuale
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemHealthSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /auth/mfa/setup:
     post:
       tags: [Auth]
@@ -5411,6 +5595,11 @@ components:
       name: thread
       required: true
       schema: { type: integer }
+    SystemStorageConfigId:
+      in: path
+      name: storageConfig
+      required: true
+      schema: { type: integer }
   responses:
     Unauthorized:
       description: Token assente o non valido
@@ -5465,7 +5654,7 @@ components:
         backup_filename:
           type: string
           nullable: true
-          description: Nome file SQL già presente nella cartella backup.
+          description: Nome file SQL gi? presente nella cartella backup.
         sql_file:
           type: string
           format: binary
@@ -5476,6 +5665,101 @@ components:
           nullable: true
           description: Se `true`, il backend genera un backup automatico prima del restore.
       required: [confirm_text]
+    SystemStorageConfigSummary:
+      type: object
+      properties:
+        id: { type: integer }
+        code: { type: string }
+        name: { type: string }
+        provider_type: { type: string, enum: [minio, aws_s3, s3_compatible] }
+        bucket: { type: string }
+        region: { type: string, nullable: true }
+        endpoint: { type: string, nullable: true }
+        use_path_style_endpoint: { type: boolean }
+        prefix: { type: string, nullable: true }
+        is_active: { type: boolean }
+        is_default: { type: boolean }
+        last_tested_at: { type: string, format: date-time, nullable: true }
+        last_test_status: { type: string, nullable: true }
+        last_test_message: { type: string, nullable: true }
+        access_key_masked: { type: string, nullable: true }
+        secret_key_masked: { type: string, nullable: true }
+        has_access_key: { type: boolean }
+        has_secret_key: { type: boolean }
+        created_at: { type: string, format: date-time, nullable: true }
+        updated_at: { type: string, format: date-time, nullable: true }
+      required: [id, code, name, provider_type, bucket, use_path_style_endpoint, is_active, is_default, has_access_key, has_secret_key]
+    SystemStorageConfigUpsertRequest:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+        provider_type: { type: string, enum: [minio, aws_s3, s3_compatible] }
+        bucket: { type: string }
+        region: { type: string, nullable: true }
+        endpoint: { type: string, nullable: true }
+        use_path_style_endpoint: { type: boolean }
+        access_key: { type: string, nullable: true }
+        secret_key: { type: string, nullable: true }
+        prefix: { type: string, nullable: true }
+        is_active: { type: boolean }
+        is_default: { type: boolean }
+    SystemStorageConfigIndexResponse:
+      type: object
+      properties:
+        current_source: { type: string, enum: [ENV, DB] }
+        active_config_id: { type: integer, nullable: true }
+        active_config:
+          allOf:
+            - $ref: '#/components/schemas/SystemStorageConfigSummary'
+          nullable: true
+        env_fallback:
+          type: object
+          additionalProperties: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SystemStorageConfigSummary'
+      required: [current_source, items]
+    SystemStorageConfigTestResponse:
+      type: object
+      properties:
+        status: { type: string, enum: [ok, warning, error, not_configured] }
+        message: { type: string }
+        tested_at: { type: string, format: date-time }
+      required: [status, message, tested_at]
+    SystemHealthServiceItem:
+      type: object
+      properties:
+        service: { type: string }
+        label: { type: string }
+        status: { type: string, enum: [ok, warning, error, not_configured] }
+        checked_at: { type: string, format: date-time, nullable: true }
+        latency_ms: { type: number, nullable: true }
+        message: { type: string }
+        error: { type: string, nullable: true }
+        meta:
+          type: object
+          additionalProperties: true
+      required: [service, label, status, message, meta]
+    SystemHealthSnapshot:
+      type: object
+      properties:
+        generated_at: { type: string, format: date-time }
+        storage_config_source: { type: string, enum: [ENV, DB] }
+        summary:
+          type: object
+          properties:
+            ok: { type: integer }
+            warning: { type: integer }
+            error: { type: integer }
+            not_configured: { type: integer }
+          required: [ok, warning, error, not_configured]
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/SystemHealthServiceItem'
+      required: [generated_at, storage_config_source, summary, services]
     DatabaseBackupRestoreResponse:
       type: object
       properties:

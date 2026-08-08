@@ -37,6 +37,8 @@ use App\Http\Controllers\Api\Admin\StaffTimesheetController as AdminStaffTimeshe
 use App\Http\Controllers\Api\Admin\StaffQualificationController;
 use App\Http\Controllers\Api\Admin\StaffDocumentStatusController;
 use App\Http\Controllers\Api\Admin\StaffStatusController;
+use App\Http\Controllers\Api\Admin\SystemStorageConfigController;
+use App\Http\Controllers\Api\Admin\SystemHealthController;
 use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\Admin\UserFacilityRoleController;
 use App\Http\Controllers\Api\AuthController;
@@ -257,6 +259,15 @@ Route::middleware(['auth:sanctum', 'admin.api', 'audit.api'])->prefix('admin')->
     Route::post('/database-backups/export', [DatabaseBackupController::class, 'export'])->middleware('permission.api:database_backups.create');
     Route::get('/database-backups/download', [DatabaseBackupController::class, 'download'])->middleware('permission.api:database_backups.read');
     Route::post('/database-backups/restore', [DatabaseBackupController::class, 'restore'])->middleware('permission.api:database_backups.restore');
+    Route::get('/system/storage-configs', [SystemStorageConfigController::class, 'index'])->middleware('permission.api:system_storage.read');
+    Route::post('/system/storage-configs', [SystemStorageConfigController::class, 'store'])->middleware('permission.api:system_storage.create');
+    Route::put('/system/storage-configs/{storageConfig}', [SystemStorageConfigController::class, 'update'])->middleware('permission.api:system_storage.update');
+    Route::patch('/system/storage-configs/{storageConfig}', [SystemStorageConfigController::class, 'update'])->middleware('permission.api:system_storage.update');
+    Route::post('/system/storage-configs/{storageConfig}/test', [SystemStorageConfigController::class, 'test'])->middleware('permission.api:system_storage.test');
+    Route::post('/system/storage-configs/{storageConfig}/activate', [SystemStorageConfigController::class, 'activate'])->middleware('permission.api:system_storage.activate');
+    Route::delete('/system/storage-configs/{storageConfig}', [SystemStorageConfigController::class, 'destroy'])->middleware('permission.api:system_storage.delete');
+    Route::get('/system/health', [SystemHealthController::class, 'index'])->middleware('permission.api:system_health.read');
+    Route::post('/system/health/run', [SystemHealthController::class, 'run'])->middleware('permission.api:system_health.run');
 
     Route::get('/countries', [CountryController::class, 'index'])->middleware('permission.api:geography.read');
     Route::post('/countries', [CountryController::class, 'store'])->middleware('permission.api:geography.create');

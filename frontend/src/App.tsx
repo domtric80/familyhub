@@ -25,6 +25,8 @@ import AssegnazioniMinoriPage from './pages/admin/AssegnazioniMinoriPage'
 import AuditPage from './pages/admin/AuditPage'
 import AuditKpiPage from './pages/admin/AuditKpiPage'
 import BackupPage from './pages/admin/BackupPage'
+import SistemaStoragePage from './pages/admin/SistemaStoragePage'
+import SistemaHealthPage from './pages/admin/SistemaHealthPage'
 
 // Anagrafiche
 import GeografiaPage from './pages/anagrafiche/GeografiaPage'
@@ -109,6 +111,8 @@ function AppRoutes() {
         <Route path='/admin/audit' element={<AuditPage />} />
         <Route path='/admin/audit-kpi' element={<AuditKpiPage />} />
         <Route path='/admin/backup' element={<BackupPage />} />
+        <Route path='/admin/sistema/storage' element={<SistemaStoragePage />} />
+        <Route path='/admin/sistema/health' element={<SistemaHealthPage />} />
         <Route path='/anagrafiche/geografia' element={<GeografiaPage />} />
         <Route path='/anagrafiche/geografia/citta/:id' element={<CittaDetailPage />} />
         <Route path='/anagrafiche/geografia-sync' element={<GeografiaSyncPage />} />

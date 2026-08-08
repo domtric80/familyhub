@@ -1258,7 +1258,131 @@ export const timesheetApi = {
     http.get('/admin/timesheets/export.csv', { params, responseType: 'blob' }),
 }
 
-// Backup database
+// ─── System Health ────────────────────────────────────────────────────────────
+
+export interface SystemHealthService {
+  service: string
+  label: string
+  status: 'ok' | 'warning' | 'error' | 'not_configured'
+  checked_at: string | null
+  latency_ms: number | null
+  message: string | null
+  error: string | null
+  meta: Record<string, unknown>
+}
+
+export interface SystemHealthSummary {
+  ok: number
+  warning: number
+  error: number
+  not_configured: number
+}
+
+export interface SystemHealthResponse {
+  generated_at: string
+  storage_config_source: string
+  summary: SystemHealthSummary
+  services: SystemHealthService[]
+}
+
+export const systemHealthApi = {
+  snapshot: () =>
+    http.get<SystemHealthResponse>('/api/admin/system/health').then((r) => r.data),
+  run: () =>
+    http.post<SystemHealthResponse>('/api/admin/system/health/run').then((r) => r.data),
+}
+
+// ─── System Storage ───────────────────────────────────────────────────────────
+
+export type StorageProviderType = 'minio' | 'aws_s3' | 's3_compatible'
+export type StorageCurrentSource = 'ENV' | 'DB'
+export type StorageTestStatus = 'ok' | 'error' | null
+
+export interface StorageEnvFallback {
+  provider_type: string
+  bucket: string
+  region: string
+  endpoint: string
+  use_path_style_endpoint: boolean
+  access_key_masked: string
+  secret_key_masked: string
+  disk: string
+}
+
+export interface StorageConfigItem {
+  id: number
+  code: string
+  name: string
+  provider_type: StorageProviderType
+  bucket: string
+  region: string
+  endpoint: string
+  use_path_style_endpoint: boolean
+  prefix: string | null
+  is_active: boolean
+  is_default: boolean
+  last_tested_at: string | null
+  last_test_status: StorageTestStatus
+  last_test_message: string | null
+  access_key_masked: string | null
+  secret_key_masked: string | null
+  has_access_key: boolean
+  has_secret_key: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface StorageConfigListResponse {
+  current_source: StorageCurrentSource
+  active_config_id: number | null
+  active_config: StorageConfigItem | null
+  env_fallback: StorageEnvFallback | null
+  items: StorageConfigItem[]
+}
+
+export interface StorageConfigWrite {
+  code: string
+  name: string
+  provider_type: StorageProviderType
+  bucket: string
+  region?: string
+  endpoint?: string
+  use_path_style_endpoint?: boolean
+  access_key?: string
+  secret_key?: string
+  prefix?: string
+  is_active?: boolean
+  is_default?: boolean
+}
+
+export interface StorageTestResponse {
+  status: 'ok' | 'error'
+  message: string
+  tested_at: string
+}
+
+export interface StorageActivateResponse {
+  message: string
+  current_source: StorageCurrentSource
+  item: StorageConfigItem
+}
+
+export const systemStorageApi = {
+  list: () =>
+    http.get<StorageConfigListResponse>('/api/admin/system/storage-configs').then((r) => r.data),
+  create: (data: StorageConfigWrite) =>
+    http.post<StorageConfigItem>('/api/admin/system/storage-configs', data).then((r) => r.data),
+  update: (id: number, data: Partial<StorageConfigWrite>) =>
+    http.put<StorageConfigItem>(`/api/admin/system/storage-configs/${id}`, data).then((r) => r.data),
+  test: (id: number) =>
+    http.post<StorageTestResponse>(`/api/admin/system/storage-configs/${id}/test`).then((r) => r.data),
+  activate: (id: number) =>
+    http.post<StorageActivateResponse>(`/api/admin/system/storage-configs/${id}/activate`).then((r) => r.data),
+  delete: (id: number) =>
+    http.delete<{ message: string }>(`/api/admin/system/storage-configs/${id}`).then((r) => r.data),
+}
+
+// ─── Backup database ──────────────────────────────────────────────────────────
 
 export const backupApi = {
   list: () =>

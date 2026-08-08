@@ -80,6 +80,8 @@ export const MENUITEMS: MenuSection[] = [
           { title: 'Audit log',              icon: 'others',   type: 'link', path: '/admin/audit' },
           { title: 'KPI Sicurezza',          icon: 'charts',   type: 'link', path: '/admin/audit-kpi' },
           { title: 'Backup',                 icon: 'project',  type: 'link', path: '/admin/backup' },
+          { title: 'Storage documentale',    icon: 'widget',   type: 'link', path: '/admin/sistema/storage' },
+          { title: 'Health servizi',         icon: 'charts',   type: 'link', path: '/admin/sistema/health' },
         ],
       },
     ],
