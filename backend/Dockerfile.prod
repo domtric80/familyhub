@@ -1,0 +1,56 @@
+# syntax=docker/dockerfile:1.7
+FROM php:8.4-cli-alpine AS base
+
+RUN apk add --no-cache \
+    bash \
+    git \
+    icu-libs \
+    postgresql-client \
+    unzip \
+    zip \
+    && apk add --no-cache --virtual .build-deps \
+    $PHPIZE_DEPS \
+    icu-dev \
+    libpq-dev \
+    linux-headers \
+    oniguruma-dev \
+    && docker-php-ext-install intl pcntl pdo_pgsql \
+    && pecl install redis \
+    && docker-php-ext-enable redis \
+    && apk del .build-deps
+
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+WORKDIR /var/www/html
+
+FROM base AS build
+
+COPY composer.json composer.lock ./
+RUN composer install \
+    --no-dev \
+    --prefer-dist \
+    --no-interaction \
+    --no-progress \
+    --optimize-autoloader
+
+COPY . .
+
+RUN mkdir -p storage/app/public storage/framework/cache storage/framework/sessions storage/framework/testing storage/framework/views storage/logs bootstrap/cache \
+    && composer dump-autoload --no-dev --optimize --classmap-authoritative \
+    && chown -R www-data:www-data /var/www/html
+
+FROM base AS runtime
+
+ENV APP_ENV=production
+ENV APP_DEBUG=false
+
+WORKDIR /var/www/html
+
+COPY --from=build /var/www/html /var/www/html
+
+RUN mkdir -p storage/app/public storage/framework/cache storage/framework/sessions storage/framework/testing storage/framework/views storage/logs bootstrap/cache \
+    && chown -R www-data:www-data /var/www/html
+
+EXPOSE 8000
+
+CMD ["sh", "-lc", "sh /var/www/html/docker/app/start-app.sh"]

@@ -13,6 +13,7 @@ if [ ! -f .env ]; then
 fi
 
 composer install --no-interaction
+php artisan storage:link || true
 php artisan migrate --force
 php artisan familyhub:ensure-bootstrap --seed-missing-only
 

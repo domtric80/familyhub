@@ -16,6 +16,7 @@ if [ ! -f vendor/autoload.php ]; then
   composer install --no-interaction
 fi
 
+php artisan storage:link || true
 php artisan migrate --force
 php artisan familyhub:ensure-bootstrap --seed-missing-only
 
