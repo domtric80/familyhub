@@ -1,5 +1,7 @@
 ﻿# FamilyHub
 
+Versione corrente: `1.0.0`
+
 Applicativo gestionale per strutture residenziali e servizi educativi, con backend Laravel, frontend React/Vite e stack infrastrutturale Docker.
 
 ## Requisiti
@@ -280,4 +282,8 @@ sudo supervisorctl restart familyhub-worker:*
 - Deploy nuovo ambiente Debian/Docker: docs/operations/2026-08-08-debian-docker-new-environment-checklist.md
 - Template .env.prod: infra/env/backend.prod.env.template
 - Primo accesso VPS OVH/Aruba: docs/operations/2026-08-08-ovh-aruba-first-access-checklist.md
+- Changelog: CHANGELOG.md
+- Release notes v1.0.0: docs/releases/2026-08-08-v1.0.0.md
+- Disegno storage config + health servizi: docs/architecture/2026-08-08-storage-configuration-and-service-health.md
+
 
