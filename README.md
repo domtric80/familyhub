@@ -28,7 +28,16 @@ Applicativo gestionale per strutture residenziali e servizi educativi, con backe
 - `frontend/` — UI React/Vite
 - `infra/` — appunti e componenti infrastrutturali
 - `docs/` — documentazione funzionale, API e handoff UX
-- `vendor-assets/` — asset di progetto realmente usati
+- `vendor-assets/` — asset vendor di supporto; non fanno parte della supply chain runtime dell'applicativo
+
+## Note sicurezza repository
+- i manifest `package.json` dei template vendor non runtime non vengono tracciati nel repository applicativo
+- gli audit di sicurezza rilevanti per FamilyHub riguardano solo:
+  - `frontend/package.json`
+  - `frontend/package-lock.json`
+  - `backend/composer.json`
+  - `backend/composer.lock`
+  - `backend/package.json` se usato in bootstrap locale Laravel/Vite
 
 ## Installazione con Docker
 

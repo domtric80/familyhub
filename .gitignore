@@ -22,4 +22,6 @@ frontend/dist/
 backups/
 
 vendor-assets/cuba/*.zip
+vendor-assets/cuba/react_context/starter-kit/package.json
+vendor-assets/cuba/react_context/template/package.json
 ChatGPT Image *.png
