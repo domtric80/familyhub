@@ -6,7 +6,7 @@ import {
   Table, Button, Badge, Modal, ModalHeader, ModalBody, ModalFooter,
   FormGroup, Label, Input, Alert, Spinner, FormFeedback,
 } from 'reactstrap'
-import { Home, Plus, Edit2, Trash2, Link2, Database, CheckCircle, XCircle, Upload } from 'react-feather'
+import { Home, Plus, Edit2, Trash2, Link2, Database, CheckCircle, XCircle, Upload, Globe } from 'react-feather'
 import { toast } from 'react-toastify'
 import {
   adminGeoProvidersApi, adminGeoApi, adminGeoImportApi,
@@ -16,7 +16,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import type {
   GeoProvider, GeoProviderWrite, GeoProviderType, GeoProviderMode, GeoProviderFormat,
   CountryProviderMapping, CountryProviderMappingWrite,
-  Country, GeoImportResponseData,
+  Country, GeoImportResponseData, GeoProviderCountriesImportResponseData,
 } from '../../types'
 
 // ── Utility ───────────────────────────────────────────────────────────────────
@@ -41,6 +41,14 @@ function sourceDisplay(p: GeoProvider) {
   if (p.source_url) return p.source_url
   if (p.source_path) return p.source_path
   return '—'
+}
+
+/** Provider GeoNames configurato per import globale nazioni (countryInfo.txt) */
+function isGeoNamesGlobalProvider(p: GeoProvider): boolean {
+  const driver = (p.driver ?? '').toLowerCase()
+  const format = (p.format ?? '').toLowerCase()
+  const src = (p.source_url ?? p.source_path ?? '').toLowerCase()
+  return driver === 'geonames' && format === 'txt' && src.includes('countryinfo')
 }
 
 /** Livelli supportati in base al driver */
@@ -208,6 +216,14 @@ export default function ProviderGeografiaPage() {
   const [deletingMap, setDeletingMap] = useState<CountryProviderMapping | null>(null)
   const [deleteMapLoading, setDeleteMapLoading] = useState(false)
 
+  // ── Import globale nazioni ───────────────────────────────────────────────────
+  const [globalImportModal, setGlobalImportModal] = useState(false)
+  const [globalImportProvider, setGlobalImportProvider] = useState<GeoProvider | null>(null)
+  const [globalImporting, setGlobalImporting] = useState(false)
+  const [globalImportResult, setGlobalImportResult] = useState<GeoProviderCountriesImportResponseData | null>(null)
+  const [globalImportMessage, setGlobalImportMessage] = useState<string | null>(null)
+  const [globalImportError, setGlobalImportError] = useState<string | null>(null)
+
   // ── Import ───────────────────────────────────────────────────────────────────
   const [importCountry, setImportCountry] = useState<Country | null>(null)
   const [importProviderOverride, setImportProviderOverride] = useState<GeoProvider | null>(null)
@@ -359,6 +375,26 @@ export default function ProviderGeografiaPage() {
     } finally { setDeleteMapLoading(false) }
   }
 
+  // ── Import globale nazioni ────────────────────────────────────────────────────
+  const handleGlobalImport = async () => {
+    if (!globalImportProvider) return
+    setGlobalImporting(true)
+    setGlobalImportResult(null); setGlobalImportMessage(null); setGlobalImportError(null)
+    try {
+      const res = await adminGeoProvidersApi.importCountries(globalImportProvider.id)
+      setGlobalImportResult(res.data)
+      setGlobalImportMessage(res.message)
+      setGlobalImportModal(false)
+      toast.success(res.message ?? 'Import nazioni completato')
+    } catch (e) {
+      const msg = apiError(e).message ?? 'Errore durante l\'import nazioni'
+      setGlobalImportError(msg)
+      setGlobalImportModal(false)
+    } finally {
+      setGlobalImporting(false)
+    }
+  }
+
   // ── Import ────────────────────────────────────────────────────────────────────
   const handleImport = async () => {
     if (!importCountry) return
@@ -498,6 +534,11 @@ export default function ProviderGeografiaPage() {
                                     <Button color='light' size='sm' title='Associa a nazioni' onClick={() => { setActiveTab('mappings') }}>
                                       <Link2 size={12} />
                                     </Button>
+                                    {isGeoNamesGlobalProvider(p) && canImport && (
+                                      <Button color='light' size='sm' title='Importa nazioni del mondo' onClick={() => { setGlobalImportProvider(p); setGlobalImportResult(null); setGlobalImportMessage(null); setGlobalImportError(null); setGlobalImportModal(true) }}>
+                                        <Globe size={12} className='text-primary' />
+                                      </Button>
+                                    )}
                                     <Button color='light' size='sm' title='Apri import' onClick={() => { setImportProviderOverride(p); if (p.code === 'ISTAT') { const italy = countries.find((c) => (c.iso_code ?? c.iso2 ?? '').toUpperCase() === 'IT') ?? null; setImportCountry(italy); setSelectedCountryId(italy?.id ?? null) } setImportResult(null); setImportMessage(null); setImportError(null); setActiveTab('import') }}>
                                       <Upload size={12} />
                                     </Button>
@@ -515,6 +556,22 @@ export default function ProviderGeografiaPage() {
                       </div>
                     )}
               </TabPane>
+
+                {/* Risultato import globale nazioni */}
+                {globalImportError && (
+                  <Alert color='danger' className='mt-3'>{globalImportError}</Alert>
+                )}
+                {globalImportResult && globalImportMessage && (
+                  <Alert color='success' className='mt-3'>
+                    <strong>{globalImportMessage}</strong>
+                    <div className='mt-2 d-flex flex-wrap gap-3' style={{ fontSize: 13 }}>
+                      <span>Nazioni lette: <strong>{globalImportResult.raw.countries}</strong></span>
+                      <span>Create: <strong>{globalImportResult.stats.created_countries}</strong></span>
+                      <span>Aggiornate: <strong>{globalImportResult.stats.updated_countries}</strong></span>
+                      <span className='text-muted'>Run #{globalImportResult.run.id} · {globalImportResult.run.status}</span>
+                    </div>
+                  </Alert>
+                )}
 
               {/* ═══════════ TAB ASSOCIAZIONI ═══════════ */}
               <TabPane tabId='mappings'>
@@ -670,6 +727,26 @@ export default function ProviderGeografiaPage() {
         </Card>
       </Container>
 
+      {/* ── Modal import globale nazioni ────────────────────────────────────── */}
+      <Modal isOpen={globalImportModal} toggle={() => !globalImporting && setGlobalImportModal(false)} size='sm'>
+        <ModalHeader toggle={() => !globalImporting && setGlobalImportModal(false)}>
+          <Globe size={16} className='me-2 text-primary' />Importa nazioni del mondo
+        </ModalHeader>
+        <ModalBody>
+          <p className='mb-2'>Provider: <strong>{globalImportProvider?.name}</strong></p>
+          <Alert color='info' className='mb-0' style={{ fontSize: 13 }}>
+            Verranno create o aggiornate le nazioni del mondo nell&apos;anagrafica globale.<br />
+            <strong>Non</strong> verranno importate regioni, province o città.
+          </Alert>
+        </ModalBody>
+        <ModalFooter>
+          <Button color='secondary' onClick={() => setGlobalImportModal(false)} disabled={globalImporting}>Annulla</Button>
+          <Button color='primary' onClick={handleGlobalImport} disabled={globalImporting}>
+            {globalImporting ? <><Spinner size='sm' className='me-1' />Import in corso…</> : <><Globe size={13} className='me-1' />Importa nazioni</>}
+          </Button>
+        </ModalFooter>
+      </Modal>
+
       {/* ── Modal form Provider ──────────────────────────────────────────────── */}
       <Modal isOpen={provModal} toggle={() => setProvModal(false)} size='lg'>
         <ModalHeader toggle={() => setProvModal(false)}>
@@ -773,7 +850,7 @@ export default function ProviderGeografiaPage() {
           )}
           {provForm.driver === 'geonames' && (
             <Alert color='light' className='border py-2 px-3 mb-3' style={{ fontSize: 13 }}>
-              ℹ️ Il driver GeoNames importa nazione, regioni, province e città. Il formato primario può essere <strong>txt</strong> (countryInfo) o <strong>zip</strong> (dump per città). Tramite <code>auth_config_json</code> è possibile definire le sorgenti ausiliarie: <code>admin1_source_url</code>, <code>admin2_source_url</code>, <code>country_dump_url_template</code> (o le varianti <code>_source_path</code> per file locali). Il placeholder <code>{'{ISO}'}</code> viene sostituito con il codice ISO della nazione.
+              ℹ️ Il driver GeoNames importa nazione, regioni, province e città. La configurazione consigliata è <strong>un solo provider generico</strong> con <code>countryInfo.txt</code>: il backend userà automaticamente <code>admin1CodesASCII.txt</code>, <code>admin2Codes.txt</code> e il dump <code>{'{ISO}'}.zip</code> della nazione selezionata. Tramite <code>auth_config_json</code> è possibile definire override avanzati: <code>admin1_source_url</code>, <code>admin2_source_url</code>, <code>country_dump_url_template</code> (o le varianti <code>_source_path</code> per file locali).
             </Alert>
           )}
           {provForm.mode === 'api' && (
@@ -816,9 +893,9 @@ export default function ProviderGeografiaPage() {
                 style={{ fontFamily: 'monospace', fontSize: 12 }}
               />
               <FormFeedback>JSON non valido</FormFeedback>
-              <small className='text-muted'>Lasciare vuoto per usare le URL GeoNames ufficiali predefinite configurate nel backend.</small>
-            </FormGroup>
-          )}
+                <small className='text-muted'>Lasciare vuoto per usare la configurazione GeoNames standard già prevista nel backend. Nella maggior parte dei casi non serve creare un provider separato per ogni nazione.</small>
+              </FormGroup>
+            )}
           <Row>
             <Col md='10'>
               <FormGroup>

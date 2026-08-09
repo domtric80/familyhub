@@ -149,58 +149,66 @@ class CanonicalGeographyLoader
                 }
             }
 
-            $cityRows = GeoSourceCityRaw::query()
-                ->where('geo_import_run_id', $runId)
-                ->where('source_system', $sourceSystem)
-                ->whereIn('source_parent_key', $this->effectiveKeys($provinceRows, $provinceKey))
-                ->get();
-
             if ($level === 'cities' || $recursive) {
-                foreach ($cityRows as $cityRow) {
-                    $parent = $provinceMap[$cityRow->source_parent_key ?? ''] ?? null;
-                    if (! $parent) {
-                        continue;
-                    }
+                GeoSourceCityRaw::query()
+                    ->where('geo_import_run_id', $runId)
+                    ->where('source_system', $sourceSystem)
+                    ->whereIn('source_parent_key', $this->effectiveKeys($provinceRows, $provinceKey))
+                    ->orderBy('id')
+                    ->chunkById(1000, function ($cityRows) use (&$cities, $provinceMap): void {
+                        foreach ($cityRows as $cityRow) {
+                            $parent = $provinceMap[$cityRow->source_parent_key ?? ''] ?? null;
+                            if (! $parent) {
+                                continue;
+                            }
 
-                    $city = null;
+                            $city = null;
 
-                    if ($cityRow->cadastre_code) {
-                        $city = City::query()
-                            ->where('cadastre_code', $cityRow->cadastre_code)
-                            ->first();
-                    }
+                            if ($cityRow->cadastre_code) {
+                                $city = City::query()
+                                    ->where('cadastre_code', $cityRow->cadastre_code)
+                                    ->first();
+                            }
 
-                    if (! $city) {
-                        $city = City::query()
-                            ->where('province_id', $parent->id)
-                            ->where('name', $cityRow->source_name)
-                            ->first();
-                    }
+                            if (! $city && $cityRow->normalized_payload_json['geoname_id'] ?? null) {
+                                $city = City::query()
+                                    ->where('province_id', $parent->id)
+                                    ->where('geoname_id', $cityRow->normalized_payload_json['geoname_id'])
+                                    ->first();
+                            }
 
-                    if (! $city) {
-                        $city = new City();
-                    }
+                            if (! $city) {
+                                $city = City::query()
+                                    ->where('province_id', $parent->id)
+                                    ->where('name', $cityRow->source_name)
+                                    ->first();
+                            }
 
-                    $city->province_id = $parent->id;
-                    $city->name = $cityRow->source_name;
-                    if ($cityRow->cadastre_code) {
-                        $city->cadastre_code = $cityRow->cadastre_code;
-                    }
-                    if ($cityRow->postal_code) {
-                        $city->postal_code = $cityRow->postal_code;
-                    }
+                            if (! $city) {
+                                $city = new City();
+                            }
 
-                    $normalized = is_array($cityRow->normalized_payload_json) ? $cityRow->normalized_payload_json : [];
-                    $city->geoname_id = $normalized['geoname_id'] ?? $city->geoname_id;
-                    $city->latitude = $normalized['latitude'] ?? $city->latitude;
-                    $city->longitude = $normalized['longitude'] ?? $city->longitude;
-                    $city->population = $normalized['population'] ?? $city->population;
-                    $city->timezone = $normalized['timezone'] ?? $city->timezone;
-                    $city->feature_code = $normalized['feature_code'] ?? $city->feature_code;
-                    $city->geonames_modified_at = $normalized['geonames_modified_at'] ?? $city->geonames_modified_at;
-                    $city->save();
-                    $cities++;
-                }
+                            $city->province_id = $parent->id;
+                            $city->name = $cityRow->source_name;
+                            if ($cityRow->cadastre_code) {
+                                $city->cadastre_code = $cityRow->cadastre_code;
+                            }
+                            if ($cityRow->postal_code) {
+                                $city->postal_code = $cityRow->postal_code;
+                            }
+
+                            $normalized = is_array($cityRow->normalized_payload_json) ? $cityRow->normalized_payload_json : [];
+                            $city->geoname_id = $normalized['geoname_id'] ?? $city->geoname_id;
+                            $city->latitude = $normalized['latitude'] ?? $city->latitude;
+                            $city->longitude = $normalized['longitude'] ?? $city->longitude;
+                            $city->population = $normalized['population'] ?? $city->population;
+                            $city->timezone = $normalized['timezone'] ?? $city->timezone;
+                            $city->feature_code = $normalized['feature_code'] ?? $city->feature_code;
+                            $city->geonames_modified_at = $normalized['geonames_modified_at'] ?? $city->geonames_modified_at;
+                            $city->save();
+                            $cities++;
+                        }
+                    });
             }
 
             return [

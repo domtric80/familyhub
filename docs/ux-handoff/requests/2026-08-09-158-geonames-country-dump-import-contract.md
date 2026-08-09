@@ -58,39 +58,52 @@ Placeholders supportati:
 
 ## Modalità semplice consigliata
 
-Per evitare configurazioni complesse da GUI, il backend ora supporta due casi semplici senza JSON avanzato:
+Per evitare configurazioni complesse da GUI, il flusso consigliato è questo:
 
-### Caso A · provider globale nazioni
+### Configurazione standard consigliata
+
+Creare **un solo provider `GEONAMES` generico** con:
 
 - driver: `geonames`
+- type: `generic`
 - mode: `remote_file`
 - format: `txt`
 - source_url: `https://download.geonames.org/export/dump/countryInfo.txt`
 
 Uso previsto:
 
-- sorgente globale per import/sync delle nazioni del mondo
+- import/sync delle nazioni del mondo
+- import della gerarchia geografica di qualsiasi nazione selezionata
 
-### Caso B · provider paese-specifico dump GeoNames
+Quando l’utente lancia l’import di una nazione, il backend usa automaticamente:
+
+- `countryInfo.txt` per la nazione
+- `admin1CodesASCII.txt` per le regioni
+- `admin2Codes.txt` per province/distretti
+- `https://download.geonames.org/export/dump/{ISO}.zip` per città e località della nazione scelta
+
+Quindi:
+
+- **non è obbligatorio creare un provider separato per `FR`, `DE`, `ES`, ecc.**
+- il backend costruisce da solo l’URL del dump paese a partire dal codice ISO della nazione
+
+### Override opzionale per singola nazione
+
+Un provider `country_specific` GeoNames resta possibile solo come override avanzato, ad esempio se:
+
+- si vuole usare un file locale
+- si vuole puntare a una sorgente diversa da quella standard
+- si vuole forzare una configurazione speciale per una singola nazione
+
+Esempio:
 
 - driver: `geonames`
 - type: `country_specific`
 - mode: `remote_file`
 - format: `zip`
-- source_url: `https://download.geonames.org/export/dump/{ISO}.zip`
+- source_url: `https://download.geonames.org/export/dump/FR.zip`
 
-Uso previsto:
-
-- import della gerarchia geografica di una singola nazione non ancora popolata
-- arricchimento futuro della nazione selezionata
-
-In questo caso il backend usa automaticamente:
-
-- `countryInfo.txt` come sorgente nazioni
-- `admin1CodesASCII.txt`
-- `admin2Codes.txt`
-
-anche se non sono esplicitati nella GUI.
+Ma questo è **opzionale**, non il flusso standard raccomandato.
 
 ## Impatto UX richiesto
 
@@ -99,6 +112,8 @@ anche se non sono esplicitati nella GUI.
 Per provider `geonames`:
 
 - non mostrare più il provider come “solo nazione”
+- mostrare come configurazione consigliata il provider unico globale `countryInfo.txt`
+- spiegare che i dump `{ISO}.zip` vengono risolti automaticamente dal backend
 - aggiornare copy capability:
   - `Nazione`
   - `Regioni`
@@ -115,8 +130,8 @@ Nel form provider:
 - il driver resta una select chiusa (`istat`, `geonames`)
 - `format` per `geonames` può essere `txt` o `zip`
 - aggiungere hint pratici già pronti:
-  - `countryInfo.txt` → provider globale nazioni
-  - `{ISO}.zip` → provider paese-specifico GeoNames
+  - `countryInfo.txt` → **configurazione standard consigliata**
+  - `{ISO}.zip` → override opzionale per provider paese-specifico
 - il blocco configurazione avanzata deve spiegare che:
   - `source_url/source_path` coprono la sorgente primaria
   - `auth_config_json` è opzionale e serve solo per override avanzati
@@ -126,6 +141,7 @@ Nel form provider:
 Per provider risolto `geonames`:
 
 - mostrare che il backend importerà tutti i livelli disponibili della nazione
+- chiarire che, se il provider risolto è il `GEONAMES` generico, il dump paese viene determinato dal backend in base alla nazione scelta
 - non mostrare messaggi legacy tipo “solo nazione”
 - se il backend restituisce errore di gerarchia canonica esistente, mostrare il messaggio senza reinterpretarlo
 
@@ -154,6 +170,23 @@ Le città canoniche possono essere arricchite con:
 
 Nota: questi campi non sono ancora esposti in tutte le schermate frontend, ma il backend li salva.
 
+## Nota sui contatori import
+
+Per GeoNames è possibile che:
+
+- `summary.cities_parsed` sia maggiore di `data.loaded.cities`
+
+Motivo:
+
+- il dump GeoNames può contenere località duplicate, varianti o record che confluiscono sulla stessa città canonica
+- il loader canonico consolida i record quando trova match sulla provincia e sugli identificativi disponibili
+
+Quindi in QA:
+
+- `cities_parsed > 0` conferma che il dump è stato letto correttamente
+- `loaded.cities > 0` conferma che le città sono state pubblicate nel database canonico
+- non è richiesto che i due numeri coincidano sempre
+
 ## QA minima richiesta a UX
 
 1. Aprire `Anagrafiche > Provider Geografia`
@@ -173,4 +206,5 @@ Nota: questi campi non sono ancora esposti in tutte le schermate frontend, ma il
 - nessun reset dati
 - migrazione additiva su tabella `cities`
 - mantenuta retrocompatibilità del provider già esistente `GEONAMES`
+- verificato in ambiente reale il caricamento completo di `FR` sia con provider `country_specific` (`FR.zip`) sia con provider generico `GEONAMES`
 - protezione attiva: se una nazione ha già gerarchia canonica gestita da provider paese-specifico (es. `ISTAT` per `IT`), GeoNames non può sovrascriverla

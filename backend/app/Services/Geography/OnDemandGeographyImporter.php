@@ -148,123 +148,139 @@ class OnDemandGeographyImporter
 
             $countryDumpPayload = $this->resolveGeoNamesCountryDumpPayload($provider, $settings, (string) $match['iso_code']);
             $countryDumpSourceFile = $this->geoNamesCountryDumpSource->persistFile($countryDumpPayload, 'country_dump', 'GeoNames country dump');
-            $countryDumpTxt = $this->geoNamesCountryDumpSource->extractFirstTxtFromZip(
+            $countryDumpTxt = $this->geoNamesCountryDumpSource->extractPreferredTxtToTempFile(
                 (string) $countryDumpPayload['content'],
                 (string) $countryDumpPayload['file_name'],
             );
-            $cities = $this->geoNamesCountryDumpSource->parseCountryDump((string) $countryDumpTxt['content'], (string) $match['iso_code']);
 
-            $structures = $this->buildGeoNamesStructure(
+            $structures = $this->buildGeoNamesBaseStructure(
                 countryIsoCode: (string) $match['iso_code'],
                 countryName: (string) $match['name'],
                 countryData: $match,
                 regions: $regions,
                 provinces: $provinces,
-                cities: $cities,
             );
 
-            DB::transaction(function () use (
-                $country,
-                $match,
-                $run,
-                $countriesSourceFile,
-                $admin1SourceFile,
-                $admin2SourceFile,
-                $countryDumpSourceFile,
-                $structures
-            ): void {
+            $cityCount = 0;
+
+            try {
                 $country->update([
                     'iso_code' => strtoupper((string) $match['iso_code']),
                     'name' => (string) $match['name'],
                 ]);
 
-                GeoSourceCountryRaw::query()->updateOrCreate(
-                    [
-                        'geo_import_run_id' => $run->id,
-                        'source_system' => 'geonames',
-                        'dataset_code' => 'countries',
-                        'source_record_key' => (string) $structures['country']['source_record_key'],
-                    ],
-                    [
-                        'geo_source_file_id' => $countriesSourceFile->id,
-                        'source_name' => (string) $structures['country']['source_name'],
-                        'iso_code' => (string) $structures['country']['iso_code'],
-                        'iso3_code' => $structures['country']['iso3_code'],
-                        'continent_code' => $structures['country']['continent_code'],
-                        'continent_name' => $structures['country']['continent_name'],
-                        'raw_payload_json' => $structures['country']['raw_payload_json'],
-                        'normalized_payload_json' => $structures['country']['normalized_payload_json'],
-                    ],
-                );
+                $now = now();
+                $cityInsertBatch = [];
 
-                foreach ($structures['regions'] as $region) {
-                    GeoSourceRegionRaw::query()->updateOrCreate(
-                        [
+                foreach ($this->geoNamesCountryDumpSource->iterateCountryDumpFile($countryDumpTxt['path'], (string) $match['iso_code']) as $city) {
+                    $this->ensureGeoNamesStructureForCity($structures, (string) $match['iso_code'], $city);
+
+                    $cityInsertBatch[] = [
+                        'geo_import_run_id' => $run->id,
+                        'geo_source_file_id' => $countryDumpSourceFile->id,
+                        'source_system' => 'geonames',
+                        'dataset_code' => 'country_dump',
+                        'source_record_key' => (string) $city['source_record_key'],
+                        'source_parent_key' => (string) $city['source_parent_key'],
+                        'source_name' => (string) $city['source_name'],
+                        'istat_code' => null,
+                        'cadastre_code' => null,
+                        'postal_code' => null,
+                        'raw_payload_json' => json_encode($city, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                        'normalized_payload_json' => json_encode([
+                            'geoname_id' => (int) $city['source_record_key'],
+                            'latitude' => $city['latitude'],
+                            'longitude' => $city['longitude'],
+                            'population' => $city['population'],
+                            'timezone' => $city['timezone'],
+                            'feature_code' => $city['feature_code'],
+                            'geonames_modified_at' => $city['modification_date'],
+                            'ascii_name' => $city['ascii_name'],
+                            'alternate_names' => $city['alternate_names'],
+                            'admin3_code' => $city['admin3_code'],
+                            'admin4_code' => $city['admin4_code'],
+                        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                    $cityCount++;
+
+                    if (count($cityInsertBatch) >= 500) {
+                        DB::table('geo_source_cities_raw')->insert($cityInsertBatch);
+                        $cityInsertBatch = [];
+                    }
+                }
+
+                if ($cityInsertBatch !== []) {
+                    DB::table('geo_source_cities_raw')->insert($cityInsertBatch);
+                }
+
+                GeoSourceCountryRaw::query()->create([
+                    'geo_import_run_id' => $run->id,
+                    'geo_source_file_id' => $countriesSourceFile->id,
+                    'source_system' => 'geonames',
+                    'dataset_code' => 'countries',
+                    'source_record_key' => (string) $structures['country']['source_record_key'],
+                    'source_name' => (string) $structures['country']['source_name'],
+                    'iso_code' => (string) $structures['country']['iso_code'],
+                    'iso3_code' => $structures['country']['iso3_code'],
+                    'continent_code' => $structures['country']['continent_code'],
+                    'continent_name' => $structures['country']['continent_name'],
+                    'raw_payload_json' => $structures['country']['raw_payload_json'],
+                    'normalized_payload_json' => $structures['country']['normalized_payload_json'],
+                ]);
+
+                if ($structures['regions'] !== []) {
+                    DB::table('geo_source_regions_raw')->insert(array_map(
+                        fn (array $region) => [
                             'geo_import_run_id' => $run->id,
+                            'geo_source_file_id' => $admin1SourceFile->id,
                             'source_system' => 'geonames',
                             'dataset_code' => 'admin1',
                             'source_record_key' => (string) $region['source_record_key'],
-                        ],
-                        [
-                            'geo_source_file_id' => $admin1SourceFile->id,
                             'source_parent_key' => (string) $region['source_parent_key'],
                             'source_name' => (string) $region['source_name'],
                             'code' => $region['code'],
                             'istat_code' => null,
-                            'raw_payload_json' => $region['raw_payload_json'],
-                            'normalized_payload_json' => $region['normalized_payload_json'],
+                            'raw_payload_json' => json_encode($region['raw_payload_json'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                            'normalized_payload_json' => json_encode($region['normalized_payload_json'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                            'created_at' => $now,
+                            'updated_at' => $now,
                         ],
-                    );
+                        $structures['regions']
+                    ));
                 }
 
-                foreach ($structures['provinces'] as $province) {
-                    GeoSourceProvinceRaw::query()->updateOrCreate(
-                        [
+                if ($structures['provinces'] !== []) {
+                    DB::table('geo_source_provinces_raw')->insert(array_map(
+                        fn (array $province) => [
                             'geo_import_run_id' => $run->id,
+                            'geo_source_file_id' => $admin2SourceFile->id,
                             'source_system' => 'geonames',
                             'dataset_code' => 'admin2',
                             'source_record_key' => (string) $province['source_record_key'],
-                        ],
-                        [
-                            'geo_source_file_id' => $admin2SourceFile->id,
                             'source_parent_key' => (string) $province['source_parent_key'],
                             'source_name' => (string) $province['source_name'],
                             'code' => $province['code'],
                             'istat_code' => null,
                             'vehicle_code' => null,
-                            'raw_payload_json' => $province['raw_payload_json'],
-                            'normalized_payload_json' => $province['normalized_payload_json'],
+                            'raw_payload_json' => json_encode($province['raw_payload_json'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                            'normalized_payload_json' => json_encode($province['normalized_payload_json'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                            'created_at' => $now,
+                            'updated_at' => $now,
                         ],
-                    );
+                        $structures['provinces']
+                    ));
                 }
-
-                foreach ($structures['cities'] as $cityRow) {
-                    GeoSourceCityRaw::query()->updateOrCreate(
-                        [
-                            'geo_import_run_id' => $run->id,
-                            'source_system' => 'geonames',
-                            'dataset_code' => 'country_dump',
-                            'source_record_key' => (string) $cityRow['source_record_key'],
-                        ],
-                        [
-                            'geo_source_file_id' => $countryDumpSourceFile->id,
-                            'source_parent_key' => (string) $cityRow['source_parent_key'],
-                            'source_name' => (string) $cityRow['source_name'],
-                            'istat_code' => null,
-                            'cadastre_code' => null,
-                            'postal_code' => null,
-                            'raw_payload_json' => $cityRow['raw_payload_json'],
-                            'normalized_payload_json' => $cityRow['normalized_payload_json'],
-                        ],
-                    );
-                }
-            });
+            } finally {
+                @unlink($countryDumpTxt['path']);
+            }
 
             $raw = [
                 'countries' => 1,
                 'regions' => count($structures['regions']),
                 'provinces' => count($structures['provinces']),
-                'cities' => count($structures['cities']),
+                'cities' => $cityCount,
             ];
             $loaded = $this->canonicalLoader->loadFromRun($run->id, 'geonames');
             $publishedCount = (int) (
@@ -522,13 +538,12 @@ class OnDemandGeographyImporter
         );
     }
 
-    private function buildGeoNamesStructure(
+    private function buildGeoNamesBaseStructure(
         string $countryIsoCode,
         string $countryName,
         array $countryData,
         array $regions,
         array $provinces,
-        array $cities,
     ): array {
         $countryIsoCode = strtoupper($countryIsoCode);
 
@@ -564,71 +579,6 @@ class OnDemandGeographyImporter
             ];
         }
 
-        $cityRows = [];
-
-        foreach ($cities as $city) {
-            $regionKey = (string) $city['region_key'];
-            $provinceKey = (string) $city['province_key'];
-
-            if (! isset($regionMap[$regionKey])) {
-                $regionCode = (string) ($city['region_code'] ?: '00');
-                $regionMap[$regionKey] = [
-                    'source_record_key' => $regionKey,
-                    'source_parent_key' => $countryIsoCode,
-                    'source_name' => "Regione {$regionCode}",
-                    'code' => $regionCode,
-                    'raw_payload_json' => [
-                        'synthetic' => true,
-                        'source' => 'country_dump',
-                        'code' => $regionCode,
-                    ],
-                    'normalized_payload_json' => [
-                        'code' => $regionCode,
-                        'synthetic' => true,
-                    ],
-                ];
-            }
-
-            if (! isset($provinceMap[$provinceKey])) {
-                $provinceCode = (string) ($city['province_code'] ?: '00');
-                $provinceMap[$provinceKey] = [
-                    'source_record_key' => $provinceKey,
-                    'source_parent_key' => $regionKey,
-                    'source_name' => "Provincia {$provinceCode}",
-                    'code' => $provinceCode,
-                    'raw_payload_json' => [
-                        'synthetic' => true,
-                        'source' => 'country_dump',
-                        'code' => $provinceCode,
-                    ],
-                    'normalized_payload_json' => [
-                        'code' => $provinceCode,
-                        'synthetic' => true,
-                    ],
-                ];
-            }
-
-            $cityRows[] = [
-                'source_record_key' => $city['source_record_key'],
-                'source_parent_key' => $provinceKey,
-                'source_name' => $city['source_name'],
-                'raw_payload_json' => $city,
-                'normalized_payload_json' => [
-                    'geoname_id' => (int) $city['source_record_key'],
-                    'latitude' => $city['latitude'],
-                    'longitude' => $city['longitude'],
-                    'population' => $city['population'],
-                    'timezone' => $city['timezone'],
-                    'feature_code' => $city['feature_code'],
-                    'geonames_modified_at' => $city['modification_date'],
-                    'ascii_name' => $city['ascii_name'],
-                    'alternate_names' => $city['alternate_names'],
-                    'admin3_code' => $city['admin3_code'],
-                    'admin4_code' => $city['admin4_code'],
-                ],
-            ];
-        }
-
         return [
             'country' => [
                 'source_record_key' => $countryIsoCode,
@@ -642,8 +592,61 @@ class OnDemandGeographyImporter
             ],
             'regions' => array_values($regionMap),
             'provinces' => array_values($provinceMap),
-            'cities' => $cityRows,
         ];
+    }
+
+    private function ensureGeoNamesStructureForCity(array &$structures, string $countryIsoCode, array $city): void
+    {
+        $regionKey = (string) $city['region_key'];
+        $provinceKey = (string) $city['province_key'];
+
+        $regionsByKey = [];
+        foreach ($structures['regions'] as $index => $region) {
+            $regionsByKey[$region['source_record_key']] = $index;
+        }
+
+        if (! array_key_exists($regionKey, $regionsByKey)) {
+            $regionCode = (string) ($city['region_code'] ?: '00');
+            $structures['regions'][] = [
+                'source_record_key' => $regionKey,
+                'source_parent_key' => $countryIsoCode,
+                'source_name' => "Regione {$regionCode}",
+                'code' => $regionCode,
+                'raw_payload_json' => [
+                    'synthetic' => true,
+                    'source' => 'country_dump',
+                    'code' => $regionCode,
+                ],
+                'normalized_payload_json' => [
+                    'code' => $regionCode,
+                    'synthetic' => true,
+                ],
+            ];
+        }
+
+        $provincesByKey = [];
+        foreach ($structures['provinces'] as $index => $province) {
+            $provincesByKey[$province['source_record_key']] = $index;
+        }
+
+        if (! array_key_exists($provinceKey, $provincesByKey)) {
+            $provinceCode = (string) ($city['province_code'] ?: '00');
+            $structures['provinces'][] = [
+                'source_record_key' => $provinceKey,
+                'source_parent_key' => $regionKey,
+                'source_name' => "Provincia {$provinceCode}",
+                'code' => $provinceCode,
+                'raw_payload_json' => [
+                    'synthetic' => true,
+                    'source' => 'country_dump',
+                    'code' => $provinceCode,
+                ],
+                'normalized_payload_json' => [
+                    'code' => $provinceCode,
+                    'synthetic' => true,
+                ],
+            ];
+        }
     }
 
     private function requireLocalPath(GeographyProvider $provider): string

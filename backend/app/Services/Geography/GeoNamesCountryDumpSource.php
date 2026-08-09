@@ -143,6 +143,138 @@ class GeoNamesCountryDumpSource
         }
     }
 
+    public function extractPreferredTxtToTempFile(string $binaryContent, string $sourceName = 'source.zip'): array
+    {
+        $tmpDir = storage_path('app/tmp/geography');
+
+        if (! is_dir($tmpDir)) {
+            mkdir($tmpDir, 0775, true);
+        }
+
+        $tmpZip = $tmpDir.'/'.uniqid('geonames-', true).'-'.$sourceName;
+        file_put_contents($tmpZip, $binaryContent);
+
+        try {
+            $selectedEntry = $this->selectPreferredTxtEntry($tmpZip, $sourceName);
+            $tmpTxt = $tmpDir.'/'.uniqid('geonames-txt-', true).'-'.basename($selectedEntry);
+
+            if (class_exists(ZipArchive::class)) {
+                $zip = new ZipArchive();
+                $result = $zip->open($tmpZip);
+
+                if ($result !== true) {
+                    throw new RuntimeException("Impossibile aprire l'archivio GeoNames {$sourceName}.");
+                }
+
+                $stream = $zip->getStream($selectedEntry);
+
+                if ($stream === false) {
+                    $zip->close();
+                    throw new RuntimeException("Impossibile aprire il file {$selectedEntry} nell'archivio GeoNames {$sourceName}.");
+                }
+
+                $target = fopen($tmpTxt, 'wb');
+                if ($target === false) {
+                    fclose($stream);
+                    $zip->close();
+                    throw new RuntimeException("Impossibile creare il file temporaneo {$tmpTxt}.");
+                }
+
+                stream_copy_to_stream($stream, $target);
+                fclose($stream);
+                fclose($target);
+                $zip->close();
+            } else {
+                $command = 'unzip -p '.escapeshellarg($tmpZip).' '.escapeshellarg($selectedEntry).' > '.escapeshellarg($tmpTxt);
+                exec($command, $output, $code);
+
+                if ($code !== 0 || ! is_file($tmpTxt)) {
+                    throw new RuntimeException("Impossibile estrarre il file {$selectedEntry} dall'archivio GeoNames {$sourceName}.");
+                }
+            }
+
+            return [
+                'file_name' => basename($selectedEntry),
+                'path' => $tmpTxt,
+                'mime_type' => 'text/plain',
+            ];
+        } finally {
+            @unlink($tmpZip);
+        }
+    }
+
+    public function iterateCountryDumpFile(string $filePath, string $countryIsoCode): \Generator
+    {
+        $countryIsoCode = strtoupper($countryIsoCode);
+        $handle = fopen($filePath, 'rb');
+
+        if ($handle === false) {
+            throw new RuntimeException("Impossibile aprire il file dump GeoNames {$filePath}.");
+        }
+
+        try {
+            while (($row = fgets($handle)) !== false) {
+                $row = trim($row);
+
+                if ($row === '' || str_starts_with($row, '#')) {
+                    continue;
+                }
+
+                $columns = explode("\t", $row);
+
+                if (count($columns) < 19) {
+                    continue;
+                }
+
+                $featureClass = trim((string) ($columns[6] ?? ''));
+                $featureCode = trim((string) ($columns[7] ?? ''));
+                $rowCountryCode = strtoupper(trim((string) ($columns[8] ?? '')));
+
+                if ($rowCountryCode !== $countryIsoCode || $featureClass !== 'P') {
+                    continue;
+                }
+
+                $admin1Code = trim((string) ($columns[10] ?? ''));
+                if ($admin1Code === '') {
+                    $admin1Code = '00';
+                }
+
+                $admin2Code = trim((string) ($columns[11] ?? ''));
+                if ($admin2Code === '') {
+                    $admin2Code = '00';
+                }
+
+                $regionKey = "{$countryIsoCode}.{$admin1Code}";
+                $provinceKey = "{$countryIsoCode}.{$admin1Code}.{$admin2Code}";
+
+                yield [
+                    'source_record_key' => trim((string) ($columns[0] ?? '')),
+                    'source_parent_key' => $provinceKey,
+                    'source_name' => trim((string) ($columns[1] ?? '')),
+                    'ascii_name' => trim((string) ($columns[2] ?? '')),
+                    'alternate_names' => trim((string) ($columns[3] ?? '')),
+                    'latitude' => $this->nullableFloat($columns[4] ?? null),
+                    'longitude' => $this->nullableFloat($columns[5] ?? null),
+                    'feature_code' => $featureCode,
+                    'country_code' => $rowCountryCode,
+                    'region_key' => $regionKey,
+                    'region_code' => $admin1Code,
+                    'province_key' => $provinceKey,
+                    'province_code' => $admin2Code,
+                    'admin3_code' => trim((string) ($columns[12] ?? '')) ?: null,
+                    'admin4_code' => trim((string) ($columns[13] ?? '')) ?: null,
+                    'population' => $this->nullableInt($columns[14] ?? null),
+                    'elevation' => $this->nullableInt($columns[15] ?? null),
+                    'dem' => $this->nullableInt($columns[16] ?? null),
+                    'timezone' => trim((string) ($columns[17] ?? '')) ?: null,
+                    'modification_date' => trim((string) ($columns[18] ?? '')) ?: null,
+                ];
+            }
+        } finally {
+            fclose($handle);
+        }
+    }
+
     private function extractWithZipArchive(string $tmpZip, string $sourceName): array
     {
         $zip = new ZipArchive();
@@ -152,16 +284,30 @@ class GeoNamesCountryDumpSource
             throw new RuntimeException("Impossibile aprire l'archivio GeoNames {$sourceName}.");
         }
 
+        $preferredEntryNames = $this->preferredTxtEntryNames($sourceName);
         $selectedName = null;
         $selectedContent = false;
 
-        for ($index = 0; $index < $zip->numFiles; $index++) {
-            $entryName = (string) $zip->getNameIndex($index);
+        foreach ($preferredEntryNames as $preferredEntryName) {
+            for ($index = 0; $index < $zip->numFiles; $index++) {
+                $entryName = (string) $zip->getNameIndex($index);
+                if (basename($entryName) === $preferredEntryName) {
+                    $selectedName = basename($entryName);
+                    $selectedContent = $zip->getFromIndex($index);
+                    break 2;
+                }
+            }
+        }
 
-            if (str_ends_with(strtolower($entryName), '.txt')) {
-                $selectedName = basename($entryName);
-                $selectedContent = $zip->getFromIndex($index);
-                break;
+        if ($selectedName === null) {
+            for ($index = 0; $index < $zip->numFiles; $index++) {
+                $entryName = (string) $zip->getNameIndex($index);
+
+                if (str_ends_with(strtolower($entryName), '.txt')) {
+                    $selectedName = basename($entryName);
+                    $selectedContent = $zip->getFromIndex($index);
+                    break;
+                }
             }
         }
 
@@ -188,14 +334,28 @@ class GeoNamesCountryDumpSource
             throw new RuntimeException("Impossibile ispezionare l'archivio GeoNames {$sourceName} tramite unzip.");
         }
 
+        $preferredEntryNames = $this->preferredTxtEntryNames($sourceName);
         $selectedEntry = null;
 
-        foreach ($listOutput as $entryName) {
-            $entryName = trim((string) $entryName);
+        foreach ($preferredEntryNames as $preferredEntryName) {
+            foreach ($listOutput as $entryName) {
+                $entryName = trim((string) $entryName);
 
-            if ($entryName !== '' && str_ends_with(strtolower($entryName), '.txt')) {
-                $selectedEntry = $entryName;
-                break;
+                if ($entryName !== '' && basename($entryName) === $preferredEntryName) {
+                    $selectedEntry = $entryName;
+                    break 2;
+                }
+            }
+        }
+
+        if ($selectedEntry === null) {
+            foreach ($listOutput as $entryName) {
+                $entryName = trim((string) $entryName);
+
+                if ($entryName !== '' && str_ends_with(strtolower($entryName), '.txt')) {
+                    $selectedEntry = $entryName;
+                    break;
+                }
             }
         }
 
@@ -213,6 +373,22 @@ class GeoNamesCountryDumpSource
             'content' => $content,
             'file_name' => basename($selectedEntry),
             'mime_type' => 'text/plain',
+        ];
+    }
+
+    private function preferredTxtEntryNames(string $sourceName): array
+    {
+        $base = pathinfo($sourceName, PATHINFO_FILENAME);
+        $base = trim((string) $base);
+
+        if ($base === '') {
+            return [];
+        }
+
+        return [
+            strtoupper($base).'.txt',
+            strtolower($base).'.txt',
+            $base.'.txt',
         ];
     }
 
@@ -360,6 +536,54 @@ class GeoNamesCountryDumpSource
         }
 
         return $cities;
+    }
+
+    private function selectPreferredTxtEntry(string $tmpZip, string $sourceName): string
+    {
+        $entries = [];
+
+        if (class_exists(ZipArchive::class)) {
+            $zip = new ZipArchive();
+            $result = $zip->open($tmpZip);
+
+            if ($result !== true) {
+                throw new RuntimeException("Impossibile aprire l'archivio GeoNames {$sourceName}.");
+            }
+
+            for ($index = 0; $index < $zip->numFiles; $index++) {
+                $entries[] = (string) $zip->getNameIndex($index);
+            }
+
+            $zip->close();
+        } else {
+            $listOutput = [];
+            $listCode = 0;
+            exec('unzip -Z1 '.escapeshellarg($tmpZip), $listOutput, $listCode);
+
+            if ($listCode !== 0) {
+                throw new RuntimeException("Impossibile ispezionare l'archivio GeoNames {$sourceName} tramite unzip.");
+            }
+
+            $entries = array_map(static fn ($entry) => trim((string) $entry), $listOutput);
+        }
+
+        $preferredEntryNames = $this->preferredTxtEntryNames($sourceName);
+
+        foreach ($preferredEntryNames as $preferredEntryName) {
+            foreach ($entries as $entryName) {
+                if ($entryName !== '' && basename($entryName) === $preferredEntryName) {
+                    return $entryName;
+                }
+            }
+        }
+
+        foreach ($entries as $entryName) {
+            if ($entryName !== '' && str_ends_with(strtolower($entryName), '.txt')) {
+                return $entryName;
+            }
+        }
+
+        throw new RuntimeException("L'archivio GeoNames {$sourceName} non contiene alcun file TXT valido.");
     }
 
     private function lastSegment(string $code): string
