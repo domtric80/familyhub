@@ -1275,6 +1275,8 @@ export const timesheetApi = {
     http.post<any>(`/admin/timesheets/${timesheetId}/adjustments/${adjustmentId}/reject`, { review_notes }).then((r) => normalizeTimesheetEntry(r.data)),
   exportMonthly: (params: { facility_id: number; year: number; month: number; format: 'csv'; preset?: 'payroll' | 'review' | 'labor_consultant' }) =>
     http.get('/admin/timesheets/export.csv', { params, responseType: 'blob' }),
+  dashboardSummary: (params?: { facility_id?: number; staff_member_id?: number; date_from?: string; date_to?: string }) =>
+    http.get<TimesheetCoordinatorDashboardResponse>('/admin/timesheets/dashboard-summary', { params }).then((r) => r.data),
   }
 
 // ─── System Health ────────────────────────────────────────────────────────────

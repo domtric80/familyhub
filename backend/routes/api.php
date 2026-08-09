@@ -438,4 +438,5 @@ Route::middleware(['auth:sanctum', 'minors.api', 'audit.api'])->prefix('internal
     Route::get('/threads/{thread}', [InternalMessageController::class, 'show'])->middleware('permission.api:internal_messages.read');
     Route::post('/threads/{thread}/messages', [InternalMessageController::class, 'addMessage'])->middleware('permission.api:internal_messages.update');
     Route::post('/threads/{thread}/mark-read', [InternalMessageController::class, 'markRead'])->middleware('permission.api:internal_messages.read');
-});
+    Route::post('/threads/{thread}/archive', [InternalMessageController::class, 'archive'])->middleware('permission.api:internal_messages.update');
+  });

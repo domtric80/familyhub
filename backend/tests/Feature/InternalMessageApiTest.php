@@ -52,7 +52,7 @@ class InternalMessageApiTest extends TestCase
         $this->assertNotSame('Messaggio interno riservato.', $storedMessage->getRawOriginal('body_encrypted'));
     }
 
-    public function test_minor_scoped_thread_requires_minor_assignment_for_access(): void
+    public function test_minor_scoped_thread_requires_active_minor_assignment_for_access(): void
     {
         $this->seed(DatabaseSeeder::class);
         $this->seed(RbacSeeder::class);
@@ -80,6 +80,15 @@ class InternalMessageApiTest extends TestCase
             'assigned_by_user_id' => User::query()->where('email', 'admin@familyhub.local')->firstOrFail()->id,
         ]);
 
+        $educatorAssignment = \App\Models\MinorUserAssignment::query()->create([
+            'minor_id' => $minor->id,
+            'user_id' => $educatorUser->id,
+            'facility_id' => $facility->id,
+            'valid_from' => now()->toDateString(),
+            'is_active' => true,
+            'assigned_by_user_id' => User::query()->where('email', 'admin@familyhub.local')->firstOrFail()->id,
+        ]);
+
         Sanctum::actingAs($coordUser, ['*']);
 
         $thread = $this->postJson('/api/internal-messages/threads', [
@@ -93,6 +102,13 @@ class InternalMessageApiTest extends TestCase
             ->assertCreated();
 
         $threadId = $thread->json('id');
+
+        $this->assertTrue(app(MinorAccessService::class)->hasActiveAssignment($educatorUser, $minor));
+
+        $educatorAssignment->update([
+            'is_active' => false,
+            'valid_to' => now()->toDateString(),
+        ]);
 
         $this->assertFalse(app(MinorAccessService::class)->hasActiveAssignment($educatorUser, $minor));
         $this->assertFalse(
@@ -142,6 +158,146 @@ class InternalMessageApiTest extends TestCase
         $this->postJson('/api/internal-messages/threads/'.$threadId.'/mark-read')
             ->assertOk()
             ->assertJsonPath('message', 'Conversazione marcata come letta.');
+    }
+
+    public function test_participant_options_return_role_metadata_and_minor_filtering(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+        $this->seed(RbacSeeder::class);
+
+        $facility = Facility::query()->firstOrFail();
+        $minor = Minor::query()->create([
+            'facility_id' => $facility->id,
+            'internal_code' => 'MIN-MSG-002',
+            'first_name' => 'Nora',
+            'last_name' => 'Blu',
+            'birth_date' => '2013-03-03',
+            'entry_date' => '2026-01-10',
+            'minor_status_id' => MinorStatus::query()->firstOrFail()->id,
+        ]);
+
+        $coordinatorUser = $this->createFacilityUser('coord.options@familyhub.local', 'COORDINATORE', $facility->id);
+        $educatorAssigned = $this->createFacilityUser('edu.assigned@familyhub.local', 'EDUCATORE', $facility->id);
+        $educatorUnassigned = $this->createFacilityUser('edu.unassigned@familyhub.local', 'EDUCATORE', $facility->id);
+
+        \App\Models\MinorUserAssignment::query()->create([
+            'minor_id' => $minor->id,
+            'user_id' => $coordinatorUser->id,
+            'facility_id' => $facility->id,
+            'valid_from' => now()->toDateString(),
+            'is_active' => true,
+            'assigned_by_user_id' => User::query()->where('email', 'admin@familyhub.local')->firstOrFail()->id,
+        ]);
+
+        \App\Models\MinorUserAssignment::query()->create([
+            'minor_id' => $minor->id,
+            'user_id' => $educatorAssigned->id,
+            'facility_id' => $facility->id,
+            'valid_from' => now()->toDateString(),
+            'is_active' => true,
+            'assigned_by_user_id' => User::query()->where('email', 'admin@familyhub.local')->firstOrFail()->id,
+        ]);
+
+        Sanctum::actingAs($coordinatorUser, ['*']);
+
+        $facilityScopedUsers = $this->getJson("/api/internal-messages/options/participants?facility_id={$facility->id}")
+            ->assertOk()
+            ->assertJsonPath('facility_id', $facility->id)
+            ->assertJsonStructure([
+                'users' => [
+                    '*' => ['id', 'display_name', 'first_name', 'last_name', 'email', 'role_code', 'role_name', 'is_minor_scoped'],
+                ],
+            ])
+            ->json('users');
+
+        $coordinatorFacilityUser = collect($facilityScopedUsers)->firstWhere('id', $coordinatorUser->id);
+        $this->assertNotNull($coordinatorFacilityUser);
+        $this->assertSame('COORDINATORE', $coordinatorFacilityUser['role_code']);
+        $this->assertSame('Coordinatore', $coordinatorFacilityUser['role_name']);
+
+        $minorScoped = $this->getJson("/api/internal-messages/options/participants?facility_id={$facility->id}&minor_id={$minor->id}")
+            ->assertOk()
+            ->json('users');
+
+        $minorScopedIds = collect($minorScoped)->pluck('id')->all();
+        $this->assertContains($educatorAssigned->id, $minorScopedIds);
+        $this->assertNotContains($educatorUnassigned->id, $minorScopedIds);
+    }
+
+    public function test_minor_thread_rejects_participants_without_minor_assignment(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+        $this->seed(RbacSeeder::class);
+
+        $facility = Facility::query()->firstOrFail();
+        $minor = Minor::query()->create([
+            'facility_id' => $facility->id,
+            'internal_code' => 'MIN-MSG-003',
+            'first_name' => 'Lia',
+            'last_name' => 'Mare',
+            'birth_date' => '2014-04-04',
+            'entry_date' => '2026-02-02',
+            'minor_status_id' => MinorStatus::query()->firstOrFail()->id,
+        ]);
+
+        $coordUser = $this->createFacilityUser('coord.minor2@familyhub.local', 'COORDINATORE', $facility->id);
+        $educatorUser = $this->createFacilityUser('edu.minor2@familyhub.local', 'EDUCATORE', $facility->id);
+
+        \App\Models\MinorUserAssignment::query()->create([
+            'minor_id' => $minor->id,
+            'user_id' => $coordUser->id,
+            'facility_id' => $facility->id,
+            'valid_from' => now()->toDateString(),
+            'is_active' => true,
+            'assigned_by_user_id' => User::query()->where('email', 'admin@familyhub.local')->firstOrFail()->id,
+        ]);
+
+        Sanctum::actingAs($coordUser, ['*']);
+
+        $this->postJson('/api/internal-messages/threads', [
+            'facility_id' => $facility->id,
+            'minor_id' => $minor->id,
+            'thread_type' => 'minor',
+            'subject' => 'Thread non valido',
+            'participant_user_ids' => [$educatorUser->id],
+            'message_body' => 'Tentativo con partecipante non assegnato al minore.',
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['participant_user_ids']);
+    }
+
+    public function test_participant_can_archive_thread(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+        $this->seed(RbacSeeder::class);
+
+        $facility = Facility::query()->firstOrFail();
+        $coordinatorUser = $this->createFacilityUser('coord.archive@familyhub.local', 'COORDINATORE', $facility->id);
+        $educatorUser = $this->createFacilityUser('edu.archive@familyhub.local', 'EDUCATORE', $facility->id);
+
+        Sanctum::actingAs($coordinatorUser, ['*']);
+
+        $threadId = $this->postJson('/api/internal-messages/threads', [
+            'facility_id' => $facility->id,
+            'thread_type' => 'facility',
+            'subject' => 'Archivio thread',
+            'participant_user_ids' => [$educatorUser->id],
+            'message_body' => 'Thread da archiviare.',
+        ])->assertCreated()->json('id');
+
+        $this->postJson("/api/internal-messages/threads/{$threadId}/archive")
+            ->assertOk()
+            ->assertJsonPath('message', 'Conversazione archiviata.')
+            ->assertJsonPath('thread.id', $threadId);
+
+        $this->getJson('/api/internal-messages/threads')
+            ->assertOk()
+            ->assertJsonCount(0);
+
+        $this->getJson('/api/internal-messages/threads?archived=true')
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonPath('0.id', $threadId);
     }
 
     private function createFacilityUser(string $email, string $roleCode, int $facilityId): User

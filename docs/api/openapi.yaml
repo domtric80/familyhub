@@ -5758,6 +5758,14 @@ paths:
           schema:
             type: string
             enum: [facility, minor]
+        - name: topic
+          in: query
+          required: false
+          schema: { type: string }
+        - name: archived
+          in: query
+          required: false
+          schema: { type: boolean }
       responses:
         '200':
           description: Elenco conversazioni accessibili all'utente
@@ -5873,6 +5881,22 @@ paths:
                 $ref: '#/components/schemas/InternalMessageMarkReadResponse'
         '403':
           description: Utente non autorizzato alla conversazione
+  /internal-messages/threads/{thread}/archive:
+    post:
+      tags: [Messaging]
+      security: [{ bearerAuth: [] }]
+      operationId: archiveInternalMessageThread
+      parameters:
+        - $ref: '#/components/parameters/InternalMessageThreadId'
+      responses:
+        '200':
+          description: Conversazione archiviata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalMessageArchiveResponse'
+        '403':
+          description: Utente non autorizzato all'archiviazione della conversazione
 components:
   securitySchemes:
     bearerAuth:
@@ -8987,10 +9011,14 @@ components:
       type: object
       properties:
         id: { type: integer }
+        display_name: { type: string }
         first_name: { type: string }
         last_name: { type: string }
         email: { type: string, format: email }
-      required: [id, first_name, last_name, email]
+        role_code: { type: string, nullable: true }
+        role_name: { type: string, nullable: true }
+        is_minor_scoped: { type: boolean }
+      required: [id, display_name, first_name, last_name, email, is_minor_scoped]
     InternalMessageThread:
       type: object
       properties:
@@ -9067,3 +9095,10 @@ components:
         thread_id: { type: integer }
         last_read_at: { type: string, format: date-time, nullable: true }
       required: [message, thread_id]
+    InternalMessageArchiveResponse:
+      type: object
+      properties:
+        message: { type: string }
+        thread:
+          $ref: '#/components/schemas/InternalMessageThread'
+      required: [message, thread]

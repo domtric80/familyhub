@@ -10,6 +10,7 @@ use App\Models\InternalMessageThread;
 use App\Models\InternalMessageThreadParticipant;
 use App\Models\Minor;
 use App\Models\User;
+use App\Models\UserFacilityRole;
 use App\Services\AuditLogService;
 use App\Services\InternalMessageAccessService;
 use App\Services\MinorAccessService;
@@ -46,6 +47,21 @@ class InternalMessageController extends Controller
             $query->where('thread_type', (string) $request->input('thread_type'));
         }
 
+        if ($request->filled('topic')) {
+            $query->where('topic', (string) $request->input('topic'));
+        }
+
+        if ($request->has('archived')) {
+            $archived = filter_var($request->input('archived'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($archived === true) {
+                $query->whereNotNull('archived_at');
+            } elseif ($archived === false) {
+                $query->whereNull('archived_at');
+            }
+        } else {
+            $query->whereNull('archived_at');
+        }
+
         $query = $this->internalMessageAccessService->scopeVisibleThreadsForUser($query, $request->user());
 
         return response()->json(
@@ -55,7 +71,12 @@ class InternalMessageController extends Controller
 
     public function participantOptions(Request $request): JsonResponse
     {
-        $facilityId = $request->integer('facility_id');
+        $validated = $request->validate([
+            'facility_id' => ['required', 'integer', 'exists:facilities,id'],
+            'minor_id' => ['nullable', 'integer', 'exists:minors,id'],
+        ]);
+
+        $facilityId = (int) $validated['facility_id'];
         abort_unless($request->user()->hasPermission('internal_messages.read', $facilityId), 403, 'Accesso ai partecipanti della messaggistica non consentito.');
 
         $minor = null;
@@ -66,6 +87,17 @@ class InternalMessageController extends Controller
         }
 
         $users = User::query()
+            ->with([
+                'userFacilityRoles' => fn ($query) => $query
+                    ->with('role:id,code,name')
+                    ->where('facility_id', $facilityId)
+                    ->where('is_active', true)
+                    ->where(function ($dateQuery): void {
+                        $dateQuery->whereNull('valid_to')->orWhere('valid_to', '>=', now());
+                    })
+                    ->orderByDesc('valid_from')
+                    ->orderByDesc('id'),
+            ])
             ->whereHas('userFacilityRoles', fn ($query) => $query
                 ->where('facility_id', $facilityId)
                 ->where('is_active', true)
@@ -83,7 +115,23 @@ class InternalMessageController extends Controller
         return response()->json([
             'facility_id' => $facilityId,
             'minor_id' => $minor?->id,
-            'users' => $users,
+            'users' => $users->map(function (User $candidate) use ($facilityId, $minor): array {
+                /** @var UserFacilityRole|null $assignment */
+                $assignment = $candidate->userFacilityRoles
+                    ->filter(fn (UserFacilityRole $item) => (int) $item->facility_id === $facilityId)
+                    ->first();
+
+                return [
+                    'id' => $candidate->id,
+                    'display_name' => trim(($candidate->last_name ?? '') . ' ' . ($candidate->first_name ?? '')),
+                    'first_name' => $candidate->first_name,
+                    'last_name' => $candidate->last_name,
+                    'email' => $candidate->email,
+                    'role_code' => $assignment?->role?->code,
+                    'role_name' => $assignment?->role?->name,
+                    'is_minor_scoped' => $minor ? $this->minorAccessService->hasActiveAssignment($candidate, $minor) : false,
+                ];
+            })->values(),
         ]);
     }
 
@@ -240,6 +288,37 @@ class InternalMessageController extends Controller
             'message' => 'Conversazione marcata come letta.',
             'thread_id' => $thread->id,
             'last_read_at' => optional($participant->last_read_at)->toIso8601String(),
+        ]);
+    }
+
+    public function archive(Request $request, InternalMessageThread $thread): JsonResponse
+    {
+        abort_unless($this->internalMessageAccessService->canAccessThread($request->user(), $thread->loadMissing('minor'), 'internal_messages.update'), 403, 'Archiviazione conversazione non consentita.');
+
+        $thread->forceFill([
+            'archived_at' => now(),
+            'updated_by_user_id' => $request->user()?->id,
+        ])->save();
+
+        $this->auditLogService->record($request, [
+            'facility_id' => $thread->facility_id,
+            'minor_id' => $thread->minor_id,
+            'action' => 'archive',
+            'resource_type' => 'internal_message_thread',
+            'resource_id' => (string) $thread->id,
+            'resource_label' => $thread->subject,
+            'operation_summary' => sprintf(
+                '%s ha archiviato la conversazione interna #%d: %s.',
+                $this->auditLogService->resolveActorDisplayName($request->user()),
+                $thread->id,
+                $thread->subject
+            ),
+        ]);
+        $this->auditLogService->markHandled($request);
+
+        return response()->json([
+            'message' => 'Conversazione archiviata.',
+            'thread' => $this->serializeThread($this->loadThread($thread), $request->user(), true),
         ]);
     }
 

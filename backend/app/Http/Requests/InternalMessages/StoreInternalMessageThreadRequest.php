@@ -4,6 +4,7 @@ namespace App\Http\Requests\InternalMessages;
 
 use App\Models\Facility;
 use App\Models\Minor;
+use App\Models\MinorUserAssignment;
 use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -75,6 +76,29 @@ class StoreInternalMessageThreadRequest extends FormRequest
 
             if (count($eligibleUserIds) !== $participantIds->count()) {
                 $validator->errors()->add('participant_user_ids', 'Uno o più partecipanti non appartengono alla struttura selezionata.');
+            }
+
+            if ($threadType === 'minor' && $minorId) {
+                $minorEligibleUserIds = MinorUserAssignment::query()
+                    ->where('minor_id', $minorId)
+                    ->where('facility_id', $facilityId)
+                    ->whereIn('user_id', $participantIds)
+                    ->where('is_active', true)
+                    ->whereDate('valid_from', '<=', now()->toDateString())
+                    ->where(function ($query): void {
+                        $query->whereNull('valid_to')
+                            ->orWhereDate('valid_to', '>=', now()->toDateString());
+                    })
+                    ->pluck('user_id')
+                    ->all();
+
+                if ($this->user()?->id) {
+                    $minorEligibleUserIds[] = $this->user()?->id;
+                }
+
+                if (count(array_unique($minorEligibleUserIds)) !== $participantIds->count()) {
+                    $validator->errors()->add('participant_user_ids', 'Uno o più partecipanti non hanno accesso attivo al minore selezionato.');
+                }
             }
         });
     }

@@ -65,6 +65,7 @@ import MiaSettimanaPage from './pages/turni/MiaSettimanaPage'
 import MiePresentePage from './pages/turni/MiePresentePage'
 import VerificaTimesheetPage from './pages/turni/VerificaTimesheetPage'
 import TimesheetLockPage from './pages/turni/TimesheetLockPage'
+import TimesheetCoordDashboardPage from './pages/turni/TimesheetCoordDashboardPage'
 import ExportPresenzePage from './pages/turni/ExportPresenzePage'
 import MessaggiPage from './pages/messaggi/MessaggiPage'
 import MessaggioDetailPage from './pages/messaggi/MessaggioDetailPage'
@@ -103,6 +104,7 @@ function AppRoutes() {
         <Route path='/turni/mia-settimana' element={<MiaSettimanaPage />} />
         <Route path='/turni/presenze' element={<MiePresentePage />} />
         <Route path='/turni/verifica' element={<VerificaTimesheetPage />} />
+        <Route path='/turni/dashboard' element={<TimesheetCoordDashboardPage />} />
         <Route path='/turni/lock' element={<TimesheetLockPage />} />
         <Route path='/turni/export' element={<ExportPresenzePage />} />
         <Route path='/messaggi' element={<MessaggiPage />} />
