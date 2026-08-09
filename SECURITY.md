@@ -42,12 +42,13 @@ Regola operativa:
 
 Per segnalazioni di sicurezza **non aprire issue pubbliche**.
 
-Usare il canale privato:
+Il canale ufficiale è:
 
-- email: `domtric80@gmail.com`
-- oggetto consigliato: `[FamilyHub Security] breve titolo del problema`
+- **GitHub Private Vulnerability Reporting** del repository `domtric80/familyhub`
 
-Nel messaggio includere, se possibile:
+Usare quindi il form privato di segnalazione vulnerabilità disponibile nella sezione sicurezza del repository.
+
+Nel report includere, se possibile:
 
 - descrizione del problema
 - impatto atteso
@@ -56,6 +57,10 @@ Nel messaggio includere, se possibile:
 - ambiente coinvolto (`locale`, `docker`, `produzione`)
 - eventuale PoC, log, screenshot o richiesta HTTP
 - indicazione se la vulnerabilità coinvolge dati reali o solo ambiente di test
+
+Canale secondario:
+
+- se il private reporting GitHub non è disponibile o non funziona, usare un canale privato concordato con il maintainer
 
 ## Tempi di presa in carico
 

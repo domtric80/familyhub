@@ -1,0 +1,185 @@
+name: familyhub-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versione release SemVer senza prefisso v (es. 1.1.2)"
+        required: true
+        type: string
+      publish:
+        description: "Pubblica la release GitHub invece di crearla in draft"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: familyhub-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      VERSION: ${{ inputs.version }}
+      APP_ENV: testing
+      APP_DEBUG: "false"
+      APP_URL: http://localhost:8100
+      APP_KEY: base64:Qm9vdHN0cmFwRmFtaWx5SHViS2V5Rm9yQ0lSZWxlYXNlMDE=
+      DB_DATABASE: familyhub
+      DB_USERNAME: familyhub
+      DB_PASSWORD: familyhub-ci-password
+      MINIO_ROOT_USER: familyhub
+      MINIO_ROOT_PASSWORD: familyhub-ci-minio-password
+      AWS_BUCKET: familyhub-private
+      AWS_DEFAULT_REGION: eu-south-1
+      AWS_ENDPOINT: http://minio:9000
+      ANTIVIRUS_DRIVER: clamav
+      ANTIVIRUS_FAIL_CLOSED: "true"
+      FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD: "true"
+      FAMILYHUB_LOCAL_ADMIN_EMAIL: admin@familyhub.local
+      FAMILYHUB_LOCAL_ADMIN_PASSWORD: password
+      COMPOSE_PROJECT_NAME: familyhub-ci
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate version format
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Versione non valida: $VERSION"; exit 1; }
+
+      - name: Validate version files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f VERSION
+          test -f CHANGELOG.md
+          test -f README.md
+          [ "$(tr -d '\r\n' < VERSION)" = "$VERSION" ] || { echo "VERSION non allineato a $VERSION"; exit 1; }
+          grep -F "Versione corrente: \`$VERSION\`" README.md >/dev/null || { echo "README non allineato a $VERSION"; exit 1; }
+          grep -F "## [$VERSION]" CHANGELOG.md >/dev/null || { echo "CHANGELOG non contiene la sezione [$VERSION]"; exit 1; }
+
+      - name: Resolve release notes file
+        id: release_notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE="$(find docs/releases -maxdepth 1 -type f -name "*-v$VERSION.md" | sort | head -n 1)"
+          [ -n "$FILE" ] || { echo "File release notes non trovato per v$VERSION"; exit 1; }
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure tag does not already exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Il tag v$VERSION esiste già."
+            exit 1
+          fi
+
+      - name: Prepare root env
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          {
+            echo "APP_ENV=$APP_ENV"
+            echo "APP_DEBUG=$APP_DEBUG"
+            echo "APP_URL=$APP_URL"
+            echo "APP_KEY=$APP_KEY"
+            echo "DB_DATABASE=$DB_DATABASE"
+            echo "DB_USERNAME=$DB_USERNAME"
+            echo "DB_PASSWORD=$DB_PASSWORD"
+            echo "MINIO_ROOT_USER=$MINIO_ROOT_USER"
+            echo "MINIO_ROOT_PASSWORD=$MINIO_ROOT_PASSWORD"
+            echo "AWS_BUCKET=$AWS_BUCKET"
+            echo "AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION"
+            echo "AWS_ENDPOINT=$AWS_ENDPOINT"
+            echo "ANTIVIRUS_DRIVER=$ANTIVIRUS_DRIVER"
+            echo "ANTIVIRUS_FAIL_CLOSED=$ANTIVIRUS_FAIL_CLOSED"
+            echo "FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD=$FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD"
+            echo "FAMILYHUB_LOCAL_ADMIN_EMAIL=$FAMILYHUB_LOCAL_ADMIN_EMAIL"
+            echo "FAMILYHUB_LOCAL_ADMIN_PASSWORD=$FAMILYHUB_LOCAL_ADMIN_PASSWORD"
+          } >> .env
+
+      - name: Start CI dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose up -d postgres redis minio clamav mc
+
+      - name: Initialize backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose run --rm app-init
+
+      - name: Run backend tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose run --rm app sh -lc "php artisan test"
+
+      - name: Run frontend build
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose run --rm frontend sh -lc "npm install && npm run build"
+
+      - name: Run backend audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose run --rm app sh -lc "composer audit --format=json"
+
+      - name: Run frontend runtime audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose run --rm frontend sh -lc "npm audit --omit=dev --json"
+
+      - name: Create and push tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "FamilyHub v$VERSION"
+          git push origin "v$VERSION"
+
+      - name: Create draft release
+        if: ${{ inputs.publish == false }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "v$VERSION" \
+            --title "FamilyHub v$VERSION" \
+            --notes-file "${{ steps.release_notes.outputs.file }}" \
+            --draft
+
+      - name: Publish release
+        if: ${{ inputs.publish == true }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "v$VERSION" \
+            --title "FamilyHub v$VERSION" \
+            --notes-file "${{ steps.release_notes.outputs.file }}"
+
+      - name: Shutdown CI stack
+        if: always()
+        shell: bash
+        run: |
+          docker compose down -v --remove-orphans

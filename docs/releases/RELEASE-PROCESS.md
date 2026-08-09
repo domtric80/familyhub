@@ -4,9 +4,10 @@
 
 Questo documento definisce il processo ufficiale di rilascio di FamilyHub.
 
-Alla data del `2026-08-09`, il progetto usa un processo di release **manuale controllato**, con pubblicazione su GitHub e aggiornamento obbligatorio della documentazione di versione.
+Alla data del `2026-08-09`, il progetto usa un processo di release **ibrido e controllato**:
 
-Questo processo è valido finché non verrà introdotta una pipeline automatizzata di release.
+- scelta umana del version bump e delle note
+- esecuzione automatizzata del flusso di verifica/tag/release tramite GitHub Actions
 
 ## Regole generali
 
@@ -159,25 +160,30 @@ Usare un commit esplicito, ad esempio:
 chore(release): publish v1.1.2
 ```
 
-### 6. Creare il tag Git
+### 6. Eseguire il workflow di release
 
-```powershell
-git tag -a v1.1.2 -m "FamilyHub v1.1.2"
-git push origin master
-git push origin v1.1.2
-```
+Il repository usa il workflow GitHub:
 
-### 7. Pubblicare la release GitHub
+- `.github/workflows/release.yml`
 
-La release GitHub può essere creata manualmente. Al momento è una procedura **accettata e ufficiale**.
+Il workflow:
 
-Campi minimi consigliati:
+- verifica `VERSION`
+- verifica `CHANGELOG.md`
+- verifica la presenza del file note release in `docs/releases/`
+- esegue bootstrap/test/build/audit con Docker Compose
+- crea il tag `vX.Y.Z`
+- crea una GitHub Release in modalità draft o pubblicata
 
-- tag: `vX.Y.Z`
-- titolo: `FamilyHub vX.Y.Z`
-- descrizione: sintesi della release basata su `docs/releases/YYYY-MM-DD-vX.Y.Z.md`
+Input minimi:
 
-Se la release è stabile, non marcarla come pre-release.
+- `version`
+- `publish`
+
+Regola:
+
+- `publish = false` → crea una **draft release**
+- `publish = true` → pubblica direttamente la release GitHub
 
 ## Standard per le release notes
 
@@ -191,14 +197,12 @@ Ogni release deve rispondere a queste domande:
 
 ## Release manuali: va bene?
 
-Sì. Alla data attuale, la gestione manuale delle release è corretta, a patto che sia disciplinata.
+Sì, ma solo per casi eccezionali o manutenzione di emergenza.
 
-Una release manuale è considerata valida quando:
+Il percorso standard raccomandato è:
 
-- il numero versione è allineato ovunque
-- changelog e release notes coincidono
-- il tag Git è presente
-- la release GitHub è pubblicata
+- preparazione manuale dei contenuti
+- esecuzione del workflow GitHub per tag e release
 
 ## Cosa non fare
 
@@ -215,14 +219,13 @@ Alla data del `2026-08-09`, lo standard FamilyHub è:
 - frontend: `npm` + `package-lock.json`
 - backend PHP: `composer.lock`
 - release notes archiviate in `docs/releases/`
-- pubblicazione release su GitHub gestita manualmente
+- release GitHub gestita tramite workflow manuale `workflow_dispatch`
 
 ## Evoluzione futura consigliata
 
-Quando il progetto crescerà ancora, sarà utile automatizzare:
+Quando il progetto crescerà ancora, sarà utile estendere l’automazione con:
 
-- validazione checklist release
-- creazione tag
-- generazione draft release notes
-- validazione version bump
-- controllo allineamento tra `VERSION`, `README.md` e `CHANGELOG.md`
+- promozione da draft a published con approvazione
+- allegati binari o pacchetti alla release
+- sincronizzazione automatica changelog/release notes
+- blocchi aggiuntivi su vulnerabilità note o test selettivi obbligatori
