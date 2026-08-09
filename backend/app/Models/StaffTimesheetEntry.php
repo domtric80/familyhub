@@ -18,6 +18,13 @@ class StaffTimesheetEntry extends Model
     public const STATUS_REJECTED = 'rejected';
     public const STATUS_LOCKED = 'locked';
 
+    public const ADJUSTMENT_TYPES = [
+        'manual_correction',
+        'break_correction',
+        'overtime_authorization',
+        'absence_reconciliation',
+    ];
+
     protected $fillable = [
         'facility_id',
         'staff_member_id',
@@ -88,5 +95,10 @@ class StaffTimesheetEntry extends Model
     public function attendanceEvents(): HasMany
     {
         return $this->hasMany(StaffAttendanceEvent::class, 'staff_member_id', 'staff_member_id');
+    }
+
+    public function adjustments(): HasMany
+    {
+        return $this->hasMany(StaffTimesheetAdjustment::class, 'timesheet_entry_id')->orderByDesc('created_at')->orderByDesc('id');
     }
 }

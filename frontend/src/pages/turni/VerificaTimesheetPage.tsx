@@ -4,10 +4,10 @@ import {
   Table, Row, Col, Input, FormGroup, Label, Alert,
   Modal, ModalHeader, ModalBody, ModalFooter,
 } from 'reactstrap'
-import { Check, X, AlertTriangle, Info, Clock, ChevronDown } from 'react-feather'
+import { Check, X, AlertTriangle, Info, Clock, ChevronDown, Plus } from 'react-feather'
 import { toast } from 'react-toastify'
 import { timesheetApi, staffMemberApi, facilityApi, apiError } from '../../services/api'
-import type { TimesheetEntry, TimesheetEntryStatus, Facility } from '../../types'
+import type { TimesheetAdjustmentWrite, TimesheetEntry, TimesheetEntryStatus, Facility } from '../../types'
 import InfoDrawer from '../../components/common/InfoDrawer'
 
 const STATUS_ENTRY: Record<TimesheetEntryStatus, { label: string; cls: string }> = {
@@ -19,6 +19,13 @@ const STATUS_ENTRY: Record<TimesheetEntryStatus, { label: string; cls: string }>
   locked: { label: 'Bloccato', cls: 'badge-light-secondary' },
 }
 
+const ADJUSTMENT_TYPE_OPTIONS: Array<{ value: TimesheetAdjustmentWrite['adjustment_type']; label: string }> = [
+  { value: 'manual_correction', label: 'Correzione manuale' },
+  { value: 'break_correction', label: 'Correzione pausa' },
+  { value: 'overtime_authorization', label: 'Straordinario autorizzato' },
+  { value: 'absence_reconciliation', label: 'Riconciliazione assenza' },
+]
+
 function fmtDate(value: string) {
   try { return new Date(value + 'T12:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }) }
   catch { return value }
@@ -26,6 +33,12 @@ function fmtDate(value: string) {
 
 function fmtTime(value: string) {
   try { return new Date(value).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) }
+  catch { return value }
+}
+
+function fmtDateTime(value?: string | null) {
+  if (!value) return '—'
+  try { return new Date(value).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) }
   catch { return value }
 }
 
@@ -50,6 +63,10 @@ function currentMonthRange() {
   return { date_from: `${year}-${monthNumber}-01`, date_to: `${year}-${monthNumber}-${new Date(year, month + 1, 0).getDate()}` }
 }
 
+function adjustmentTypeLabel(value: string) {
+  return ADJUSTMENT_TYPE_OPTIONS.find((item) => item.value === value)?.label ?? value
+}
+
 export default function VerificaTimesheetPage() {
   const [entries, setEntries] = useState<TimesheetEntry[]>([])
   const [facilities, setFacilities] = useState<Facility[]>([])
@@ -66,6 +83,12 @@ export default function VerificaTimesheetPage() {
   const [detail, setDetail] = useState<TimesheetEntry | null>(null)
   const [rejectModal, setRejectModal] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
+  const [adjustmentModal, setAdjustmentModal] = useState(false)
+  const [adjustmentForm, setAdjustmentForm] = useState<TimesheetAdjustmentWrite>({
+    adjustment_type: 'manual_correction',
+    delta_minutes: 0,
+    reason: '',
+  })
   const [acting, setActing] = useState(false)
 
   useEffect(() => {
@@ -122,6 +145,33 @@ export default function VerificaTimesheetPage() {
       toast.success('Entry rifiutata.')
     } catch (e) {
       toast.error(apiError(e).message ?? 'Errore rifiuto.')
+    } finally {
+      setActing(false)
+    }
+  }
+
+  const openAdjustmentModal = (entry: TimesheetEntry) => {
+    setDetail(entry)
+    setAdjustmentForm({
+      adjustment_type: 'manual_correction',
+      delta_minutes: 0,
+      reason: '',
+    })
+    setAdjustmentModal(true)
+  }
+
+  const handleAdjustmentSubmit = async () => {
+    if (!detail || !adjustmentForm.reason.trim() || adjustmentForm.delta_minutes === 0) return
+
+    setActing(true)
+    try {
+      const updated = await timesheetApi.addAdjustment(detail.id, adjustmentForm)
+      setEntries((prev) => prev.map((item) => item.id === detail.id ? updated : item))
+      setDetail(updated)
+      setAdjustmentModal(false)
+      toast.success('Rettifica timesheet registrata con successo.')
+    } catch (e) {
+      toast.error(apiError(e).message ?? 'Errore creazione rettifica.')
     } finally {
       setActing(false)
     }
@@ -252,7 +302,7 @@ export default function VerificaTimesheetPage() {
         </CardBody>
       </Card>
 
-      <Modal isOpen={!!detail && !rejectModal} toggle={() => setDetail(null)} size='lg'>
+      <Modal isOpen={!!detail && !rejectModal && !adjustmentModal} toggle={() => setDetail(null)} size='lg'>
         {detail && (
           <>
             <ModalHeader toggle={() => setDetail(null)}>
@@ -299,14 +349,15 @@ export default function VerificaTimesheetPage() {
                 <>
                   <div className='fw-semibold small mb-1' style={{ color: '#7366ff' }}>Rettifiche</div>
                   <Table size='sm' className='mb-3'>
-                    <thead><tr><th>Tipo</th><th>Δ min</th><th>Motivo</th><th>Stato</th></tr></thead>
+                    <thead><tr><th>Tipo</th><th>Δ min</th><th>Motivo</th><th>Stato</th><th>Creata il</th></tr></thead>
                     <tbody>
                       {detail.adjustments.map((adjustment) => (
                         <tr key={adjustment.id}>
-                          <td className='small'>{adjustment.adjustment_type}</td>
+                          <td className='small'>{adjustmentTypeLabel(adjustment.adjustment_type)}</td>
                           <td className='small'>{adjustment.delta_minutes > 0 ? '+' : ''}{adjustment.delta_minutes}</td>
                           <td className='small'>{adjustment.reason}</td>
                           <td><span className='badge badge-light-secondary'>{adjustment.status}</span></td>
+                          <td className='small'>{fmtDateTime(adjustment.created_at)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -315,8 +366,13 @@ export default function VerificaTimesheetPage() {
               )}
             </ModalBody>
             <ModalFooter className='justify-content-between'>
-              <div className='small text-muted'>Rettifiche avanzate disponibili in una fase backend successiva.</div>
+              <div className='small text-muted'>Le rettifiche correggono il consuntivo senza alterare lo storico delle timbrature originali.</div>
               <div className='d-flex gap-2'>
+                {detail.status !== 'locked' && (
+                  <Button color='primary' outline size='sm' disabled={acting} onClick={() => openAdjustmentModal(detail)}>
+                    <Plus size={13} className='me-1' /> Aggiungi rettifica
+                  </Button>
+                )}
                 {detail.status === 'submitted' && (
                   <>
                     <Button color='success' size='sm' disabled={acting} onClick={() => handleApprove(detail)}>
@@ -332,6 +388,52 @@ export default function VerificaTimesheetPage() {
             </ModalFooter>
           </>
         )}
+      </Modal>
+
+      <Modal isOpen={adjustmentModal} toggle={() => setAdjustmentModal(false)}>
+        <ModalHeader toggle={() => setAdjustmentModal(false)}>Nuova rettifica timesheet</ModalHeader>
+        <ModalBody>
+          <FormGroup>
+            <Label>Tipo rettifica</Label>
+            <Input
+              type='select'
+              value={adjustmentForm.adjustment_type}
+              onChange={(e) => setAdjustmentForm((prev) => ({ ...prev, adjustment_type: e.target.value as TimesheetAdjustmentWrite['adjustment_type'] }))}
+            >
+              {ADJUSTMENT_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </Input>
+          </FormGroup>
+          <FormGroup>
+            <Label>Delta minuti</Label>
+            <Input
+              type='number'
+              min='-720'
+              max='720'
+              step='1'
+              value={adjustmentForm.delta_minutes}
+              onChange={(e) => setAdjustmentForm((prev) => ({ ...prev, delta_minutes: Number(e.target.value) }))}
+            />
+            <div className='small text-muted mt-1'>Positivo aggiunge minuti, negativo li sottrae dal consuntivo.</div>
+          </FormGroup>
+          <FormGroup className='mb-0'>
+            <Label>Motivazione</Label>
+            <Input
+              type='textarea'
+              rows={4}
+              value={adjustmentForm.reason}
+              onChange={(e) => setAdjustmentForm((prev) => ({ ...prev, reason: e.target.value }))}
+              placeholder='Descrivi la motivazione operativa o autorizzativa della rettifica.'
+            />
+          </FormGroup>
+        </ModalBody>
+        <ModalFooter>
+          <Button color='primary' disabled={acting || !adjustmentForm.reason.trim() || adjustmentForm.delta_minutes === 0} onClick={handleAdjustmentSubmit}>
+            {acting ? 'Salvataggio…' : 'Crea rettifica'}
+          </Button>
+          <Button color='secondary' onClick={() => setAdjustmentModal(false)}>Annulla</Button>
+        </ModalFooter>
       </Modal>
 
       <Modal isOpen={rejectModal} toggle={() => setRejectModal(false)}>
@@ -350,8 +452,7 @@ export default function VerificaTimesheetPage() {
       <InfoDrawer isOpen={infoOpen} onClose={() => setInfoOpen(false)} title='Verifica timesheet — Guida'>
         <p>Qui puoi revisionare e approvare le entry timesheet degli operatori della struttura.</p>
         <p>Le entry nello stato <em>Inviato</em> sono in attesa di approvazione. Le anomalie indicano scostamenti o timbrature incomplete.</p>
-        <p>Usa <strong>Approva</strong> per confermare l'entry e <strong>Rifiuta</strong> per rimandarla all'operatore con motivazione.</p>
-        <p className='text-muted small'>Le rettifiche avanzate sono previste nel contratto ma non ancora attive nel backend operativo.</p>
+        <p>Usa <strong>Approva</strong> per confermare l'entry, <strong>Rifiuta</strong> per rimandarla all'operatore e <strong>Aggiungi rettifica</strong> per correggere il consuntivo con audit trail.</p>
       </InfoDrawer>
     </div>
   )

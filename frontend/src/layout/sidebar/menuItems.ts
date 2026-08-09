@@ -54,6 +54,7 @@ export const MENUITEMS: MenuSection[] = [
         active: false,
         children: [
           { title: 'Pianificazione settimanale', icon: 'calendar', type: 'link', path: '/turni' },
+          { title: 'Dashboard timesheet',        icon: 'charts',   type: 'link', path: '/turni/timesheet' },
           { title: 'Modelli turno',              icon: 'table',    type: 'link', path: '/turni/modelli' },
           { title: 'La mia settimana',           icon: 'board',    type: 'link', path: '/turni/mia-settimana' },
           { title: 'Le mie presenze',            icon: 'form',     type: 'link', path: '/turni/presenze' },

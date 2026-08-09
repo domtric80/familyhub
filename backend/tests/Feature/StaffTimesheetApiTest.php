@@ -256,6 +256,77 @@ class StaffTimesheetApiTest extends TestCase
         $this->assertStringContainsString('entry_id;work_date;facility;staff_member', $response->streamedContent());
     }
 
+    public function test_coordinator_can_add_timesheet_adjustment_with_audit_trail(): void
+    {
+        $facility = Facility::query()->firstOrFail();
+        [$coordinator] = $this->createFacilityUserWithStaffMember('coord.timesheet.adjust@familyhub.local', 'COORDINATORE', $facility->id, 'STAFF-TS-COORD-A');
+        [$educator, $educatorStaffMember] = $this->createFacilityUserWithStaffMember('edu.timesheet.adjust@familyhub.local', 'EDUCATORE', $facility->id, 'STAFF-TS-EDU-A');
+
+        Sanctum::actingAs($coordinator);
+        $templateId = $this
+            ->postJson('/api/admin/staff-shift-templates', [
+                'facility_id' => $facility->id,
+                'code' => 'ADJ',
+                'name' => 'Turno rettifica',
+                'start_time' => '08:00',
+                'end_time' => '16:00',
+                'minimum_staff_required' => 1,
+                'sort_order' => 10,
+                'is_active' => true,
+            ])
+            ->assertCreated()
+            ->json('id');
+
+        $shiftAssignmentId = $this
+            ->postJson('/api/admin/staff-shifts', [
+                'facility_id' => $facility->id,
+                'shift_template_id' => $templateId,
+                'staff_member_id' => $educatorStaffMember->id,
+                'shift_date' => '2026-07-22',
+                'status' => 'planned',
+            ])
+            ->assertCreated()
+            ->json('id');
+
+        Sanctum::actingAs($educator);
+        $this->postJson('/api/staff/attendance-events', [
+            'facility_id' => $facility->id,
+            'shift_assignment_id' => $shiftAssignmentId,
+            'event_type' => 'clock_in',
+            'occurred_at' => '2026-07-22T08:00:00+02:00',
+        ])->assertCreated();
+
+        $timesheetEntryId = $this->postJson('/api/staff/attendance-events', [
+            'facility_id' => $facility->id,
+            'shift_assignment_id' => $shiftAssignmentId,
+            'event_type' => 'clock_out',
+            'occurred_at' => '2026-07-22T15:30:00+02:00',
+        ])->assertCreated()->json('timesheet_entry.id');
+
+        Sanctum::actingAs($coordinator);
+        $this
+            ->postJson("/api/admin/timesheets/{$timesheetEntryId}/adjustments", [
+                'adjustment_type' => 'manual_correction',
+                'delta_minutes' => 30,
+                'reason' => 'Autorizzata rettifica per uscita registrata in ritardo nel verbale turno.',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('id', $timesheetEntryId)
+            ->assertJsonPath('worked_minutes', 480)
+            ->assertJsonPath('ordinary_minutes', 480)
+            ->assertJsonPath('overtime_minutes', 0)
+            ->assertJsonPath('variance_minutes', 0)
+            ->assertJsonPath('adjustments.0.adjustment_type', 'manual_correction')
+            ->assertJsonPath('adjustments.0.delta_minutes', 30)
+            ->assertJsonPath('adjustments.0.status', 'approved');
+
+        $this
+            ->getJson("/api/admin/timesheets/{$timesheetEntryId}")
+            ->assertOk()
+            ->assertJsonPath('adjustments.0.adjustment_type', 'manual_correction')
+            ->assertJsonPath('adjustments.0.delta_minutes', 30);
+    }
+
     private function createFacilityUserWithStaffMember(string $email, string $roleCode, int $facilityId, string $employeeCode): array
     {
         $admin = User::query()->where('email', 'admin@familyhub.local')->firstOrFail();

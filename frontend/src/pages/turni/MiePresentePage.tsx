@@ -26,6 +26,13 @@ const STATUS_ENTRY: Record<TimesheetEntryStatus, { label: string; cls: string }>
   locked: { label: 'Bloccato', cls: 'badge-light-secondary' },
 }
 
+const ADJUSTMENT_LABELS: Record<string, string> = {
+  manual_correction: 'Correzione manuale',
+  break_correction: 'Correzione pausa',
+  overtime_authorization: 'Straordinario autorizzato',
+  absence_reconciliation: 'Riconciliazione assenza',
+}
+
 function fmtTime(value: string) {
   try { return new Date(value).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) }
   catch { return value }
@@ -264,7 +271,7 @@ export default function MiePresentePage() {
                     <tbody>
                       {detail.adjustments.map((adjustment) => (
                         <tr key={adjustment.id}>
-                          <td className='small'>{adjustment.adjustment_type}</td>
+                          <td className='small'>{ADJUSTMENT_LABELS[adjustment.adjustment_type] ?? adjustment.adjustment_type}</td>
                           <td className='small'>{adjustment.delta_minutes > 0 ? '+' : ''}{adjustment.delta_minutes}</td>
                           <td className='small'>{adjustment.reason}</td>
                           <td><span className='badge badge-light-secondary'>{adjustment.status}</span></td>

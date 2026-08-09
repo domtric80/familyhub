@@ -4496,6 +4496,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StaffTimesheetEntry'
+  /admin/timesheets/{timesheetEntry}/adjustments:
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: addStaffTimesheetAdjustment
+      description: >
+        Registra una rettifica sul consuntivo timesheet senza alterare lo storico timbrature.
+        La rettifica viene approvata contestualmente alla creazione e ricalcola i totali
+        dell'entry mantenendo il ciclo di stato esistente del timesheet.
+      parameters:
+        - in: path
+          name: timesheetEntry
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffTimesheetAdjustmentWrite'
+      responses:
+        '201':
+          description: Rettifica creata e consuntivo aggiornato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffTimesheetEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /admin/minor-assignments:
     get:
       tags: [Admin]
@@ -6947,7 +6980,47 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/StaffAttendanceEvent'
+        adjustments:
+          type: array
+          items:
+            $ref: '#/components/schemas/StaffTimesheetAdjustment'
       required: [id, facility_id, staff_member_id, work_date, planned_minutes, worked_minutes, break_minutes, ordinary_minutes, overtime_minutes, night_minutes, absence_minutes, variance_minutes, status]
+    StaffTimesheetAdjustment:
+      type: object
+      properties:
+        id: { type: integer }
+        timesheet_entry_id: { type: integer }
+        adjustment_type:
+          type: string
+          enum: [manual_correction, break_correction, overtime_authorization, absence_reconciliation]
+        delta_minutes: { type: integer }
+        reason: { type: string }
+        status:
+          type: string
+          enum: [pending, approved, rejected, cancelled]
+        created_by_user_id: { type: integer, nullable: true }
+        reviewed_by_user_id: { type: integer, nullable: true }
+        reviewed_at: { type: string, format: date-time, nullable: true }
+        review_notes: { type: string, nullable: true }
+        created_at: { type: string, format: date-time, nullable: true }
+        updated_at: { type: string, format: date-time, nullable: true }
+      required: [id, timesheet_entry_id, adjustment_type, delta_minutes, reason, status]
+    StaffTimesheetAdjustmentWrite:
+      type: object
+      properties:
+        adjustment_type:
+          type: string
+          enum: [manual_correction, break_correction, overtime_authorization, absence_reconciliation]
+        delta_minutes:
+          type: integer
+          minimum: -720
+          maximum: 720
+          not:
+            const: 0
+        reason:
+          type: string
+          maxLength: 5000
+      required: [adjustment_type, delta_minutes, reason]
     StaffAttendanceEventStoreResponse:
       type: object
       properties:

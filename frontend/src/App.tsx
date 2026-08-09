@@ -59,6 +59,7 @@ import AvvicinamentiPage from './pages/avvicinamenti/AvvicinamentiPage'
 import DiarioPage from './pages/diario/DiarioPage'
 import EducatoriPage from './pages/educatori/EducatoriPage'
 import PianificazionePage from './pages/turni/PianificazionePage'
+import TimesheetPage from './pages/turni/TimesheetPage'
 import ModelliTurnoPage from './pages/turni/ModelliTurnoPage'
 import MiaSettimanaPage from './pages/turni/MiaSettimanaPage'
 import MiePresentePage from './pages/turni/MiePresentePage'
@@ -96,6 +97,7 @@ function AppRoutes() {
         <Route path='/diario' element={<DiarioPage />} />
         <Route path='/educatori' element={<EducatoriPage />} />
         <Route path='/turni' element={<PianificazionePage />} />
+        <Route path='/turni/timesheet' element={<TimesheetPage />} />
         <Route path='/turni/modelli' element={<ModelliTurnoPage />} />
         <Route path='/turni/mia-settimana' element={<MiaSettimanaPage />} />
         <Route path='/turni/presenze' element={<MiePresentePage />} />

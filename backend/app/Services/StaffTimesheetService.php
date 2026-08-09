@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\StaffAttendanceEvent;
 use App\Models\StaffShiftAssignment;
+use App\Models\StaffTimesheetAdjustment;
 use App\Models\StaffTimesheetEntry;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -118,6 +119,21 @@ class StaffTimesheetService
         $absenceMinutes = max(0, $plannedMinutes - $workedMinutes);
         $varianceMinutes = $workedMinutes - $plannedMinutes;
 
+        $approvedAdjustmentDelta = (int) StaffTimesheetAdjustment::query()
+            ->where('timesheet_entry_id', $entry->id)
+            ->where('status', StaffTimesheetAdjustment::STATUS_APPROVED)
+            ->sum('delta_minutes');
+
+        if ($approvedAdjustmentDelta !== 0) {
+            $workedMinutes = max(0, $workedMinutes + $approvedAdjustmentDelta);
+            $ordinaryMinutes = $plannedMinutes > 0
+                ? min($workedMinutes, $plannedMinutes)
+                : $workedMinutes;
+            $overtimeMinutes = max(0, $workedMinutes - $ordinaryMinutes);
+            $absenceMinutes = max(0, $plannedMinutes - $workedMinutes);
+            $varianceMinutes = $workedMinutes - $plannedMinutes;
+        }
+
         $anomalies = [];
 
         if ($events->isNotEmpty() && ! $clockIn) {
@@ -176,6 +192,8 @@ class StaffTimesheetService
             'shiftAssignment.shiftTemplate',
             'submittedBy:id,first_name,last_name,email',
             'approvedBy:id,first_name,last_name,email',
+            'adjustments.createdBy:id,first_name,last_name,email',
+            'adjustments.reviewedBy:id,first_name,last_name,email',
         ];
     }
 

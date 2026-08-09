@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\StaffTimesheetAdjustment;
 use App\Models\StaffTimesheetEntry;
 use App\Services\AuditLogService;
 use App\Services\StaffTimesheetService;
@@ -120,6 +121,101 @@ class StaffTimesheetController extends Controller
         $this->auditLogService->markHandled($request);
 
         return $this->show($timesheetEntry);
+    }
+
+    public function addAdjustment(Request $request, StaffTimesheetEntry $timesheetEntry): JsonResponse
+    {
+        $validated = $request->validate([
+            'adjustment_type' => ['required', 'string', 'in:' . implode(',', StaffTimesheetEntry::ADJUSTMENT_TYPES)],
+            'delta_minutes' => ['required', 'integer', 'between:-720,720', 'not_in:0'],
+            'reason' => ['required', 'string', 'max:5000'],
+        ]);
+
+        abort_if(
+            $timesheetEntry->status === StaffTimesheetEntry::STATUS_LOCKED,
+            422,
+            'Il timesheet è bloccato e non accetta rettifiche.'
+        );
+
+        $before = [
+            'worked_minutes' => $timesheetEntry->worked_minutes,
+            'ordinary_minutes' => $timesheetEntry->ordinary_minutes,
+            'overtime_minutes' => $timesheetEntry->overtime_minutes,
+            'absence_minutes' => $timesheetEntry->absence_minutes,
+            'variance_minutes' => $timesheetEntry->variance_minutes,
+            'status' => $timesheetEntry->status,
+        ];
+
+        $adjustment = StaffTimesheetAdjustment::query()->create([
+            'timesheet_entry_id' => $timesheetEntry->id,
+            'adjustment_type' => $validated['adjustment_type'],
+            'delta_minutes' => (int) $validated['delta_minutes'],
+            'reason' => trim((string) $validated['reason']),
+            'status' => StaffTimesheetAdjustment::STATUS_APPROVED,
+            'created_by_user_id' => $request->user()?->id,
+            'reviewed_by_user_id' => $request->user()?->id,
+            'reviewed_at' => now(),
+            'review_notes' => 'Rettifica approvata contestualmente alla creazione.',
+        ]);
+
+        $lifecycle = [
+            'status' => $timesheetEntry->status,
+            'submitted_at' => $timesheetEntry->submitted_at,
+            'submitted_by_user_id' => $timesheetEntry->submitted_by_user_id,
+            'approved_at' => $timesheetEntry->approved_at,
+            'approved_by_user_id' => $timesheetEntry->approved_by_user_id,
+            'locked_at' => $timesheetEntry->locked_at,
+        ];
+
+        $recomputed = $this->timesheetService->recomputeForWorkDate(
+            $timesheetEntry->facility_id,
+            $timesheetEntry->staff_member_id,
+            $timesheetEntry->work_date->toDateString(),
+            $timesheetEntry->shift_assignment_id,
+        );
+
+        if (! in_array($lifecycle['status'], [
+            StaffTimesheetEntry::STATUS_DRAFT,
+            StaffTimesheetEntry::STATUS_COMPUTED,
+        ], true)) {
+            $recomputed->forceFill($lifecycle)->save();
+        }
+
+        $recomputed->refresh()->load($this->timesheetService->baseRelations());
+
+        $this->auditLogService->record($request, [
+            'facility_id' => $timesheetEntry->facility_id,
+            'action' => 'create',
+            'resource_type' => 'staff_timesheet_adjustment',
+            'resource_id' => (string) $adjustment->id,
+            'resource_label' => sprintf('Rettifica timesheet %s', $timesheetEntry->work_date->format('Y-m-d')),
+            'operation_summary' => sprintf(
+                '%s ha creato una rettifica timesheet %s (%+d minuti) per il %s.',
+                $this->auditLogService->resolveActorDisplayName($request->user()),
+                $validated['adjustment_type'],
+                (int) $validated['delta_minutes'],
+                $timesheetEntry->work_date->format('Y-m-d')
+            ),
+            'old_values_json' => $before,
+            'new_values_json' => [
+                'adjustment' => [
+                    'id' => $adjustment->id,
+                    'adjustment_type' => $adjustment->adjustment_type,
+                    'delta_minutes' => $adjustment->delta_minutes,
+                    'status' => $adjustment->status,
+                    'reason' => $adjustment->reason,
+                ],
+                'worked_minutes' => $recomputed->worked_minutes,
+                'ordinary_minutes' => $recomputed->ordinary_minutes,
+                'overtime_minutes' => $recomputed->overtime_minutes,
+                'absence_minutes' => $recomputed->absence_minutes,
+                'variance_minutes' => $recomputed->variance_minutes,
+                'status' => $recomputed->status,
+            ],
+        ]);
+        $this->auditLogService->markHandled($request);
+
+        return response()->json($recomputed->load($this->timesheetService->baseRelations()), 201);
     }
 
     public function reject(Request $request, StaffTimesheetEntry $timesheetEntry): JsonResponse

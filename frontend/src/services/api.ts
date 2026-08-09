@@ -1259,7 +1259,7 @@ export const timesheetApi = {
   reject: (id: number, reason: string) =>
     http.post<any>(`/admin/timesheets/${id}/reject`, { reason }).then((r) => normalizeTimesheetEntry(r.data)),
   addAdjustment: (id: number, data: TimesheetAdjustmentWrite) =>
-    Promise.reject(new Error(`Rettifiche timesheet non ancora disponibili per entry ${id}.`)),
+    http.post<any>(`/admin/timesheets/${id}/adjustments`, data).then((r) => normalizeTimesheetEntry(r.data)),
   exportMonthly: (params: { facility_id: number; year: number; month: number; format: 'csv' }) =>
     http.get('/admin/timesheets/export.csv', { params, responseType: 'blob' }),
 }
