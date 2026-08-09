@@ -4,6 +4,11 @@ Versione corrente: `1.1.1`
 
 Applicativo gestionale per strutture residenziali e servizi educativi, con backend Laravel, frontend React/Vite e stack infrastrutturale Docker.
 
+Documenti di governance:
+
+- `SECURITY.md`
+- `docs/releases/RELEASE-PROCESS.md`
+
 ## Requisiti
 
 ### Opzione A — Avvio con Docker
