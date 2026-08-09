@@ -17,6 +17,7 @@ class InternalMessageThread extends Model
         'thread_type',
         'subject',
         'topic',
+        'classification_code',
         'created_by_user_id',
         'updated_by_user_id',
         'last_message_at',
@@ -39,6 +40,11 @@ class InternalMessageThread extends Model
     public function minor(): BelongsTo
     {
         return $this->belongsTo(Minor::class);
+    }
+
+    public function documentClassification(): BelongsTo
+    {
+        return $this->belongsTo(DocumentClassification::class, 'classification_code', 'code');
     }
 
     public function createdBy(): BelongsTo

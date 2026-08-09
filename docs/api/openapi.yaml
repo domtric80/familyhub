@@ -4651,6 +4651,45 @@ paths:
           description: Nessuna entry esportabile nel periodo selezionato
         '422':
           $ref: '#/components/responses/ValidationError'
+  /admin/timesheets/export.pdf:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: exportStaffTimesheetPdf
+      description: Export mensile PDF del timesheet con gli stessi preset amministrativi del CSV.
+      parameters:
+        - in: query
+          name: facility_id
+          required: true
+          schema: { type: integer }
+        - in: query
+          name: year
+          required: true
+          schema: { type: integer }
+        - in: query
+          name: month
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 12 }
+        - in: query
+          name: preset
+          required: false
+          schema: { type: string, enum: [payroll, review, labor_consultant], default: payroll }
+      responses:
+        '200':
+          description: File PDF esportato
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Nessuna entry esportabile nel periodo selezionato
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /admin/timesheets/dashboard-summary:
     get:
       tags: [Admin]
@@ -5762,6 +5801,10 @@ paths:
           in: query
           required: false
           schema: { type: string }
+        - name: classification_code
+          in: query
+          required: false
+          schema: { type: string, description: Classificazione ABAC del thread }
         - name: archived
           in: query
           required: false
@@ -5812,6 +5855,10 @@ paths:
           in: query
           required: false
           schema: { type: integer }
+        - name: classification_code
+          in: query
+          required: false
+          schema: { type: string, description: Se valorizzato, restituisce solo partecipanti autorizzati a quella classificazione }
       responses:
         '200':
           description: Partecipanti selezionabili per la conversazione
@@ -8987,6 +9034,10 @@ components:
           enum: [facility, minor]
         subject: { type: string }
         topic: { type: string, nullable: true }
+        classification_code:
+          type: string
+          nullable: true
+          description: Se omesso il backend usa `internal` per retrocompatibilità.
         participant_user_ids:
           type: array
           items: { type: integer }
@@ -9002,6 +9053,7 @@ components:
       properties:
         facility_id: { type: integer }
         minor_id: { type: integer, nullable: true }
+        classification_code: { type: string, nullable: true }
         users:
           type: array
           items:
@@ -9030,6 +9082,16 @@ components:
           enum: [facility, minor]
         subject: { type: string }
         topic: { type: string, nullable: true }
+        classification_code: { type: string, nullable: true }
+        classification_label: { type: string, nullable: true }
+        document_classification:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            code: { type: string }
+            name: { type: string }
+            is_active: { type: boolean }
         last_message_at: { type: string, format: date-time, nullable: true }
         archived_at: { type: string, format: date-time, nullable: true }
         unread_count: { type: integer }

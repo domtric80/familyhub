@@ -31,6 +31,7 @@ Ordine di lavoro:
 - export mensile con colonna rettifiche
 - export dettaglio verifiche/revisioni
 - preset per payroll / consulente lavoro
+- download sia `CSV` sia `PDF` con lo stesso set di preset
 
 ### 1D. Dashboard timesheet coordinatore
 - anomalie aperte

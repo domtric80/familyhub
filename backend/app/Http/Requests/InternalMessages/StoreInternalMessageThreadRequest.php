@@ -6,6 +6,7 @@ use App\Models\Facility;
 use App\Models\Minor;
 use App\Models\MinorUserAssignment;
 use App\Models\User;
+use App\Services\InternalMessageAccessService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -24,6 +25,7 @@ class StoreInternalMessageThreadRequest extends FormRequest
             'thread_type' => ['required', 'string', Rule::in(config('internal_messages.thread_types', []))],
             'subject' => ['required', 'string', 'max:150'],
             'topic' => ['nullable', 'string'],
+            'classification_code' => ['nullable', 'string', 'exists:document_classifications,code'],
             'participant_user_ids' => ['required', 'array', 'min:1'],
             'participant_user_ids.*' => ['integer', 'exists:users,id'],
             'message_body' => ['required', 'string'],
@@ -36,6 +38,8 @@ class StoreInternalMessageThreadRequest extends FormRequest
             $facilityId = $this->integer('facility_id');
             $minorId = $this->integer('minor_id');
             $threadType = (string) $this->input('thread_type');
+            $classificationCode = (string) ($this->input('classification_code') ?: 'internal');
+            $minor = null;
 
             $facility = Facility::query()->find($facilityId);
             if (! $facility) {
@@ -55,6 +59,10 @@ class StoreInternalMessageThreadRequest extends FormRequest
 
             if ($threadType === 'facility' && $minorId) {
                 $validator->errors()->add('minor_id', 'Un thread di struttura non deve avere un minore associato.');
+            }
+
+            if (! app(InternalMessageAccessService::class)->canUseClassification($this->user(), $classificationCode, $facilityId, $minor)) {
+                $validator->errors()->add('classification_code', 'La classificazione selezionata non è consentita per il tuo profilo o per il contesto scelto.');
             }
 
             $participantIds = collect((array) $this->input('participant_user_ids', []))
@@ -99,6 +107,21 @@ class StoreInternalMessageThreadRequest extends FormRequest
                 if (count(array_unique($minorEligibleUserIds)) !== $participantIds->count()) {
                     $validator->errors()->add('participant_user_ids', 'Uno o più partecipanti non hanno accesso attivo al minore selezionato.');
                 }
+            }
+
+            $classificationEligibleIds = $participantIds
+                ->filter(function ($participantId) use ($classificationCode, $facilityId, $minor): bool {
+                    $candidate = User::query()->find($participantId);
+
+                    return $candidate
+                        ? app(InternalMessageAccessService::class)->canUseClassification($candidate, $classificationCode, $facilityId, $minor)
+                        : false;
+                })
+                ->values()
+                ->all();
+
+            if (count($classificationEligibleIds) !== $participantIds->count()) {
+                $validator->errors()->add('participant_user_ids', 'Uno o più partecipanti non sono autorizzati alla classificazione selezionata.');
             }
         });
     }

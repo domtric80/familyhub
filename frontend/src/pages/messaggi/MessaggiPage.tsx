@@ -5,7 +5,7 @@ import {
   Modal, ModalHeader, ModalBody, ModalFooter,
   FormGroup, Label, Input, Alert, Button, Badge,
 } from 'reactstrap'
-import { Home, Plus, Info, MessageSquare, Users, X } from 'react-feather'
+import { Home, Plus, Info, MessageSquare, Users, X, Archive } from 'react-feather'
 import InfoDrawer from '../../components/common/InfoDrawer'
 import { toast } from 'react-toastify'
 import { internalMessageApi, facilityApi, minorApi, apiError } from '../../services/api'
@@ -32,12 +32,25 @@ const THREAD_TYPE_COLOR: Record<string, string> = {
   minor: 'info',
 }
 
+const CLASSIFICATIONS = [
+  { code: 'internal',   label: 'Interno',      cls: 'badge-light-secondary' },
+  { code: 'restricted', label: 'Riservato',     cls: 'badge-light-warning'   },
+  { code: 'clinical',   label: 'Clinico',       cls: 'badge-light-danger'    },
+  { code: 'judicial',   label: 'Giudiziario',   cls: 'badge-light-primary'   },
+]
+
+function classificationBadge(code?: string | null) {
+  const c = CLASSIFICATIONS.find((x) => x.code === code) ?? CLASSIFICATIONS[0]
+  return <span className={`badge ${c.cls}`} style={{ fontSize: 10 }}>{c.label}</span>
+}
+
 const EMPTY_FORM: InternalMessageThreadWrite = {
   facility_id: 0,
   minor_id: null,
   thread_type: 'facility',
   subject: '',
   topic: '',
+  classification_code: 'internal',
   participant_user_ids: [],
   message_body: '',
 }
@@ -65,6 +78,12 @@ export default function MessaggiPage() {
   const [filterFacilityId, setFilterFacilityId] = useState(0)
   const [filterThreadType, setFilterThreadType] = useState('')
   const [filterMinorId, setFilterMinorId]       = useState(0)
+  const [filterTopic, setFilterTopic]               = useState('')
+  const [filterArchived, setFilterArchived]         = useState<'false' | 'true'>('false')
+  const [filterClassification, setFilterClassification] = useState('')
+
+  // azione archiviazione
+  const [archiving, setArchiving] = useState<number | null>(null)
 
   // form nuova conversazione
   const [modalOpen, setModalOpen] = useState(false)
@@ -77,10 +96,20 @@ export default function MessaggiPage() {
   const load = async () => {
     setLoading(true); setError(null)
     try {
-      const params: { facility_id?: number; thread_type?: string; minor_id?: number } = {}
+      const params: {
+        facility_id?: number
+        thread_type?: string
+        minor_id?: number
+        topic?: string
+        archived?: boolean
+        classification_code?: string
+      } = {}
       if (filterFacilityId) params.facility_id = filterFacilityId
       if (filterThreadType) params.thread_type = filterThreadType
       if (filterMinorId)    params.minor_id    = filterMinorId
+      if (filterTopic.trim())       params.topic               = filterTopic.trim()
+      if (filterClassification)     params.classification_code = filterClassification
+      params.archived = filterArchived === 'true'
       const data = await internalMessageApi.listThreads(params)
       setThreads(Array.isArray(data) ? data : [])
       setApiMissing(false)
@@ -98,15 +127,17 @@ export default function MessaggiPage() {
       .catch(() => {})
   }, [])
 
-  useEffect(() => { load() }, [filterFacilityId, filterThreadType, filterMinorId]) // eslint-disable-line
+  useEffect(() => { load() }, [filterFacilityId, filterThreadType, filterMinorId, filterTopic, filterArchived, filterClassification]) // eslint-disable-line
 
   // ── Caricamento partecipanti (quando cambia struttura/minore nel form) ──
   useEffect(() => {
     if (!form.facility_id) { setParticipants([]); setParticipantsError(null); return }
     setLoadingParticipants(true)
     setParticipantsError(null)
-    const params: { facility_id: number; minor_id?: number } = { facility_id: form.facility_id }
+    setForm((prev) => ({ ...prev, participant_user_ids: [] }))
+    const params: { facility_id: number; minor_id?: number; classification_code?: string } = { facility_id: form.facility_id }
     if (form.thread_type === 'minor' && form.minor_id) params.minor_id = form.minor_id
+    if (form.classification_code) params.classification_code = form.classification_code
     internalMessageApi.participantOptions(params)
       .then((data) => {
         const source = Array.isArray(data) ? data : []
@@ -139,7 +170,7 @@ export default function MessaggiPage() {
         setParticipants([])
       })
       .finally(() => setLoadingParticipants(false))
-  }, [form.facility_id, form.minor_id, form.thread_type])
+  }, [form.facility_id, form.minor_id, form.thread_type, form.classification_code])
 
   // ── Form helpers ────────────────────────────────────────────────
   const setF = <K extends keyof InternalMessageThreadWrite>(k: K, v: InternalMessageThreadWrite[K]) =>
@@ -200,6 +231,20 @@ export default function MessaggiPage() {
 
   const fe = (k: string) => fieldErrors[k]?.[0]
 
+  const handleArchive = async (t: InternalMessageThread, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!window.confirm(`Archiviare la conversazione "${t.subject}"?`)) return
+    setArchiving(t.id)
+    try {
+      await internalMessageApi.archiveThread(t.id)
+      toast.success('Conversazione archiviata.')
+      load()
+    } catch (err) {
+      const ae = apiError(err)
+      toast.error(ae.message ?? 'Errore durante l\'archiviazione.')
+    } finally { setArchiving(null) }
+  }
+
   // ── Render ──────────────────────────────────────────────────────
   return (
     <>
@@ -257,7 +302,7 @@ export default function MessaggiPage() {
                     <option value='minor'>Sul minore</option>
                   </Input>
                 </Col>
-                <Col sm='3'>
+                <Col sm='2'>
                   <Label className='small mb-1'>Minore</Label>
                   <Input type='select' bsSize='sm' value={filterMinorId}
                     onChange={(e) => setFilterMinorId(Number(e.target.value))}>
@@ -267,8 +312,32 @@ export default function MessaggiPage() {
                     ))}
                   </Input>
                 </Col>
+                <Col sm='2'>
+                  <Label className='small mb-1'>Topic</Label>
+                  <Input bsSize='sm' placeholder='Filtra per topic…' value={filterTopic}
+                    onChange={(e) => setFilterTopic(e.target.value)} />
+                </Col>
+                <Col sm='2'>
+                  <Label className='small mb-1'>Classificazione</Label>
+                  <Input type='select' bsSize='sm' value={filterClassification}
+                    onChange={(e) => setFilterClassification(e.target.value)}>
+                    <option value=''>Tutte</option>
+                    {CLASSIFICATIONS.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
+                  </Input>
+                </Col>
+                <Col sm='2'>
+                  <Label className='small mb-1'>Stato</Label>
+                  <Input type='select' bsSize='sm' value={filterArchived}
+                    onChange={(e) => setFilterArchived(e.target.value as 'false' | 'true')}>
+                    <option value='false'>Solo attive</option>
+                    <option value='true'>Solo archiviate</option>
+                  </Input>
+                </Col>
                 <Col sm='auto'>
-                  <Button size='sm' color='light' onClick={() => { setFilterFacilityId(0); setFilterThreadType(''); setFilterMinorId(0) }}>
+                  <Button size='sm' color='light' onClick={() => {
+                    setFilterFacilityId(0); setFilterThreadType('');
+                    setFilterMinorId(0); setFilterTopic(''); setFilterArchived('false'); setFilterClassification('')
+                  }}>
                     Reset
                   </Button>
                 </Col>
@@ -304,11 +373,15 @@ export default function MessaggiPage() {
                           <td>
                             <strong>{t.subject}</strong>
                             {t.topic && <div className='text-muted' style={{ fontSize: 11 }}>{t.topic}</div>}
+                            {t.archived_at && <Badge color='' className='badge-light-secondary ms-1' style={{ fontSize: 10 }}>Archiviata</Badge>}
                           </td>
                           <td>
-                            <span className={`badge badge-light-${THREAD_TYPE_COLOR[t.thread_type] ?? 'secondary'}`}>
-                              {THREAD_TYPE_LABEL[t.thread_type] ?? t.thread_type}
-                            </span>
+                            <div className='d-flex flex-column gap-1'>
+                              <span className={`badge badge-light-${THREAD_TYPE_COLOR[t.thread_type] ?? 'secondary'}`}>
+                                {THREAD_TYPE_LABEL[t.thread_type] ?? t.thread_type}
+                              </span>
+                              {classificationBadge(t.classification_code)}
+                            </div>
                           </td>
                           <td className='small'>{t.facility?.name ?? '—'}</td>
                           <td className='small'>
@@ -329,10 +402,20 @@ export default function MessaggiPage() {
                               : <span className='text-muted small'>—</span>}
                           </td>
                           <td>
-                            <Button size='sm' color='outline-primary' className='d-flex align-items-center gap-1'
-                              onClick={(e) => { e.stopPropagation(); navigate(`/messaggi/${t.id}`) }}>
-                              <MessageSquare size={12} /> Apri
-                            </Button>
+                            <div className='d-flex gap-1 text-nowrap'>
+                              <Button size='sm' color='outline-primary' className='d-flex align-items-center gap-1'
+                                onClick={(e) => { e.stopPropagation(); navigate(`/messaggi/${t.id}`) }}>
+                                <MessageSquare size={12} /> Apri
+                              </Button>
+                              {!t.archived_at && (
+                                <Button size='sm' color='outline-secondary' className='d-flex align-items-center gap-1'
+                                  disabled={archiving === t.id}
+                                  onClick={(e) => handleArchive(t, e)}
+                                  title='Archivia conversazione'>
+                                  <Archive size={12} />
+                                </Button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -382,6 +465,16 @@ export default function MessaggiPage() {
               </FormGroup>
             </Col>
           </Row>
+
+          <FormGroup>
+            <Label className='col-form-label'>Classificazione</Label>
+            <Input type='select' value={form.classification_code ?? 'internal'} invalid={!!fe('classification_code')}
+              onChange={(e) => { setF('classification_code', e.target.value); setF('participant_user_ids', []) }}>
+              {CLASSIFICATIONS.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
+            </Input>
+            {fe('classification_code') && <div className='invalid-feedback d-block'>{fe('classification_code')}</div>}
+            <div className='form-text'>Cambiando classificazione i partecipanti verranno rifiltrati automaticamente.</div>
+          </FormGroup>
 
           {form.thread_type === 'minor' && (
             <FormGroup>
@@ -442,19 +535,25 @@ export default function MessaggiPage() {
           )}
 
           {form.facility_id && !loadingParticipants && participants.length > 0 && (
-            <div className='border rounded p-2 mb-3' style={{ maxHeight: 200, overflowY: 'auto' }}>
-              {participants.map((p) => (
-                <div key={p.id} className='form-check mb-1'>
-                  <input type='checkbox' className='form-check-input' id={`p-${p.id}`}
-                    checked={form.participant_user_ids.includes(p.id)}
-                    onChange={() => toggleParticipant(p.id)} />
-                  <label className='form-check-label small' htmlFor={`p-${p.id}`}>
-                    {p.display_name}
-                    {p.role_name && <span className='text-muted ms-1'>({p.role_name})</span>}
-                  </label>
-                </div>
-              ))}
-            </div>
+            <>
+              <div className='border rounded p-2 mb-1' style={{ maxHeight: 220, overflowY: 'auto' }}>
+                {participants.map((p) => (
+                  <div key={p.id} className='form-check mb-1'>
+                    <input type='checkbox' className='form-check-input' id={`p-${p.id}`}
+                      checked={form.participant_user_ids.includes(p.id)}
+                      onChange={() => toggleParticipant(p.id)} />
+                    <label className='form-check-label small' htmlFor={`p-${p.id}`}>
+                      <span className='fw-semibold'>{p.display_name}</span>
+                      {p.role_name && <span className='text-muted ms-1'>— {p.role_name}</span>}
+                      {(p as any).email && <span className='text-muted ms-1'>— {(p as any).email}</span>}
+                    </label>
+                  </div>
+                ))}
+              </div>
+              {fe('participant_user_ids') && (
+                <div className='text-danger small mb-2'>{fe('participant_user_ids')}</div>
+              )}
+            </>
           )}
 
           {form.participant_user_ids.length > 0 && (

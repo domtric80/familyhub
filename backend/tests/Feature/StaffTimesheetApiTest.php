@@ -333,6 +333,67 @@ class StaffTimesheetApiTest extends TestCase
         $this->assertStringContainsString('Educatore', $consultantBody);
     }
 
+    public function test_timesheet_pdf_export_supports_review_preset(): void
+    {
+        $facility = Facility::query()->firstOrFail();
+        [$coordinator] = $this->createFacilityUserWithStaffMember('coord.timesheet.pdf@familyhub.local', 'COORDINATORE', $facility->id, 'STAFF-TS-COORD-PDF');
+        [$educator, $educatorStaffMember] = $this->createFacilityUserWithStaffMember('edu.timesheet.pdf@familyhub.local', 'EDUCATORE', $facility->id, 'STAFF-TS-EDU-PDF');
+
+        Sanctum::actingAs($coordinator);
+        $templateId = $this
+            ->postJson('/api/admin/staff-shift-templates', [
+                'facility_id' => $facility->id,
+                'code' => 'PDF',
+                'name' => 'Turno PDF',
+                'start_time' => '08:00',
+                'end_time' => '16:00',
+                'minimum_staff_required' => 1,
+                'sort_order' => 10,
+                'is_active' => true,
+            ])
+            ->assertCreated()
+            ->json('id');
+
+        $shiftAssignmentId = $this
+            ->postJson('/api/admin/staff-shifts', [
+                'facility_id' => $facility->id,
+                'shift_template_id' => $templateId,
+                'staff_member_id' => $educatorStaffMember->id,
+                'shift_date' => '2026-07-29',
+                'status' => 'planned',
+            ])
+            ->assertCreated()
+            ->json('id');
+
+        Sanctum::actingAs($educator);
+        $this->postJson('/api/staff/attendance-events', [
+            'facility_id' => $facility->id,
+            'shift_assignment_id' => $shiftAssignmentId,
+            'event_type' => 'clock_in',
+            'occurred_at' => '2026-07-29T08:00:00+02:00',
+        ])->assertCreated();
+
+        $timesheetEntryId = $this->postJson('/api/staff/attendance-events', [
+            'facility_id' => $facility->id,
+            'shift_assignment_id' => $shiftAssignmentId,
+            'event_type' => 'clock_out',
+            'occurred_at' => '2026-07-29T16:00:00+02:00',
+        ])->assertCreated()->json('timesheet_entry.id');
+
+        $this->postJson("/api/staff/timesheets/{$timesheetEntryId}/submit")
+            ->assertOk();
+
+        Sanctum::actingAs($coordinator);
+        $this->postJson("/api/admin/timesheets/{$timesheetEntryId}/approve")
+            ->assertOk();
+
+        $response = $this->get("/api/admin/timesheets/export.pdf?facility_id={$facility->id}&year=2026&month=7&preset=review");
+        $response->assertOk();
+        $response->assertHeader('content-type', 'application/pdf');
+        $response->assertHeader('content-disposition');
+        $this->assertStringStartsWith('%PDF-', $response->getContent());
+    }
+
     public function test_coordinator_can_add_timesheet_adjustment_with_audit_trail(): void
     {
         $facility = Facility::query()->firstOrFail();

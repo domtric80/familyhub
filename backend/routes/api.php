@@ -244,6 +244,7 @@ Route::middleware(['auth:sanctum', 'admin.api', 'audit.api'])->prefix('admin')->
     Route::post('/timesheet-month-locks', [AdminStaffTimesheetController::class, 'lockMonth'])->middleware('permission.api:staff_timesheet_entries.lock');
     Route::post('/timesheet-month-locks/{monthLock}/unlock', [AdminStaffTimesheetController::class, 'unlockMonth'])->middleware('permission.api:staff_timesheet_entries.lock');
     Route::get('/timesheets/export.csv', [AdminStaffTimesheetController::class, 'exportCsv'])->middleware('permission.api:staff_timesheet_entries.export');
+    Route::get('/timesheets/export.pdf', [AdminStaffTimesheetController::class, 'exportPdf'])->middleware('permission.api:staff_timesheet_entries.export');
     Route::get('/timesheets/{timesheetEntry}', [AdminStaffTimesheetController::class, 'show'])->middleware('permission.api:staff_timesheet_entries.read');
     Route::post('/timesheets/{timesheetEntry}/approve', [AdminStaffTimesheetController::class, 'approve'])->middleware('permission.api:staff_timesheet_entries.approve');
     Route::post('/timesheets/{timesheetEntry}/reject', [AdminStaffTimesheetController::class, 'reject'])->middleware('permission.api:staff_timesheet_entries.approve');

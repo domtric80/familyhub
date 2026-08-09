@@ -8,8 +8,11 @@ use App\Models\StaffTimesheetEntry;
 use App\Models\StaffTimesheetMonthLock;
 use App\Services\AuditLogService;
 use App\Services\StaffTimesheetService;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -886,58 +889,8 @@ class StaffTimesheetController extends Controller
         $dateFrom = sprintf('%04d-%02d-01', $validated['year'], $validated['month']);
         $dateTo = date('Y-m-t', strtotime($dateFrom));
         $preset = (string) ($validated['preset'] ?? 'payroll');
-
-        $entries = StaffTimesheetEntry::query()
-            ->with([
-                'facility:id,name',
-                'staffMember:id,first_name,last_name,employee_code,qualification_code',
-                'staffMember.qualificationLookup:code,name',
-                'shiftAssignment.shiftTemplate:id,name,code',
-                'submittedBy:id,first_name,last_name,email',
-                'approvedBy:id,first_name,last_name,email',
-                'adjustments.createdBy:id,first_name,last_name,email',
-                'adjustments.reviewedBy:id,first_name,last_name,email',
-            ])
-            ->where('facility_id', $validated['facility_id'])
-            ->whereBetween('work_date', [$dateFrom, $dateTo])
-            ->whereIn('status', [
-                StaffTimesheetEntry::STATUS_APPROVED,
-                StaffTimesheetEntry::STATUS_LOCKED,
-            ])
-            ->orderBy('work_date')
-            ->orderBy('id')
-            ->get();
-
-        abort_if($entries->isEmpty(), 404, 'Nessuna entry approvata o bloccata per il periodo selezionato.');
-
-        $filename = sprintf(
-            'timesheet_%s_%d_%04d_%02d.csv',
-            $preset,
-            $validated['facility_id'],
-            $validated['year'],
-            $validated['month']
-        );
-
-        $this->auditLogService->record($request, [
-            'facility_id' => (int) $validated['facility_id'],
-            'action' => 'export',
-            'resource_type' => 'staff_timesheet_entry',
-            'resource_id' => 'month:' . $validated['year'] . '-' . str_pad((string) $validated['month'], 2, '0', STR_PAD_LEFT),
-            'resource_label' => $filename,
-            'operation_summary' => sprintf(
-                '%s ha esportato il CSV timesheet %s.',
-                $this->auditLogService->resolveActorDisplayName($request->user()),
-                $filename
-            ),
-            'new_values_json' => [
-                'facility_id' => (int) $validated['facility_id'],
-                'year' => (int) $validated['year'],
-                'month' => (int) $validated['month'],
-                'rows' => $entries->count(),
-                'preset' => $preset,
-            ],
-        ]);
-        $this->auditLogService->markHandled($request);
+        [$entries, $filename] = $this->resolveTimesheetExportPayload($validated, $preset, 'csv');
+        $this->recordTimesheetExportAudit($request, $validated, $entries->count(), $preset, 'csv', $filename);
 
         return response()->streamDownload(function () use ($entries, $preset): void {
             $handle = fopen('php://output', 'wb');
@@ -950,6 +903,50 @@ class StaffTimesheetController extends Controller
             fclose($handle);
         }, $filename, [
             'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
+    public function exportPdf(Request $request): Response
+    {
+        $validated = $request->validate([
+            'facility_id' => ['required', 'integer', 'exists:facilities,id'],
+            'year' => ['required', 'integer', 'min:2020', 'max:2100'],
+            'month' => ['required', 'integer', 'min:1', 'max:12'],
+            'preset' => ['nullable', 'in:payroll,review,labor_consultant'],
+        ]);
+
+        $preset = (string) ($validated['preset'] ?? 'payroll');
+        [$entries, $filename] = $this->resolveTimesheetExportPayload($validated, $preset, 'pdf');
+        $this->recordTimesheetExportAudit($request, $validated, $entries->count(), $preset, 'pdf', $filename);
+
+        $facilityName = (string) ($entries->first()?->facility?->name ?? ('Struttura #' . $validated['facility_id']));
+        $periodLabel = sprintf('%02d/%04d', $validated['month'], $validated['year']);
+        $options = new Options([
+            'defaultFont' => 'DejaVu Sans',
+            'isRemoteEnabled' => false,
+            'isPhpEnabled' => false,
+            'isJavascriptEnabled' => false,
+            'isHtml5ParserEnabled' => true,
+        ]);
+
+        $dompdf = new Dompdf($options);
+        $dompdf->setPaper('A4', 'landscape');
+        $dompdf->loadHtml(view('pdf.timesheet-export', [
+            'title' => 'Export presenze',
+            'facilityName' => $facilityName,
+            'periodLabel' => $periodLabel,
+            'preset' => $preset,
+            'presetLabel' => $this->timesheetExportPresetLabel($preset),
+            'headers' => $this->timesheetExportHeaders($preset),
+            'rows' => $entries->map(fn (StaffTimesheetEntry $entry) => $this->timesheetExportRow($entry, $preset))->all(),
+            'generatedAt' => now()->format('d/m/Y H:i'),
+            'entriesCount' => $entries->count(),
+        ])->render());
+        $dompdf->render();
+
+        return response($dompdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ]);
     }
 
@@ -1005,6 +1002,79 @@ class StaffTimesheetController extends Controller
                 'email' => $lock->unlockedBy->email,
             ] : null,
         ];
+    }
+
+    private function resolveTimesheetExportPayload(array $validated, string $preset, string $extension): array
+    {
+        $dateFrom = sprintf('%04d-%02d-01', $validated['year'], $validated['month']);
+        $dateTo = date('Y-m-t', strtotime($dateFrom));
+
+        $entries = StaffTimesheetEntry::query()
+            ->with([
+                'facility:id,name',
+                'staffMember:id,first_name,last_name,employee_code,qualification_code',
+                'staffMember.qualificationLookup:code,name',
+                'shiftAssignment.shiftTemplate:id,name,code',
+                'submittedBy:id,first_name,last_name,email',
+                'approvedBy:id,first_name,last_name,email',
+                'adjustments.createdBy:id,first_name,last_name,email',
+                'adjustments.reviewedBy:id,first_name,last_name,email',
+            ])
+            ->where('facility_id', $validated['facility_id'])
+            ->whereBetween('work_date', [$dateFrom, $dateTo])
+            ->whereIn('status', [
+                StaffTimesheetEntry::STATUS_APPROVED,
+                StaffTimesheetEntry::STATUS_LOCKED,
+            ])
+            ->orderBy('work_date')
+            ->orderBy('id')
+            ->get();
+
+        abort_if($entries->isEmpty(), 404, 'Nessuna entry approvata o bloccata per il periodo selezionato.');
+
+        $filename = sprintf(
+            'timesheet_%s_%d_%04d_%02d.%s',
+            $preset,
+            $validated['facility_id'],
+            $validated['year'],
+            $validated['month'],
+            $extension
+        );
+
+        return [$entries, $filename];
+    }
+
+    private function recordTimesheetExportAudit(
+        Request $request,
+        array $validated,
+        int $rows,
+        string $preset,
+        string $format,
+        string $filename
+    ): void {
+        $formatLabel = strtoupper($format);
+        $this->auditLogService->record($request, [
+            'facility_id' => (int) $validated['facility_id'],
+            'action' => 'export',
+            'resource_type' => 'staff_timesheet_entry',
+            'resource_id' => 'month:' . $validated['year'] . '-' . str_pad((string) $validated['month'], 2, '0', STR_PAD_LEFT),
+            'resource_label' => $filename,
+            'operation_summary' => sprintf(
+                '%s ha esportato il %s timesheet %s.',
+                $this->auditLogService->resolveActorDisplayName($request->user()),
+                $formatLabel,
+                $filename
+            ),
+            'new_values_json' => [
+                'facility_id' => (int) $validated['facility_id'],
+                'year' => (int) $validated['year'],
+                'month' => (int) $validated['month'],
+                'rows' => $rows,
+                'preset' => $preset,
+                'format' => $format,
+            ],
+        ]);
+        $this->auditLogService->markHandled($request);
     }
 
     private function timesheetExportHeaders(string $preset): array
@@ -1075,6 +1145,15 @@ class StaffTimesheetController extends Controller
                 'approved_adjustments_count',
                 'pending_adjustments_count',
             ],
+        };
+    }
+
+    private function timesheetExportPresetLabel(string $preset): string
+    {
+        return match ($preset) {
+            'review' => 'Revisione interna',
+            'labor_consultant' => 'Consulente del lavoro',
+            default => 'Paghe',
         };
     }
 

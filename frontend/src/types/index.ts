@@ -1780,12 +1780,18 @@ export type ThreadType = 'facility' | 'minor'
 export interface MessageParticipantOption {
   id: number
   display_name: string
+  first_name?: string
+  last_name?: string
+  email?: string | null
+  role_code?: string | null
   role_name?: string | null
+  is_minor_scoped?: boolean
 }
 
 export interface MessageParticipantOptionsResponse {
   facility_id: number
   minor_id?: number | null
+  classification_code?: string | null
   users: MessageParticipantOption[]
 }
 
@@ -1824,6 +1830,9 @@ export interface InternalMessageThread {
   thread_type: ThreadType
   subject: string
   topic?: string | null
+  classification_code?: string | null
+  classification_label?: string | null
+  document_classification?: { id: number; code: string; name: string; is_active?: boolean } | null
   last_message_at?: string | null
   archived_at?: string | null
   unread_count: number
@@ -1841,6 +1850,7 @@ export interface InternalMessageThreadWrite {
   thread_type: ThreadType
   subject: string
   topic?: string | null
+  classification_code?: string | null
   participant_user_ids: number[]
   message_body: string
 }

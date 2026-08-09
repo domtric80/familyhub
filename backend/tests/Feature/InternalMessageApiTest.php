@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Facility;
 use App\Models\InternalMessageMessage;
 use App\Models\InternalMessageThread;
+use App\Models\InternalMessageThreadParticipant;
 use App\Models\Minor;
 use App\Models\MinorStatus;
 use App\Models\Role;
@@ -39,11 +40,13 @@ class InternalMessageApiTest extends TestCase
                 'thread_type' => 'facility',
                 'subject' => 'Consegne pomeriggio',
                 'topic' => 'Allineamento rapido del team',
+                'classification_code' => 'internal',
                 'participant_user_ids' => [$otherUser->id],
                 'message_body' => 'Messaggio interno riservato.',
             ])
             ->assertCreated()
             ->assertJsonPath('subject', 'Consegne pomeriggio')
+            ->assertJsonPath('classification_code', 'internal')
             ->assertJsonPath('messages.0.body', 'Messaggio interno riservato.');
 
         $threadId = $response->json('id');
@@ -96,6 +99,7 @@ class InternalMessageApiTest extends TestCase
                 'minor_id' => $minor->id,
                 'thread_type' => 'minor',
                 'subject' => 'Caso minore - confronto team',
+                'classification_code' => 'internal',
                 'participant_user_ids' => [$educatorUser->id],
                 'message_body' => 'Confronto riservato sul caso.',
             ])
@@ -140,6 +144,7 @@ class InternalMessageApiTest extends TestCase
                 'facility_id' => $facility->id,
                 'thread_type' => 'facility',
                 'subject' => 'Turno sera',
+                'classification_code' => 'internal',
                 'participant_user_ids' => [$educatorUser->id],
                 'message_body' => 'Ricordati la consegna finale.',
             ])
@@ -224,6 +229,49 @@ class InternalMessageApiTest extends TestCase
         $this->assertNotContains($educatorUnassigned->id, $minorScopedIds);
     }
 
+    public function test_participant_options_can_be_filtered_by_classification_code(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+        $this->seed(RbacSeeder::class);
+
+        $facility = Facility::query()->firstOrFail();
+        $minor = Minor::query()->create([
+            'facility_id' => $facility->id,
+            'internal_code' => 'MIN-MSG-004',
+            'first_name' => 'Sara',
+            'last_name' => 'Neri',
+            'birth_date' => '2014-06-06',
+            'entry_date' => '2026-02-10',
+            'minor_status_id' => MinorStatus::query()->firstOrFail()->id,
+        ]);
+
+        $pediatricianUser = $this->createFacilityUser('ped.options@familyhub.local', 'PEDIATRA', $facility->id);
+        $psychologistUser = $this->createFacilityUser('psy.options@familyhub.local', 'PSICOLOGO', $facility->id);
+        $educatorUser = $this->createFacilityUser('edu.options2@familyhub.local', 'EDUCATORE', $facility->id);
+
+        foreach ([$pediatricianUser, $psychologistUser, $educatorUser] as $assignedUser) {
+            \App\Models\MinorUserAssignment::query()->create([
+                'minor_id' => $minor->id,
+                'user_id' => $assignedUser->id,
+                'facility_id' => $facility->id,
+                'valid_from' => now()->toDateString(),
+                'is_active' => true,
+                'assigned_by_user_id' => User::query()->where('email', 'admin@familyhub.local')->firstOrFail()->id,
+            ]);
+        }
+
+        Sanctum::actingAs($psychologistUser, ['*']);
+
+        $users = $this->getJson("/api/internal-messages/options/participants?facility_id={$facility->id}&minor_id={$minor->id}&classification_code=clinical")
+            ->assertOk()
+            ->json('users');
+
+        $ids = collect($users)->pluck('id')->all();
+        $this->assertContains($psychologistUser->id, $ids);
+        $this->assertContains($pediatricianUser->id, $ids);
+        $this->assertNotContains($educatorUser->id, $ids);
+    }
+
     public function test_minor_thread_rejects_participants_without_minor_assignment(): void
     {
         $this->seed(DatabaseSeeder::class);
@@ -259,11 +307,120 @@ class InternalMessageApiTest extends TestCase
             'minor_id' => $minor->id,
             'thread_type' => 'minor',
             'subject' => 'Thread non valido',
+            'classification_code' => 'internal',
             'participant_user_ids' => [$educatorUser->id],
             'message_body' => 'Tentativo con partecipante non assegnato al minore.',
         ])
             ->assertStatus(422)
             ->assertJsonValidationErrors(['participant_user_ids']);
+    }
+
+    public function test_clinical_minor_thread_rejects_participants_without_classification_access(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+        $this->seed(RbacSeeder::class);
+
+        $facility = Facility::query()->firstOrFail();
+        $minor = Minor::query()->create([
+            'facility_id' => $facility->id,
+            'internal_code' => 'MIN-MSG-005',
+            'first_name' => 'Eva',
+            'last_name' => 'Luce',
+            'birth_date' => '2015-05-05',
+            'entry_date' => '2026-03-01',
+            'minor_status_id' => MinorStatus::query()->firstOrFail()->id,
+        ]);
+
+        $psychologistUser = $this->createFacilityUser('psy.thread@familyhub.local', 'PSICOLOGO', $facility->id);
+        $educatorUser = $this->createFacilityUser('edu.thread@familyhub.local', 'EDUCATORE', $facility->id);
+
+        foreach ([$psychologistUser, $educatorUser] as $assignedUser) {
+            \App\Models\MinorUserAssignment::query()->create([
+                'minor_id' => $minor->id,
+                'user_id' => $assignedUser->id,
+                'facility_id' => $facility->id,
+                'valid_from' => now()->toDateString(),
+                'is_active' => true,
+                'assigned_by_user_id' => User::query()->where('email', 'admin@familyhub.local')->firstOrFail()->id,
+            ]);
+        }
+
+        Sanctum::actingAs($psychologistUser, ['*']);
+
+        $this->postJson('/api/internal-messages/threads', [
+            'facility_id' => $facility->id,
+            'minor_id' => $minor->id,
+            'thread_type' => 'minor',
+            'subject' => 'Thread clinico non valido',
+            'classification_code' => 'clinical',
+            'participant_user_ids' => [$educatorUser->id],
+            'message_body' => 'Contenuto clinico riservato.',
+        ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['participant_user_ids']);
+    }
+
+    public function test_participant_cannot_open_thread_if_classification_is_not_allowed(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+        $this->seed(RbacSeeder::class);
+
+        $facility = Facility::query()->firstOrFail();
+        $minor = Minor::query()->create([
+            'facility_id' => $facility->id,
+            'internal_code' => 'MIN-MSG-006',
+            'first_name' => 'Gio',
+            'last_name' => 'Rosa',
+            'birth_date' => '2014-07-07',
+            'entry_date' => '2026-03-20',
+            'minor_status_id' => MinorStatus::query()->firstOrFail()->id,
+        ]);
+
+        $pediatricianUser = $this->createFacilityUser('ped.read@familyhub.local', 'PEDIATRA', $facility->id);
+        $educatorUser = $this->createFacilityUser('edu.read@familyhub.local', 'EDUCATORE', $facility->id);
+
+        foreach ([$pediatricianUser, $educatorUser] as $assignedUser) {
+            \App\Models\MinorUserAssignment::query()->create([
+                'minor_id' => $minor->id,
+                'user_id' => $assignedUser->id,
+                'facility_id' => $facility->id,
+                'valid_from' => now()->toDateString(),
+                'is_active' => true,
+                'assigned_by_user_id' => User::query()->where('email', 'admin@familyhub.local')->firstOrFail()->id,
+            ]);
+        }
+
+        $thread = InternalMessageThread::query()->create([
+            'facility_id' => $facility->id,
+            'minor_id' => $minor->id,
+            'thread_type' => 'minor',
+            'subject' => 'Thread clinico manuale',
+            'classification_code' => 'clinical',
+            'created_by_user_id' => $pediatricianUser->id,
+            'updated_by_user_id' => $pediatricianUser->id,
+            'last_message_at' => now(),
+        ]);
+
+        foreach ([$pediatricianUser, $educatorUser] as $participant) {
+            InternalMessageThreadParticipant::query()->create([
+                'thread_id' => $thread->id,
+                'user_id' => $participant->id,
+                'joined_at' => now(),
+                'is_active' => true,
+                'added_by_user_id' => $pediatricianUser->id,
+            ]);
+        }
+
+        InternalMessageMessage::query()->create([
+            'thread_id' => $thread->id,
+            'sender_user_id' => $pediatricianUser->id,
+            'body_encrypted' => encrypt('Messaggio clinico riservato.'),
+        ]);
+
+        Sanctum::actingAs($educatorUser, ['*']);
+
+        $this->getJson('/api/internal-messages/threads/'.$thread->id)
+            ->assertForbidden();
     }
 
     public function test_participant_can_archive_thread(): void
@@ -281,6 +438,7 @@ class InternalMessageApiTest extends TestCase
             'facility_id' => $facility->id,
             'thread_type' => 'facility',
             'subject' => 'Archivio thread',
+            'classification_code' => 'internal',
             'participant_user_ids' => [$educatorUser->id],
             'message_body' => 'Thread da archiviare.',
         ])->assertCreated()->json('id');

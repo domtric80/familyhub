@@ -18,7 +18,7 @@ export default function ExportPresenzePage() {
   const [facilityId, setFacilityId] = useState(0)
   const [year, setYear] = useState(new Date().getFullYear())
   const [month, setMonth] = useState(new Date().getMonth() + 1)
-  const [format] = useState<'csv'>('csv')
+  const [format, setFormat] = useState<'csv' | 'pdf'>('csv')
   const [preset, setPreset] = useState<'payroll' | 'review' | 'labor_consultant'>('payroll')
   const [exporting, setExporting] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
@@ -39,12 +39,14 @@ export default function ExportPresenzePage() {
 
     setExporting(true)
     try {
-      const response = await timesheetApi.exportMonthly({ facility_id: facilityId, year, month, format, preset })
-      const blob = response.data as Blob
-      const url = URL.createObjectURL(blob)
       const mm = month.toString().padStart(2, '0')
       const facilityName = facilities.find((f) => f.id === facilityId)?.name?.replace(/\s+/g, '_') ?? `struttura${facilityId}`
-      const filename = `timesheet_${preset}_${facilityName}_${year}_${mm}.csv`
+      const response = format === 'pdf'
+        ? await timesheetApi.exportMonthlyPdf({ facility_id: facilityId, year, month, preset })
+        : await timesheetApi.exportMonthly({ facility_id: facilityId, year, month, format: 'csv', preset })
+      const blob = response.data as Blob
+      const url = URL.createObjectURL(blob)
+      const filename = `timesheet_${preset}_${facilityName}_${year}_${mm}.${format}`
       const anchor = document.createElement('a')
       anchor.href = url
       anchor.download = filename
@@ -53,9 +55,9 @@ export default function ExportPresenzePage() {
       anchor.remove()
       URL.revokeObjectURL(url)
       const presetLabel = preset === 'payroll' ? 'Paghe' : preset === 'review' ? 'Revisione' : 'Consulente lavoro'
-      const label = `${MONTHS[month - 1]} ${year} — CSV ${presetLabel}`
+      const label = `${MONTHS[month - 1]} ${year} — ${format.toUpperCase()} ${presetLabel}`
       setLastExport((prev) => [{ label, at: new Date().toLocaleString('it-IT') }, ...prev.slice(0, 4)])
-      toast.success(`Export ${format.toUpperCase()} scaricato.`)
+      toast.success(`Export ${format.toUpperCase()} scaricato con successo.`)
     } catch (e) {
       const error = apiError(e)
       if (error.status === 404) toast.error('Nessuna entry approvata per il periodo selezionato.')
@@ -114,6 +116,22 @@ export default function ExportPresenzePage() {
               </Row>
 
               <FormGroup>
+                <Label>Formato</Label>
+                <div className='d-flex gap-4 mt-1'>
+                  {([
+                    { value: 'csv', label: 'CSV', desc: 'foglio di calcolo' },
+                    { value: 'pdf', label: 'PDF', desc: 'report stampabile' },
+                  ] as const).map((opt) => (
+                    <label key={opt.value} className='d-flex align-items-center gap-2' style={{ cursor: 'pointer' }}>
+                      <input type='radio' name='format' checked={format === opt.value} onChange={() => setFormat(opt.value)} />
+                      <span className='small fw-semibold'>{opt.label}</span>
+                      <span className='text-muted small'>— {opt.desc}</span>
+                    </label>
+                  ))}
+                </div>
+              </FormGroup>
+
+              <FormGroup>
                 <Label>Preset export</Label>
                 <div className='d-flex flex-column gap-2 mt-1'>
                   {([
@@ -166,13 +184,13 @@ export default function ExportPresenzePage() {
       </Row>
 
       <InfoDrawer isOpen={infoOpen} onClose={() => setInfoOpen(false)} title='Export presenze — Guida'>
-        <p>Genera il <strong>report mensile presenze</strong> in formato CSV per la struttura selezionata.</p>
+        <p>Genera il <strong>report mensile presenze</strong> per la struttura selezionata in formato <strong>CSV</strong> (foglio di calcolo) o <strong>PDF</strong> (report stampabile).</p>
         <p>L&apos;export include solo le entry in stato <em>Approvato</em> o <em>Bloccato</em>.</p>
-        <p><strong>Preset disponibili:</strong></p>
+        <p><strong>Preset disponibili (identici per CSV e PDF):</strong></p>
         <ul>
-          <li><strong>CSV paghe</strong> — export sintetico con ore ordinarie, straordinari, assenze e rettifiche approvate.</li>
-          <li><strong>CSV revisione</strong> — include workflow approvazioni, anomalie, note e dettaglio completo rettifiche.</li>
-          <li><strong>CSV consulente lavoro</strong> — include anche qualifica operatore e tutte le informazioni amministrative.</li>
+          <li><strong>Paghe</strong> — export sintetico con ore ordinarie, straordinari, assenze e rettifiche approvate.</li>
+          <li><strong>Revisione</strong> — include workflow approvazioni, anomalie, note e dettaglio completo rettifiche.</li>
+          <li><strong>Consulente lavoro</strong> — include anche qualifica operatore e tutte le informazioni amministrative.</li>
         </ul>
         <p>Se il periodo non contiene entry approvate o bloccate, il download non sarà disponibile.</p>
       </InfoDrawer>

@@ -51,6 +51,10 @@ class InternalMessageController extends Controller
             $query->where('topic', (string) $request->input('topic'));
         }
 
+        if ($request->filled('classification_code')) {
+            $query->where('classification_code', (string) $request->input('classification_code'));
+        }
+
         if ($request->has('archived')) {
             $archived = filter_var($request->input('archived'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
             if ($archived === true) {
@@ -65,7 +69,10 @@ class InternalMessageController extends Controller
         $query = $this->internalMessageAccessService->scopeVisibleThreadsForUser($query, $request->user());
 
         return response()->json(
-            $query->get()->map(fn (InternalMessageThread $thread) => $this->serializeThread($thread, $request->user()))
+            $query->get()
+                ->filter(fn (InternalMessageThread $thread) => $this->internalMessageAccessService->canAccessThread($request->user(), $thread->loadMissing(['minor', 'documentClassification']), 'internal_messages.read'))
+                ->values()
+                ->map(fn (InternalMessageThread $thread) => $this->serializeThread($thread, $request->user()))
         );
     }
 
@@ -74,6 +81,7 @@ class InternalMessageController extends Controller
         $validated = $request->validate([
             'facility_id' => ['required', 'integer', 'exists:facilities,id'],
             'minor_id' => ['nullable', 'integer', 'exists:minors,id'],
+            'classification_code' => ['nullable', 'string', 'exists:document_classifications,code'],
         ]);
 
         $facilityId = (int) $validated['facility_id'];
@@ -84,6 +92,15 @@ class InternalMessageController extends Controller
             $minor = Minor::query()->findOrFail($request->integer('minor_id'));
             abort_unless((int) $minor->facility_id === $facilityId, 422, 'Il minore selezionato non appartiene alla struttura indicata.');
             abort_unless($this->minorAccessService->hasActiveAssignment($request->user(), $minor), 403, 'Accesso al minore non consentito per questa conversazione.');
+        }
+
+        $classificationCode = $request->input('classification_code');
+        if ($classificationCode) {
+            abort_unless(
+                $this->internalMessageAccessService->canUseClassification($request->user(), (string) $classificationCode, $facilityId, $minor),
+                403,
+                'La classificazione selezionata non è consentita per il tuo profilo.'
+            );
         }
 
         $users = User::query()
@@ -112,9 +129,16 @@ class InternalMessageController extends Controller
             $users = $users->filter(fn (User $candidate): bool => $this->minorAccessService->hasActiveAssignment($candidate, $minor))->values();
         }
 
+        if ($classificationCode) {
+            $users = $users
+                ->filter(fn (User $candidate): bool => $this->internalMessageAccessService->canUseClassification($candidate, (string) $classificationCode, $facilityId, $minor))
+                ->values();
+        }
+
         return response()->json([
             'facility_id' => $facilityId,
             'minor_id' => $minor?->id,
+            'classification_code' => $classificationCode,
             'users' => $users->map(function (User $candidate) use ($facilityId, $minor): array {
                 /** @var UserFacilityRole|null $assignment */
                 $assignment = $candidate->userFacilityRoles
@@ -152,6 +176,7 @@ class InternalMessageController extends Controller
                 'thread_type' => (string) $request->input('thread_type'),
                 'subject' => (string) $request->input('subject'),
                 'topic' => $request->input('topic'),
+                'classification_code' => (string) ($request->input('classification_code') ?: 'internal'),
                 'created_by_user_id' => $request->user()?->id,
                 'updated_by_user_id' => $request->user()?->id,
                 'last_message_at' => now(),
@@ -198,6 +223,10 @@ class InternalMessageController extends Controller
                 $thread->id,
                 $thread->subject
             ),
+            'new_values_json' => [
+                'classification_code' => $thread->classification_code,
+                'thread_type' => $thread->thread_type,
+            ],
         ]);
         $this->auditLogService->markHandled($request);
 
@@ -206,7 +235,7 @@ class InternalMessageController extends Controller
 
     public function show(Request $request, InternalMessageThread $thread): JsonResponse
     {
-        abort_unless($this->internalMessageAccessService->canAccessThread($request->user(), $thread->loadMissing('minor'), 'internal_messages.read'), 403, 'Accesso alla conversazione interna non consentito.');
+        abort_unless($this->internalMessageAccessService->canAccessThread($request->user(), $thread->loadMissing(['minor', 'documentClassification']), 'internal_messages.read'), 403, 'Accesso alla conversazione interna non consentito.');
 
         $thread = $this->loadThread($thread);
 
@@ -223,6 +252,9 @@ class InternalMessageController extends Controller
                 $thread->id,
                 $thread->subject
             ),
+            'new_values_json' => [
+                'classification_code' => $thread->classification_code,
+            ],
         ]);
         $this->auditLogService->markHandled($request);
 
@@ -231,7 +263,7 @@ class InternalMessageController extends Controller
 
     public function addMessage(StoreInternalMessageMessageRequest $request, InternalMessageThread $thread): JsonResponse
     {
-        abort_unless($this->internalMessageAccessService->canAccessThread($request->user(), $thread->loadMissing('minor'), 'internal_messages.update'), 403, 'Invio messaggio non consentito per questa conversazione.');
+        abort_unless($this->internalMessageAccessService->canAccessThread($request->user(), $thread->loadMissing(['minor', 'documentClassification']), 'internal_messages.update'), 403, 'Invio messaggio non consentito per questa conversazione.');
 
         $message = DB::transaction(function () use ($request, $thread) {
             $message = InternalMessageMessage::query()->create([
@@ -265,6 +297,9 @@ class InternalMessageController extends Controller
                 $thread->id,
                 $thread->subject
             ),
+            'new_values_json' => [
+                'classification_code' => $thread->classification_code,
+            ],
         ]);
         $this->auditLogService->markHandled($request);
 
@@ -273,7 +308,7 @@ class InternalMessageController extends Controller
 
     public function markRead(Request $request, InternalMessageThread $thread): JsonResponse
     {
-        abort_unless($this->internalMessageAccessService->canAccessThread($request->user(), $thread->loadMissing('minor'), 'internal_messages.read'), 403, 'Presa visione conversazione non consentita.');
+        abort_unless($this->internalMessageAccessService->canAccessThread($request->user(), $thread->loadMissing(['minor', 'documentClassification']), 'internal_messages.read'), 403, 'Presa visione conversazione non consentita.');
 
         $participant = $thread->participants()
             ->where('user_id', $request->user()?->id)
@@ -293,7 +328,7 @@ class InternalMessageController extends Controller
 
     public function archive(Request $request, InternalMessageThread $thread): JsonResponse
     {
-        abort_unless($this->internalMessageAccessService->canAccessThread($request->user(), $thread->loadMissing('minor'), 'internal_messages.update'), 403, 'Archiviazione conversazione non consentita.');
+        abort_unless($this->internalMessageAccessService->canAccessThread($request->user(), $thread->loadMissing(['minor', 'documentClassification']), 'internal_messages.update'), 403, 'Archiviazione conversazione non consentita.');
 
         $thread->forceFill([
             'archived_at' => now(),
@@ -313,6 +348,9 @@ class InternalMessageController extends Controller
                 $thread->id,
                 $thread->subject
             ),
+            'new_values_json' => [
+                'classification_code' => $thread->classification_code,
+            ],
         ]);
         $this->auditLogService->markHandled($request);
 
@@ -332,6 +370,7 @@ class InternalMessageController extends Controller
         return [
             'facility.organization',
             'minor.minorStatus',
+            'documentClassification',
             'participants.user:id,first_name,last_name,email',
             'participants.addedBy:id,first_name,last_name,email',
             'messages.sender:id,first_name,last_name,email',
@@ -357,6 +396,14 @@ class InternalMessageController extends Controller
             'thread_type' => $thread->thread_type,
             'subject' => $thread->subject,
             'topic' => $thread->topic,
+            'classification_code' => $thread->classification_code ?: 'internal',
+            'classification_label' => $thread->documentClassification?->name,
+            'document_classification' => $thread->documentClassification ? [
+                'id' => $thread->documentClassification->id,
+                'code' => $thread->documentClassification->code,
+                'name' => $thread->documentClassification->name,
+                'is_active' => (bool) $thread->documentClassification->is_active,
+            ] : null,
             'last_message_at' => optional($latestMessageAt)->toIso8601String(),
             'archived_at' => optional($thread->archived_at)->toIso8601String(),
             'unread_count' => $unreadCount,
