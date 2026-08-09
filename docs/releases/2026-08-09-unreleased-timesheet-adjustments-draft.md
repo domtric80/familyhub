@@ -15,11 +15,20 @@ Stato: non pubblicare ancora su GitHub, in attesa chiusura UX e commit finale
 - collegata la UI coordinatore per invio richiesta, approvazione e rifiuto rettifiche da `Verifica timesheet`
 - resa visibile la lista rettifiche anche in `Le mie presenze`
 - aggiunta copertura test API per creazione, approvazione e rifiuto rettifiche
+- aggiunta coda revisione rettifiche in dashboard timesheet con filtri stato e KPI di lavorazione
+- introdotto lock contabile mensile per struttura con blocco reale di timbrature, invio entry e rettifiche dopo chiusura
+- aggiunti endpoint amministrativi per elenco lock, chiusura mese e riapertura mese
+- esteso export CSV timesheet con preset `payroll`, `review`, `labor_consultant`
+- aggiunte colonne rettifiche approvate/pending e dettaglio revisione nel preset export amministrativo
+- aggiunto summary dedicato per dashboard coordinatore con KPI e liste operative su anomalie, straordinari, assenze riconciliate e rettifiche pending
 
 ### Documentazione tecnica
 
-- aggiornato `docs/api/openapi.yaml` con endpoint `POST /api/admin/timesheets/{timesheetEntry}/adjustments` e revisione `/approve` `/reject`
-- preparato handoff UX dedicato per comportamento pagina, stati e payload
+- aggiornato `docs/api/openapi.yaml` con endpoint rettifiche timesheet, revisione `/approve` `/reject` e nuova coda `/admin/timesheet-adjustments*`
+- aggiornato `docs/api/openapi.yaml` con endpoint `timesheet-month-locks` per chiusura e riapertura contabile
+- aggiornato `docs/api/openapi.yaml` con `GET /admin/timesheets/export.csv` e relativi preset export
+- aggiornato `docs/api/openapi.yaml` con `GET /admin/timesheets/dashboard-summary`
+- preparato handoff UX dedicato per comportamento pagina, stati, payload e coda revisione
 
 ### Documenti / Policy ABAC
 

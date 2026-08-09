@@ -6,11 +6,30 @@ use App\Models\StaffAttendanceEvent;
 use App\Models\StaffShiftAssignment;
 use App\Models\StaffTimesheetAdjustment;
 use App\Models\StaffTimesheetEntry;
+use App\Models\StaffTimesheetMonthLock;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
 class StaffTimesheetService
 {
+    public function isMonthLocked(int $facilityId, string $workDate): bool
+    {
+        $date = Carbon::parse($workDate);
+
+        return StaffTimesheetMonthLock::query()
+            ->where('facility_id', $facilityId)
+            ->where('year', (int) $date->format('Y'))
+            ->where('month', (int) $date->format('m'))
+            ->whereNotNull('locked_at')
+            ->whereNull('unlocked_at')
+            ->exists();
+    }
+
+    public function abortIfMonthLocked(int $facilityId, string $workDate, string $message): void
+    {
+        abort_if($this->isMonthLocked($facilityId, $workDate), 422, $message);
+    }
+
     public function resolveWorkDate(
         int $facilityId,
         int $staffMemberId,

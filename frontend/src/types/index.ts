@@ -1962,6 +1962,47 @@ export interface TimesheetAdjustment {
   review_notes?: string | null
 }
 
+export interface TimesheetAdjustmentQueueItem {
+  id: number
+  timesheet_entry_id: number
+  adjustment_type: string
+  delta_minutes: number
+  reason: string
+  status: TimesheetAdjustmentStatus
+  created_at?: string | null
+  reviewed_at?: string | null
+  review_notes?: string | null
+  created_by?: { id: number; first_name: string; last_name: string; email?: string | null } | null
+  reviewed_by?: { id: number; first_name: string; last_name: string; email?: string | null } | null
+  timesheet_entry?: {
+    id: number
+    work_date?: string | null
+    status?: TimesheetEntryStatus | string | null
+    worked_minutes?: number | null
+    planned_minutes?: number | null
+    variance_minutes?: number | null
+    facility?: { id: number; name: string } | null
+    staff_member?: { id: number; first_name: string; last_name: string; display_name?: string | null; employee_code?: string | null } | null
+    shift_assignment?: { id: number; shift_template?: { id: number; name: string; code?: string | null } | null } | null
+  } | null
+}
+
+export interface TimesheetAdjustmentQueueFilters {
+  facility_id?: number
+  staff_member_id?: number
+  status?: TimesheetAdjustmentStatus
+  adjustment_type?: string
+  date_from?: string
+  date_to?: string
+}
+
+export interface TimesheetAdjustmentQueueKpis {
+  pending_count: number
+  approved_count: number
+  rejected_count: number
+  average_review_hours?: number | null
+}
+
 export interface TimesheetAdjustmentWrite {
   adjustment_type: string
   delta_minutes: number
@@ -2037,3 +2078,106 @@ export interface DatabaseRestoreResponse {
   post_restore_counts: Record<string, number>
 }
 
+
+// ─── Timesheet Month Lock ─────────────────────────────────────────────────────
+
+export interface TimesheetMonthLockUser {
+  id: number
+  first_name: string
+  last_name: string
+  email: string
+}
+
+export interface TimesheetMonthLock {
+  id: number
+  facility_id: number
+  year: number
+  month: number
+  is_locked: boolean
+  locked_at: string | null
+  unlocked_at: string | null
+  notes: string | null
+  facility: { id: number; name: string }
+  locked_by: TimesheetMonthLockUser | null
+  unlocked_by: TimesheetMonthLockUser | null
+}
+
+export interface TimesheetMonthLockCreate {
+  facility_id: number
+  year: number
+  month: number
+  notes?: string
+}
+
+export interface TimesheetMonthLockResponse {
+  message: string
+  lock: TimesheetMonthLock
+  entries_locked: number
+}
+
+export interface TimesheetMonthUnlockResponse {
+  message: string
+  lock: TimesheetMonthLock
+  entries_unlocked: number
+}
+
+export interface TimesheetDashboardSummaryEntryRef {
+  id: number
+  work_date: string
+  status: TimesheetEntryStatus | string
+  facility?: { id: number; name: string } | null
+  staff_member?: { id: number; first_name: string; last_name: string; display_name?: string | null; employee_code?: string | null } | null
+}
+
+export interface TimesheetDashboardOpenAnomaly extends TimesheetDashboardSummaryEntryRef {
+  variance_minutes: number
+  overtime_minutes: number
+  absence_minutes: number
+  anomaly_flags: string[]
+}
+
+export interface TimesheetDashboardOvertimeEntry extends TimesheetDashboardSummaryEntryRef {
+  worked_minutes: number
+  planned_minutes: number
+  overtime_minutes: number
+  shift_template?: { id: number; name: string; code?: string | null } | null
+}
+
+export interface TimesheetDashboardAbsenceReconciliation {
+  id: number
+  timesheet_entry_id: number
+  delta_minutes: number
+  reason: string
+  reviewed_at?: string | null
+  timesheet_entry?: TimesheetDashboardSummaryEntryRef | null
+}
+
+export interface TimesheetDashboardPendingAdjustment {
+  id: number
+  timesheet_entry_id: number
+  adjustment_type: string
+  delta_minutes: number
+  reason: string
+  status: TimesheetAdjustmentStatus
+  created_at?: string | null
+  timesheet_entry?: TimesheetDashboardSummaryEntryRef | null
+}
+
+export interface TimesheetDashboardSummary {
+  entries_total: number
+  submitted_entries_count: number
+  approved_or_locked_entries_count: number
+  open_anomalies_count: number
+  overtime_minutes_total: number
+  absence_reconciliations_count: number
+  absence_reconciled_minutes_total: number
+  pending_adjustments_count: number
+}
+
+export interface TimesheetCoordinatorDashboardResponse {
+  summary: TimesheetDashboardSummary
+  open_anomalies: TimesheetDashboardOpenAnomaly[]
+  top_overtime_entries: TimesheetDashboardOvertimeEntry[]
+  absence_reconciliations: TimesheetDashboardAbsenceReconciliation[]
+  pending_adjustments: TimesheetDashboardPendingAdjustment[]
+}

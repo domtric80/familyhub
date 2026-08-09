@@ -41,7 +41,9 @@ import type {
   StaffShiftAssignment, StaffShiftAssignmentWrite,
   StaffShiftWeekView, StaffShiftMyWeek,
   AttendanceEvent, AttendanceEventType,
-  TimesheetEntry, TimesheetEntryFilters, TimesheetAdjustmentWrite, TimesheetAdjustment,
+  TimesheetEntry, TimesheetEntryFilters, TimesheetAdjustmentWrite, TimesheetAdjustment, TimesheetAdjustmentQueueFilters, TimesheetAdjustmentQueueKpis,
+  TimesheetCoordinatorDashboardResponse,
+  TimesheetMonthLock, TimesheetMonthLockCreate, TimesheetMonthLockResponse, TimesheetMonthUnlockResponse,
   DatabaseBackup, DatabaseBackupListResponse, DatabaseRestoreRequest, DatabaseRestoreResponse,
 } from '../types'
 
@@ -1251,6 +1253,12 @@ export const timesheetApi = {
     http.get<{ items: any[] }>('/staff/timesheets/me', { params }).then((r) => r.data.items.map((entry) => normalizeTimesheetEntry(entry))),
   list: (params?: TimesheetEntryFilters) =>
     http.get<any[]>('/admin/timesheets', { params }).then((r) => r.data.map((entry) => normalizeTimesheetEntry(entry))),
+  coordinatorDashboard: (params?: TimesheetEntryFilters) =>
+    http.get<TimesheetCoordinatorDashboardResponse>('/admin/timesheets/dashboard-summary', { params }).then((r) => r.data),
+  adjustmentQueue: (params?: TimesheetAdjustmentQueueFilters) =>
+    http.get<any[]>('/admin/timesheet-adjustments', { params }).then((r) => r.data),
+  adjustmentKpis: (params?: TimesheetAdjustmentQueueFilters) =>
+    http.get<TimesheetAdjustmentQueueKpis>('/admin/timesheet-adjustments/kpis', { params }).then((r) => r.data),
   get: (id: number) =>
     http.get<any>(`/admin/timesheets/${id}`).then((r) => normalizeTimesheetEntry(r.data)),
   submit: (id: number) =>
@@ -1265,9 +1273,9 @@ export const timesheetApi = {
     http.post<any>(`/admin/timesheets/${timesheetId}/adjustments/${adjustmentId}/approve`, { review_notes }).then((r) => normalizeTimesheetEntry(r.data)),
   rejectAdjustment: (timesheetId: number, adjustmentId: number, review_notes: string) =>
     http.post<any>(`/admin/timesheets/${timesheetId}/adjustments/${adjustmentId}/reject`, { review_notes }).then((r) => normalizeTimesheetEntry(r.data)),
-  exportMonthly: (params: { facility_id: number; year: number; month: number; format: 'csv' }) =>
+  exportMonthly: (params: { facility_id: number; year: number; month: number; format: 'csv'; preset?: 'payroll' | 'review' | 'labor_consultant' }) =>
     http.get('/admin/timesheets/export.csv', { params, responseType: 'blob' }),
-}
+  }
 
 // ─── System Health ────────────────────────────────────────────────────────────
 
@@ -1296,11 +1304,20 @@ export interface SystemHealthResponse {
   services: SystemHealthService[]
 }
 
+export const timesheetMonthLockApi = {
+  list: (facility_id?: number) =>
+    http.get<TimesheetMonthLock[]>('/admin/timesheet-month-locks', { params: facility_id ? { facility_id } : undefined }).then((r) => r.data),
+  lock: (data: TimesheetMonthLockCreate) =>
+    http.post<TimesheetMonthLockResponse>('/admin/timesheet-month-locks', data).then((r) => r.data),
+  unlock: (id: number) =>
+    http.post<TimesheetMonthUnlockResponse>(`/admin/timesheet-month-locks/${id}/unlock`).then((r) => r.data),
+}
+
 export const systemHealthApi = {
   snapshot: () =>
-    http.get<SystemHealthResponse>('/api/admin/system/health').then((r) => r.data),
+    http.get<SystemHealthResponse>('/admin/system/health').then((r) => r.data),
   run: () =>
-    http.post<SystemHealthResponse>('/api/admin/system/health/run').then((r) => r.data),
+    http.post<SystemHealthResponse>('/admin/system/health/run').then((r) => r.data),
 }
 
 // ─── System Storage ───────────────────────────────────────────────────────────
@@ -1380,17 +1397,17 @@ export interface StorageActivateResponse {
 
 export const systemStorageApi = {
   list: () =>
-    http.get<StorageConfigListResponse>('/api/admin/system/storage-configs').then((r) => r.data),
+    http.get<StorageConfigListResponse>('/admin/system/storage-configs').then((r) => r.data),
   create: (data: StorageConfigWrite) =>
-    http.post<StorageConfigItem>('/api/admin/system/storage-configs', data).then((r) => r.data),
+    http.post<StorageConfigItem>('/admin/system/storage-configs', data).then((r) => r.data),
   update: (id: number, data: Partial<StorageConfigWrite>) =>
-    http.put<StorageConfigItem>(`/api/admin/system/storage-configs/${id}`, data).then((r) => r.data),
+    http.put<StorageConfigItem>(`/admin/system/storage-configs/${id}`, data).then((r) => r.data),
   test: (id: number) =>
-    http.post<StorageTestResponse>(`/api/admin/system/storage-configs/${id}/test`).then((r) => r.data),
+    http.post<StorageTestResponse>(`/admin/system/storage-configs/${id}/test`).then((r) => r.data),
   activate: (id: number) =>
-    http.post<StorageActivateResponse>(`/api/admin/system/storage-configs/${id}/activate`).then((r) => r.data),
+    http.post<StorageActivateResponse>(`/admin/system/storage-configs/${id}/activate`).then((r) => r.data),
   delete: (id: number) =>
-    http.delete<{ message: string }>(`/api/admin/system/storage-configs/${id}`).then((r) => r.data),
+    http.delete<{ message: string }>(`/admin/system/storage-configs/${id}`).then((r) => r.data),
 }
 
 // ─── Backup database ──────────────────────────────────────────────────────────

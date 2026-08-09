@@ -4447,6 +4447,268 @@ paths:
       responses:
         '200':
           description: Assegnazione turno eliminata
+  /admin/timesheet-adjustments:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: listStaffTimesheetAdjustmentQueue
+      description: Elenco rettifiche timesheet per revisione coordinatore/amministrazione.
+      parameters:
+        - in: query
+          name: facility_id
+          schema: { type: integer }
+        - in: query
+          name: staff_member_id
+          schema: { type: integer }
+        - in: query
+          name: status
+          schema: { type: string, enum: [pending, approved, rejected, cancelled] }
+        - in: query
+          name: adjustment_type
+          schema: { type: string }
+        - in: query
+          name: date_from
+          schema: { type: string, format: date }
+        - in: query
+          name: date_to
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Coda revisione rettifiche
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: integer }
+                    timesheet_entry_id: { type: integer }
+                    adjustment_type: { type: string }
+                    delta_minutes: { type: integer }
+                    reason: { type: string }
+                    status: { type: string }
+                    created_at: { type: string, format: date-time, nullable: true }
+                    reviewed_at: { type: string, format: date-time, nullable: true }
+                    review_notes: { type: string, nullable: true }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/timesheet-adjustments/kpis:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: getStaffTimesheetAdjustmentQueueKpis
+      description: KPI sintetici della coda revisione rettifiche timesheet.
+      parameters:
+        - in: query
+          name: facility_id
+          schema: { type: integer }
+        - in: query
+          name: staff_member_id
+          schema: { type: integer }
+        - in: query
+          name: date_from
+          schema: { type: string, format: date }
+        - in: query
+          name: date_to
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: KPI coda revisione rettifiche
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pending_count: { type: integer }
+                  approved_count: { type: integer }
+                  rejected_count: { type: integer }
+                  average_review_hours: { type: number, nullable: true }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/timesheet-month-locks:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: listStaffTimesheetMonthLocks
+      description: Elenco dei lock mensili timesheet per struttura.
+      parameters:
+        - in: query
+          name: facility_id
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Elenco lock mensili
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: integer }
+                    facility_id: { type: integer }
+                    year: { type: integer }
+                    month: { type: integer }
+                    is_locked: { type: boolean }
+                    locked_at: { type: string, format: date-time, nullable: true }
+                    unlocked_at: { type: string, format: date-time, nullable: true }
+                    notes: { type: string, nullable: true }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: lockStaffTimesheetMonth
+      description: Esegue la chiusura contabile mensile del timesheet per una struttura.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [facility_id, year, month]
+              properties:
+                facility_id: { type: integer }
+                year: { type: integer }
+                month: { type: integer, minimum: 1, maximum: 12 }
+                notes: { type: string, nullable: true }
+      responses:
+        '201':
+          description: Lock mensile creato
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /admin/timesheet-month-locks/{monthLock}/unlock:
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: unlockStaffTimesheetMonth
+      description: Riapre un mese timesheet precedentemente bloccato.
+      parameters:
+        - in: path
+          name: monthLock
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Lock mensile riaperto
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /admin/timesheets/export.csv:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: exportStaffTimesheetCsv
+      description: Export mensile CSV del timesheet con preset amministrativi dedicati.
+      parameters:
+        - in: query
+          name: facility_id
+          required: true
+          schema: { type: integer }
+        - in: query
+          name: year
+          required: true
+          schema: { type: integer }
+        - in: query
+          name: month
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 12 }
+        - in: query
+          name: format
+          required: true
+          schema: { type: string, enum: [csv] }
+        - in: query
+          name: preset
+          required: false
+          schema: { type: string, enum: [payroll, review, labor_consultant], default: payroll }
+      responses:
+        '200':
+          description: File CSV esportato
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Nessuna entry esportabile nel periodo selezionato
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /admin/timesheets/dashboard-summary:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: getStaffTimesheetCoordinatorDashboard
+      description: KPI e liste operative per dashboard timesheet coordinatore/amministrazione.
+      parameters:
+        - in: query
+          name: facility_id
+          schema: { type: integer }
+        - in: query
+          name: staff_member_id
+          schema: { type: integer }
+        - in: query
+          name: date_from
+          schema: { type: string, format: date }
+        - in: query
+          name: date_to
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Summary dashboard coordinatore
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    type: object
+                    properties:
+                      entries_total: { type: integer }
+                      submitted_entries_count: { type: integer }
+                      approved_or_locked_entries_count: { type: integer }
+                      open_anomalies_count: { type: integer }
+                      overtime_minutes_total: { type: integer }
+                      absence_reconciliations_count: { type: integer }
+                      absence_reconciled_minutes_total: { type: integer }
+                      pending_adjustments_count: { type: integer }
+                  open_anomalies:
+                    type: array
+                    items:
+                      type: object
+                  top_overtime_entries:
+                    type: array
+                    items:
+                      type: object
+                  absence_reconciliations:
+                    type: array
+                    items:
+                      type: object
+                  pending_adjustments:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /admin/timesheets:
     get:
       tags: [Admin]

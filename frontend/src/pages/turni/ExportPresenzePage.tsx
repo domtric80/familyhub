@@ -18,7 +18,8 @@ export default function ExportPresenzePage() {
   const [facilityId, setFacilityId] = useState(0)
   const [year, setYear] = useState(new Date().getFullYear())
   const [month, setMonth] = useState(new Date().getMonth() + 1)
-  const [format, setFormat] = useState<'csv'>('csv')
+  const [format] = useState<'csv'>('csv')
+  const [preset, setPreset] = useState<'payroll' | 'review' | 'labor_consultant'>('payroll')
   const [exporting, setExporting] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
   const [lastExport, setLastExport] = useState<{ label: string; at: string }[]>([])
@@ -38,10 +39,12 @@ export default function ExportPresenzePage() {
 
     setExporting(true)
     try {
-      const response = await timesheetApi.exportMonthly({ facility_id: facilityId, year, month, format })
+      const response = await timesheetApi.exportMonthly({ facility_id: facilityId, year, month, format, preset })
       const blob = response.data as Blob
       const url = URL.createObjectURL(blob)
-      const filename = `presenze_${year}_${month.toString().padStart(2, '0')}_struttura${facilityId}.${format}`
+      const mm = month.toString().padStart(2, '0')
+      const facilityName = facilities.find((f) => f.id === facilityId)?.name?.replace(/\s+/g, '_') ?? `struttura${facilityId}`
+      const filename = `timesheet_${preset}_${facilityName}_${year}_${mm}.csv`
       const anchor = document.createElement('a')
       anchor.href = url
       anchor.download = filename
@@ -49,7 +52,8 @@ export default function ExportPresenzePage() {
       anchor.click()
       anchor.remove()
       URL.revokeObjectURL(url)
-      const label = `${MONTHS[month - 1]} ${year} — ${format.toUpperCase()}`
+      const presetLabel = preset === 'payroll' ? 'Paghe' : preset === 'review' ? 'Revisione' : 'Consulente lavoro'
+      const label = `${MONTHS[month - 1]} ${year} — CSV ${presetLabel}`
       setLastExport((prev) => [{ label, at: new Date().toLocaleString('it-IT') }, ...prev.slice(0, 4)])
       toast.success(`Export ${format.toUpperCase()} scaricato.`)
     } catch (e) {
@@ -110,15 +114,22 @@ export default function ExportPresenzePage() {
               </Row>
 
               <FormGroup>
-                <Label>Formato</Label>
-                <div className='d-flex gap-3'>
-                  <label className='d-flex align-items-center gap-2' style={{ cursor: 'pointer' }}>
-                    <input type='radio' name='fmt' checked={format === 'csv'} onChange={() => setFormat('csv')} />
-                    <span className='small fw-semibold'>CSV paghe</span>
-                    <span className='text-muted small'>— disponibile nel backend attuale</span>
-                  </label>
+                <Label>Preset export</Label>
+                <div className='d-flex flex-column gap-2 mt-1'>
+                  {([
+                    { value: 'payroll', label: 'CSV paghe', desc: 'export sintetico per conteggi mensili e straordinari' },
+                    { value: 'review', label: 'CSV revisione', desc: 'include workflow approvazioni, anomalie e dettaglio rettifiche' },
+                    { value: 'labor_consultant', label: 'CSV consulente lavoro', desc: 'include anche qualifica operatore e dettaglio amministrativo' },
+                  ] as const).map((opt) => (
+                    <label key={opt.value} className='d-flex align-items-start gap-2' style={{ cursor: 'pointer' }}>
+                      <input type='radio' name='preset' style={{ marginTop: 3 }} checked={preset === opt.value} onChange={() => setPreset(opt.value)} />
+                      <div>
+                        <span className='small fw-semibold'>{opt.label}</span>
+                        <span className='text-muted small ms-2'>— {opt.desc}</span>
+                      </div>
+                    </label>
+                  ))}
                 </div>
-                <div className='small text-muted mt-2'>Il PDF presenze verrà riattivato quando sarà disponibile il generatore backend dedicato.</div>
               </FormGroup>
 
               <Button color='primary' className='d-flex align-items-center gap-2' disabled={!facilityId || exporting} onClick={handleExport}>
@@ -155,9 +166,15 @@ export default function ExportPresenzePage() {
       </Row>
 
       <InfoDrawer isOpen={infoOpen} onClose={() => setInfoOpen(false)} title='Export presenze — Guida'>
-        <p>Genera il <strong>report mensile presenze</strong> per la struttura selezionata.</p>
-        <p>Nel backend attuale l&apos;export operativo disponibile è il <strong>CSV paghe</strong>.</p>
+        <p>Genera il <strong>report mensile presenze</strong> in formato CSV per la struttura selezionata.</p>
         <p>L&apos;export include solo le entry in stato <em>Approvato</em> o <em>Bloccato</em>.</p>
+        <p><strong>Preset disponibili:</strong></p>
+        <ul>
+          <li><strong>CSV paghe</strong> — export sintetico con ore ordinarie, straordinari, assenze e rettifiche approvate.</li>
+          <li><strong>CSV revisione</strong> — include workflow approvazioni, anomalie, note e dettaglio completo rettifiche.</li>
+          <li><strong>CSV consulente lavoro</strong> — include anche qualifica operatore e tutte le informazioni amministrative.</li>
+        </ul>
+        <p>Se il periodo non contiene entry approvate o bloccate, il download non sarà disponibile.</p>
       </InfoDrawer>
     </div>
   )

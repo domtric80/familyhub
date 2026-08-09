@@ -43,6 +43,12 @@ function fmtDate(value: string) {
   catch { return value }
 }
 
+function fmtDateTime(value: string | null | undefined) {
+  if (!value) return '—'
+  try { return new Date(value).toLocaleString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) }
+  catch { return value }
+}
+
 function minsToHM(min?: number | null) {
   if (min == null) return '—'
   const h = Math.floor(Math.abs(min) / 60)
@@ -267,7 +273,7 @@ export default function MiePresentePage() {
                 <>
                   <div className='fw-semibold small mb-1' style={{ color: '#7366ff' }}>Rettifiche</div>
                   <Table size='sm' className='mb-0'>
-                    <thead><tr><th>Tipo</th><th>Δ minuti</th><th>Motivo</th><th>Stato</th></tr></thead>
+                    <thead><tr><th>Tipo</th><th>Δ min</th><th>Motivo</th><th>Stato</th><th>Creata il</th><th>Revisione</th></tr></thead>
                     <tbody>
                       {detail.adjustments.map((adjustment) => (
                         <tr key={adjustment.id}>
@@ -275,6 +281,15 @@ export default function MiePresentePage() {
                           <td className='small'>{adjustment.delta_minutes > 0 ? '+' : ''}{adjustment.delta_minutes}</td>
                           <td className='small'>{adjustment.reason}</td>
                           <td><span className='badge badge-light-secondary'>{adjustment.status}</span></td>
+                          <td className='small'>{fmtDateTime(adjustment.created_at)}</td>
+                          <td className='small'>
+                            {adjustment.reviewed_at ? (
+                              <>
+                                <div>{fmtDateTime(adjustment.reviewed_at)}</div>
+                                {adjustment.review_notes && <div className='text-muted'>{adjustment.review_notes}</div>}
+                              </>
+                            ) : '—'}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

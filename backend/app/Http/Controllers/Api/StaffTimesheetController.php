@@ -51,6 +51,11 @@ class StaffTimesheetController extends Controller
     {
         $staffMember = StaffMember::query()->where('user_id', $request->user()?->id)->firstOrFail();
         abort_unless((int) $timesheetEntry->staff_member_id === (int) $staffMember->id, 403, 'Permesso insufficiente per inviare questa entry.');
+        $this->timesheetService->abortIfMonthLocked(
+            $timesheetEntry->facility_id,
+            $timesheetEntry->work_date->toDateString(),
+            'Il mese timesheet è bloccato: non è possibile inviare la entry.'
+        );
 
         if (! in_array($timesheetEntry->status, [
             StaffTimesheetEntry::STATUS_DRAFT,

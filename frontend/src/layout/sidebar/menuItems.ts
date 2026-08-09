@@ -59,6 +59,7 @@ export const MENUITEMS: MenuSection[] = [
           { title: 'La mia settimana',           icon: 'board',    type: 'link', path: '/turni/mia-settimana' },
           { title: 'Le mie presenze',            icon: 'form',     type: 'link', path: '/turni/presenze' },
           { title: 'Verifica timesheet',         icon: 'charts',   type: 'link', path: '/turni/verifica' },
+          { title: 'Lock mensili',               icon: 'lock',     type: 'link', path: '/turni/lock' },
           { title: 'Export presenze',            icon: 'file',     type: 'link', path: '/turni/export' },
         ],
       },

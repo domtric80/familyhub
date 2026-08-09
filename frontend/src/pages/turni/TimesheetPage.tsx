@@ -3,11 +3,11 @@ import { Link } from 'react-router-dom'
 import {
   Card, CardBody, CardHeader, Row, Col, Button, Input, Alert, Table,
 } from 'reactstrap'
-import { Calendar, CheckCircle, Clock, Download, FileText, Info, AlertTriangle, UserCheck } from 'react-feather'
+import { Calendar, CheckCircle, Clock, Download, FileText, Info, AlertTriangle, UserCheck, Eye } from 'react-feather'
 import { toast } from 'react-toastify'
 import { attendanceApi, timesheetApi, facilityApi, apiError } from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
-import type { AttendanceEvent, Facility, TimesheetEntry } from '../../types'
+import type { AttendanceEvent, Facility, TimesheetAdjustmentQueueItem, TimesheetAdjustmentQueueKpis, TimesheetAdjustmentStatus, TimesheetEntry } from '../../types'
 import InfoDrawer from '../../components/common/InfoDrawer'
 
 function currentMonthRange() {
@@ -44,6 +44,31 @@ function fmtTime(value: string) {
   } catch {
     return value
   }
+}
+
+function fmtDateTime(value?: string | null) {
+  if (!value) return '—'
+  try {
+    return new Date(value).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  } catch {
+    return value
+  }
+}
+
+function staffName(staff?: { first_name: string; last_name: string; display_name?: string | null } | null) {
+  if (!staff) return '—'
+  return staff.display_name?.trim() || `${staff.last_name} ${staff.first_name}`
+}
+
+function adjustmentTypeLabel(value: string) {
+  const labels: Record<string, string> = {
+    manual_correction: 'Correzione manuale',
+    break_correction: 'Correzione pausa',
+    overtime_authorization: 'Straordinario autorizzato',
+    absence_reconciliation: 'Riconciliazione assenza',
+  }
+
+  return labels[value] ?? value
 }
 
 function lastEventLabel(events: AttendanceEvent[]) {
@@ -104,6 +129,9 @@ export default function TimesheetPage() {
   const [myEntries, setMyEntries] = useState<TimesheetEntry[]>([])
   const [adminEntries, setAdminEntries] = useState<TimesheetEntry[]>([])
   const [todayEvents, setTodayEvents] = useState<AttendanceEvent[]>([])
+  const [adjustmentQueue, setAdjustmentQueue] = useState<TimesheetAdjustmentQueueItem[]>([])
+  const [adjustmentKpis, setAdjustmentKpis] = useState<TimesheetAdjustmentQueueKpis>({ pending_count: 0, approved_count: 0, rejected_count: 0, average_review_hours: null })
+  const [adjustmentStatus, setAdjustmentStatus] = useState<TimesheetAdjustmentStatus | ''>('pending')
 
   const canReview = hasPermission('staff_timesheet_entries.approve')
   const canExport = hasPermission('staff_timesheet_entries.export')
@@ -140,6 +168,17 @@ export default function TimesheetPage() {
             date_from: dateFrom,
             date_to: dateTo,
           }))
+          requests.push(timesheetApi.adjustmentQueue({
+            facility_id: selectedFacilityId,
+            date_from: dateFrom,
+            date_to: dateTo,
+            status: adjustmentStatus || undefined,
+          }))
+          requests.push(timesheetApi.adjustmentKpis({
+            facility_id: selectedFacilityId,
+            date_from: dateFrom,
+            date_to: dateTo,
+          }))
         }
 
         const results = await Promise.allSettled(requests)
@@ -153,8 +192,12 @@ export default function TimesheetPage() {
         }
 
         if ((canReview || canExport) && selectedFacilityId) {
-          const adminEntriesResult = results[pointer]
+          const adminEntriesResult = results[pointer++]
+          const adjustmentQueueResult = results[pointer++]
+          const adjustmentKpisResult = results[pointer]
           if (adminEntriesResult?.status === 'fulfilled' && active) setAdminEntries(adminEntriesResult.value as TimesheetEntry[])
+          if (adjustmentQueueResult?.status === 'fulfilled' && active) setAdjustmentQueue(adjustmentQueueResult.value as TimesheetAdjustmentQueueItem[])
+          if (adjustmentKpisResult?.status === 'fulfilled' && active) setAdjustmentKpis(adjustmentKpisResult.value as TimesheetAdjustmentQueueKpis)
         }
       } catch (error) {
         toast.error(apiError(error).message ?? 'Errore caricamento dashboard timesheet.')
@@ -165,7 +208,7 @@ export default function TimesheetPage() {
 
     void load()
     return () => { active = false }
-  }, [canReadOwn, canReview, canExport, selectedFacilityId, dateFrom, dateTo])
+  }, [canReadOwn, canReview, canExport, selectedFacilityId, adjustmentStatus, dateFrom, dateTo])
 
   const myWorkedMinutes = myEntries.reduce((sum, item) => sum + (item.worked_minutes ?? 0), 0)
   const myPlannedMinutes = myEntries.reduce((sum, item) => sum + (item.planned_minutes ?? 0), 0)
@@ -177,6 +220,7 @@ export default function TimesheetPage() {
   const adminAnomalyCount = adminEntries.filter((item) => item.has_anomaly).length
   const adminOvertimeMinutes = adminEntries.reduce((sum, item) => sum + (item.overtime_minutes ?? 0), 0)
   const anomalyItems = adminEntries.filter((item) => item.has_anomaly).slice(0, 5)
+  const adjustmentItems = adjustmentQueue.slice(0, 8)
 
   return (
     <div className='container-fluid py-3'>
@@ -228,6 +272,15 @@ export default function TimesheetPage() {
               <Col md='3'><StatCard title='Entry approvate/bloccate' value={adminApprovedCount} subtitle='Pronte per export' icon={<CheckCircle size={22} />} tone='success' /></Col>
               <Col md='3'><StatCard title='Anomalie struttura' value={adminAnomalyCount} subtitle='Richiedono verifica' icon={<AlertTriangle size={22} />} tone='danger' /></Col>
               <Col md='3'><StatCard title='Straordinari struttura' value={minsToHM(adminOvertimeMinutes)} subtitle='Accumulo nel mese' icon={<Clock size={22} />} tone='primary' /></Col>
+            </Row>
+          )}
+
+          {canReview && (
+            <Row className='g-3 mb-3'>
+              <Col md='3'><StatCard title='Rettifiche pending' value={adjustmentKpis.pending_count} subtitle='Da revisionare' icon={<Clock size={22} />} tone='warning' /></Col>
+              <Col md='3'><StatCard title='Rettifiche approvate' value={adjustmentKpis.approved_count} subtitle='Nel periodo selezionato' icon={<CheckCircle size={22} />} tone='success' /></Col>
+              <Col md='3'><StatCard title='Rettifiche rifiutate' value={adjustmentKpis.rejected_count} subtitle='Nel periodo selezionato' icon={<AlertTriangle size={22} />} tone='danger' /></Col>
+              <Col md='3'><StatCard title='Tempo medio revisione' value={adjustmentKpis.average_review_hours != null ? `${adjustmentKpis.average_review_hours} h` : '—'} subtitle='Create → review' icon={<UserCheck size={22} />} tone='primary' /></Col>
             </Row>
           )}
 
@@ -310,6 +363,79 @@ export default function TimesheetPage() {
               </Card>
             </Col>
           </Row>
+
+          {canReview && (
+            <Card className='mt-3'>
+              <CardHeader className='py-2 d-flex flex-wrap align-items-center gap-2'>
+                <strong>Coda revisione rettifiche</strong>
+                <Input
+                  type='select'
+                  bsSize='sm'
+                  value={adjustmentStatus}
+                  onChange={(e) => setAdjustmentStatus(e.target.value as TimesheetAdjustmentStatus | '')}
+                  style={{ width: 220, marginLeft: 'auto' }}
+                >
+                  <option value='pending'>Solo pending</option>
+                  <option value='approved'>Solo approved</option>
+                  <option value='rejected'>Solo rejected</option>
+                  <option value=''>Tutti gli stati</option>
+                </Input>
+                <Button tag={Link} to='/turni/verifica' size='sm' color='warning'>
+                  Vai a verifica timesheet
+                </Button>
+              </CardHeader>
+              <CardBody className='p-0'>
+                {adjustmentItems.length === 0 ? (
+                  <div className='text-center py-4 text-muted small'>Nessuna rettifica in coda per i filtri selezionati.</div>
+                ) : (
+                  <Table responsive className='table-sm align-middle mb-0'>
+                    <thead className='table-light'>
+                      <tr>
+                        <th>Struttura</th>
+                        <th>Operatore</th>
+                        <th>Data</th>
+                        <th>Tipo</th>
+                        <th>Delta</th>
+                        <th>Stato</th>
+                        <th>Richiesta</th>
+                        <th>Revisione</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adjustmentItems.map((item) => (
+                        <tr key={item.id}>
+                          <td className='small'>{item.timesheet_entry?.facility?.name ?? '—'}</td>
+                          <td className='small'>{staffName(item.timesheet_entry?.staff_member ?? null)}</td>
+                          <td className='small'>{item.timesheet_entry?.work_date ? fmtDate(item.timesheet_entry.work_date) : '—'}</td>
+                          <td className='small'>{adjustmentTypeLabel(item.adjustment_type)}</td>
+                          <td className='small'>{item.delta_minutes > 0 ? '+' : ''}{item.delta_minutes} min</td>
+                          <td className='small'><span className='badge badge-light-secondary'>{item.status}</span></td>
+                          <td className='small'>
+                            <div>{fmtDateTime(item.created_at)}</div>
+                            <div className='text-muted'>{item.reason}</div>
+                          </td>
+                          <td className='small'>
+                            {item.reviewed_at ? (
+                              <>
+                                <div>{fmtDateTime(item.reviewed_at)}</div>
+                                {item.review_notes ? <div className='text-muted'>{item.review_notes}</div> : null}
+                              </>
+                            ) : '—'}
+                          </td>
+                          <td className='text-end'>
+                            <Button tag={Link} to='/turni/verifica' size='sm' color='outline-primary'>
+                              <Eye size={13} className='me-1' /> Apri
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                )}
+              </CardBody>
+            </Card>
+          )}
         </>
       )}
 
@@ -317,7 +443,7 @@ export default function TimesheetPage() {
         <p>Questa è la pagina di ingresso del modulo <strong>Timesheet</strong>.</p>
         <p>Il flusso corretto è: <strong>pianificazione turno</strong> → <strong>timbrature</strong> → <strong>entry timesheet</strong> → <strong>verifica/approvazione</strong> → <strong>export</strong>.</p>
         <p>Le timbrature non sostituiscono il turno pianificato: servono a produrre il consuntivo reale.</p>
-        <p className='text-muted small'>Le rettifiche avanzate, il PDF presenze e la chiusura periodo restano evoluzioni successive del modulo.</p>
+        <p className='text-muted small'>Da qui puoi anche controllare la coda revisione rettifiche del periodo corrente e instradarti verso la verifica operativa.</p>
       </InfoDrawer>
     </div>
   )

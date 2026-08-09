@@ -36,6 +36,12 @@ class StaffAttendanceEventController extends Controller
             $occurredAt,
         );
 
+        $this->timesheetService->abortIfMonthLocked(
+            $request->integer('facility_id'),
+            $workDate,
+            'Il mese timesheet è bloccato: non è possibile registrare nuove timbrature.'
+        );
+
         $event = StaffAttendanceEvent::query()->create([
             'facility_id' => $request->integer('facility_id'),
             'staff_member_id' => $staffMember->id,

@@ -46,7 +46,7 @@ const ROLE_INFO: Record<string, RoleGuideEntry> = {
 
   EDUCATORE:              { tipo: 'Operativo', privilegiato: false, richiedeAssegnazione: true,  rbacModificabile: true,  descrizione: 'Gestione quotidiana dei minori assegnati.' },
 
-  EDUCATORE_NOTTURNO:     { tipo: 'Operativo', privilegiato: false, richiedeAssegnazione: true,  rbacModificabile: true,  descrizione: 'OperativitÃƒÂ  ridotta sui minori assegnati.' },
+  EDUCATORE_NOTTURNO:     { tipo: 'Operativo', privilegiato: false, richiedeAssegnazione: true,  rbacModificabile: true,  descrizione: 'Operatività ridotta sui minori assegnati.' },
 
   ASSISTENTE_SOCIALE_EST: { tipo: 'Esterno',   privilegiato: false, richiedeAssegnazione: true,  rbacModificabile: true,  descrizione: 'Lettura selettiva sui minori assegnati.' },
 
@@ -60,7 +60,7 @@ const ROLE_INFO: Record<string, RoleGuideEntry> = {
 
 
 
-// --- Matrice accesso documentale ABAC (statica Ã¢â‚¬â€ finchÃƒÂ© non esiste GET /admin/document-access-matrix) --
+// --- Matrice accesso documentale ABAC (statica — finché non esiste GET /admin/document-access-matrix) --
 
 interface DocAccessEntry {
 
@@ -68,9 +68,9 @@ interface DocAccessEntry {
 
   label: string
 
-  read: 'sÃƒÂ¬' | 'sÃƒÂ¬ (con assegnazione)' | 'no'
+  read: 'sì' | 'sì (con assegnazione)' | 'no'
 
-  download: 'sÃƒÂ¬' | 'sÃƒÂ¬ (con assegnazione)' | 'no'
+  download: 'sì' | 'sì (con assegnazione)' | 'no'
 
   note?: string
 
@@ -80,47 +80,47 @@ const DOC_ACCESS_BY_ROLE: Record<string, DocAccessEntry[]> = {
 
   SUPER_ADMIN: [
 
-    { classification: 'internal',   label: 'Interno',      read: 'sÃƒÂ¬', download: 'sÃƒÂ¬' },
+    { classification: 'internal',   label: 'Interno',      read: 'sì', download: 'sì' },
 
-    { classification: 'restricted', label: 'Riservato',    read: 'sÃƒÂ¬', download: 'sÃƒÂ¬' },
+    { classification: 'restricted', label: 'Riservato',    read: 'sì', download: 'sì' },
 
-    { classification: 'clinical',   label: 'Clinico',      read: 'sÃƒÂ¬', download: 'sÃƒÂ¬' },
+    { classification: 'clinical',   label: 'Clinico',      read: 'sì', download: 'sì' },
 
-    { classification: 'judicial',   label: 'Giudiziario',  read: 'sÃƒÂ¬', download: 'sÃƒÂ¬' },
+    { classification: 'judicial',   label: 'Giudiziario',  read: 'sì', download: 'sì' },
 
   ],
 
   DIRETTORE: [
 
-    { classification: 'internal',   label: 'Interno',      read: 'sÃƒÂ¬', download: 'sÃƒÂ¬' },
+    { classification: 'internal',   label: 'Interno',      read: 'sì', download: 'sì' },
 
-    { classification: 'restricted', label: 'Riservato',    read: 'sÃƒÂ¬', download: 'sÃƒÂ¬' },
+    { classification: 'restricted', label: 'Riservato',    read: 'sì', download: 'sì' },
 
-    { classification: 'clinical',   label: 'Clinico',      read: 'sÃƒÂ¬', download: 'sÃƒÂ¬' },
+    { classification: 'clinical',   label: 'Clinico',      read: 'sì', download: 'sì' },
 
-    { classification: 'judicial',   label: 'Giudiziario',  read: 'sÃƒÂ¬', download: 'sÃƒÂ¬' },
+    { classification: 'judicial',   label: 'Giudiziario',  read: 'sì', download: 'sì' },
 
   ],
 
   COORDINATORE: [
 
-    { classification: 'internal',   label: 'Interno',      read: 'sÃƒÂ¬', download: 'sÃƒÂ¬' },
+    { classification: 'internal',   label: 'Interno',      read: 'sì', download: 'sì' },
 
-    { classification: 'restricted', label: 'Riservato',    read: 'sÃƒÂ¬', download: 'sÃƒÂ¬' },
+    { classification: 'restricted', label: 'Riservato',    read: 'sì', download: 'sì' },
 
-    { classification: 'clinical',   label: 'Clinico',      read: 'sÃƒÂ¬', download: 'sÃƒÂ¬' },
+    { classification: 'clinical',   label: 'Clinico',      read: 'sì', download: 'sì' },
 
-    { classification: 'judicial',   label: 'Giudiziario',  read: 'sÃƒÂ¬', download: 'sÃƒÂ¬' },
+    { classification: 'judicial',   label: 'Giudiziario',  read: 'sì', download: 'sì' },
 
   ],
 
   PSICOLOGO: [
 
-    { classification: 'internal',   label: 'Interno',      read: 'sÃƒÂ¬ (con assegnazione)', download: 'sÃƒÂ¬ (con assegnazione)' },
+    { classification: 'internal',   label: 'Interno',      read: 'sì (con assegnazione)', download: 'sì (con assegnazione)' },
 
-    { classification: 'restricted', label: 'Riservato',    read: 'sÃƒÂ¬ (con assegnazione)', download: 'sÃƒÂ¬ (con assegnazione)' },
+    { classification: 'restricted', label: 'Riservato',    read: 'sì (con assegnazione)', download: 'sì (con assegnazione)' },
 
-    { classification: 'clinical',   label: 'Clinico',      read: 'sÃƒÂ¬ (con assegnazione)', download: 'sÃƒÂ¬ (con assegnazione)' },
+    { classification: 'clinical',   label: 'Clinico',      read: 'sì (con assegnazione)', download: 'sì (con assegnazione)' },
 
     { classification: 'judicial',   label: 'Giudiziario',  read: 'no', download: 'no', note: 'Accesso riservato a ruoli altamente autorizzati' },
 
@@ -128,9 +128,9 @@ const DOC_ACCESS_BY_ROLE: Record<string, DocAccessEntry[]> = {
 
   EDUCATORE: [
 
-    { classification: 'internal',   label: 'Interno',      read: 'sÃƒÂ¬ (con assegnazione)', download: 'sÃƒÂ¬ (con assegnazione)' },
+    { classification: 'internal',   label: 'Interno',      read: 'sì (con assegnazione)', download: 'sì (con assegnazione)' },
 
-    { classification: 'restricted', label: 'Riservato',    read: 'sÃƒÂ¬ (con assegnazione)', download: 'no', note: 'Lettura consentita, download no' },
+    { classification: 'restricted', label: 'Riservato',    read: 'sì (con assegnazione)', download: 'no', note: 'Lettura consentita, download no' },
 
     { classification: 'clinical',   label: 'Clinico',      read: 'no', download: 'no' },
 
@@ -140,7 +140,7 @@ const DOC_ACCESS_BY_ROLE: Record<string, DocAccessEntry[]> = {
 
   EDUCATORE_NOTTURNO: [
 
-    { classification: 'internal',   label: 'Interno',      read: 'sÃƒÂ¬ (con assegnazione)', download: 'no' },
+    { classification: 'internal',   label: 'Interno',      read: 'sì (con assegnazione)', download: 'no' },
 
     { classification: 'restricted', label: 'Riservato',    read: 'no', download: 'no' },
 
@@ -152,7 +152,7 @@ const DOC_ACCESS_BY_ROLE: Record<string, DocAccessEntry[]> = {
 
   ASSISTENTE_SOCIALE_EST: [
 
-    { classification: 'internal',   label: 'Interno',      read: 'sÃƒÂ¬ (con assegnazione)', download: 'no' },
+    { classification: 'internal',   label: 'Interno',      read: 'sì (con assegnazione)', download: 'no' },
 
     { classification: 'restricted', label: 'Riservato',    read: 'no', download: 'no' },
 
@@ -164,7 +164,7 @@ const DOC_ACCESS_BY_ROLE: Record<string, DocAccessEntry[]> = {
 
   SUPERVISORE_ESTERNO: [
 
-    { classification: 'internal',   label: 'Interno',      read: 'sÃƒÂ¬ (con assegnazione)', download: 'no' },
+    { classification: 'internal',   label: 'Interno',      read: 'sì (con assegnazione)', download: 'no' },
 
     { classification: 'restricted', label: 'Riservato',    read: 'no', download: 'no' },
 
@@ -180,7 +180,7 @@ const DOC_ACCESS_BY_ROLE: Record<string, DocAccessEntry[]> = {
 
     { classification: 'restricted', label: 'Riservato',    read: 'no', download: 'no' },
 
-    { classification: 'clinical',   label: 'Clinico',      read: 'sÃƒÂ¬ (con assegnazione)', download: 'sÃƒÂ¬ (con assegnazione)', note: 'Solo su minori assegnati attivamente' },
+    { classification: 'clinical',   label: 'Clinico',      read: 'sì (con assegnazione)', download: 'sì (con assegnazione)', note: 'Solo su minori assegnati attivamente' },
 
     { classification: 'judicial',   label: 'Giudiziario',  read: 'no', download: 'no' },
 
@@ -204,9 +204,9 @@ const DOC_ACCESS_BY_ROLE: Record<string, DocAccessEntry[]> = {
 
 function DocAccessBadge({ value }: { value: DocAccessEntry['read'] }) {
 
-  if (value === 'sÃƒÂ¬') return <span className='badge badge-light-success' style={{ fontSize: 10 }}>SÃƒÂ¬</span>
+  if (value === 'sì') return <span className='badge badge-light-success' style={{ fontSize: 10 }}>Sì</span>
 
-  if (value === 'sÃƒÂ¬ (con assegnazione)') return <span className='badge badge-light-warning' style={{ fontSize: 10 }}>SÃƒÂ¬ (con assegnazione)</span>
+  if (value === 'sì (con assegnazione)') return <span className='badge badge-light-warning' style={{ fontSize: 10 }}>Sì (con assegnazione)</span>
 
   return <span className='badge badge-light-secondary' style={{ fontSize: 10 }}>No</span>
 
@@ -228,41 +228,41 @@ const RESOURCE_LABELS: Record<string, string> = {
 
   // Minori
 
-  minors:                   'Minori Ã¢â‚¬â€ Anagrafica',
+  minors:                   'Minori — Anagrafica',
 
-  minor_profiles:           'Minori Ã¢â‚¬â€ Profilo esteso',
+  minor_profiles:           'Minori — Profilo esteso',
 
-  minor_contacts:           'Minori Ã¢â‚¬â€ Contatti',
+  minor_contacts:           'Minori — Contatti',
 
-  minor_documents:          'Minori Ã¢â‚¬â€ Documenti',
+  minor_documents:          'Minori — Documenti',
 
-  minor_case_details:       'Minori Ã¢â‚¬â€ Scheda caso',
+  minor_case_details:       'Minori — Scheda caso',
 
-  minor_exits:              'Minori Ã¢â‚¬â€ Uscite',
+  minor_exits:              'Minori — Uscite',
 
-  minor_assignments:        'Minori Ã¢â‚¬â€ Assegnazioni operatori',
+  minor_assignments:        'Minori — Assegnazioni operatori',
 
-  minor_approaches:         'Minori Ã¢â‚¬â€ Avvicinamenti',
+  minor_approaches:         'Minori — Avvicinamenti',
 
-  minor_journal_entries:    'Minori Ã¢â‚¬â€ Diario',
+  minor_journal_entries:    'Minori — Diario',
 
-  minor_diagnoses:          'Minori Ã¢â‚¬â€ Diagnosi',
+  minor_diagnoses:          'Minori — Diagnosi',
 
-  minor_peis:               'Minori Ã¢â‚¬â€ PEI',
+  minor_peis:               'Minori — PEI',
 
-  minor_needs:              'Minori Ã¢â‚¬â€ Bisogni',
+  minor_needs:              'Minori — Bisogni',
 
-  // AttivitÃƒÂ 
+  // Attività
 
-  activities:               'AttivitÃƒÂ ',
+  activities:               'Attività',
 
-  activity_types:           'AttivitÃƒÂ  Ã¢â‚¬â€ Tipi',
+  activity_types:           'Attività — Tipi',
 
   // Messaggistica
 
   internal_messages:        'Messaggistica interna',
 
-  internal_message_threads: 'Messaggistica Ã¢â‚¬â€ Thread',
+  internal_message_threads: 'Messaggistica — Thread',
 
   // Admin
 
@@ -280,39 +280,39 @@ const RESOURCE_LABELS: Record<string, string> = {
 
   staff_members:            'Operatori (Staff)',
 
-  staff_documents:          'Operatori Ã¢â‚¬â€ Documenti',
+  staff_documents:          'Operatori — Documenti',
 
   // Anagrafiche
 
-  minor_statuses:           'Anagrafiche Ã¢â‚¬â€ Stati minore',
+  minor_statuses:           'Anagrafiche — Stati minore',
 
-  genders:                  'Anagrafiche Ã¢â‚¬â€ Generi',
+  genders:                  'Anagrafiche — Generi',
 
-  contact_types:            'Anagrafiche Ã¢â‚¬â€ Tipi contatto',
+  contact_types:            'Anagrafiche — Tipi contatto',
 
-  document_types:           'Anagrafiche Ã¢â‚¬â€ Tipi documento',
+  document_types:           'Anagrafiche — Tipi documento',
 
-  document_issuers:         'Anagrafiche Ã¢â‚¬â€ Enti emittenti',
+  document_issuers:         'Anagrafiche — Enti emittenti',
 
-  approach_types:           'Anagrafiche Ã¢â‚¬â€ Tipi avvicinamento',
+  approach_types:           'Anagrafiche — Tipi avvicinamento',
 
-  journal_entry_types:      'Anagrafiche Ã¢â‚¬â€ Tipi diario',
+  journal_entry_types:      'Anagrafiche — Tipi diario',
 
-  staff_qualifications:     'Anagrafiche Ã¢â‚¬â€ Qualifiche operatori',
+  staff_qualifications:     'Anagrafiche — Qualifiche operatori',
 
-  staff_statuses:           'Anagrafiche Ã¢â‚¬â€ Stati operatori',
+  staff_statuses:           'Anagrafiche — Stati operatori',
 
-  facility_statuses:        'Anagrafiche Ã¢â‚¬â€ Stati struttura',
+  facility_statuses:        'Anagrafiche — Stati struttura',
 
   // Geo
 
-  countries:                'Geografica Ã¢â‚¬â€ Nazioni',
+  countries:                'Geografica — Nazioni',
 
-  regions:                  'Geografica Ã¢â‚¬â€ Regioni',
+  regions:                  'Geografica — Regioni',
 
-  provinces:                'Geografica Ã¢â‚¬â€ Province',
+  provinces:                'Geografica — Province',
 
-  cities:                   'Geografica Ã¢â‚¬â€ Comuni',
+  cities:                   'Geografica — Comuni',
 
   // Audit
 
@@ -495,7 +495,7 @@ export default function RuoliPage() {
 
       if (m.status === 'fulfilled') {
 
-        // Fallback retrocompatibile: il backend puÃƒÂ² restituire all_permissions o permissions
+        // Fallback retrocompatibile: il backend può restituire all_permissions o permissions
 
         const raw = m.value
 
@@ -778,13 +778,13 @@ export default function RuoliPage() {
 
                             <td className='fw-semibold'>{role.name}</td>
 
-                            <td className='text-muted small'>{role.description ?? 'Ã¢â‚¬â€'}</td>
+                            <td className='text-muted small'>{role.description ?? '—'}</td>
 
                             <td>
 
                               <span className='badge badge-light-primary'>
 
-                                {role.permissions_count ?? 'Ã¢â‚¬â€'} permessi
+                                {role.permissions_count ?? '—'} permessi
 
                               </span>
 
@@ -854,7 +854,7 @@ export default function RuoliPage() {
 
           <Shield size={15} className='me-2' />
 
-          Permessi attivi Ã¢â‚¬â€ {detailRole?.name}
+          Permessi attivi — {detailRole?.name}
 
         </ModalHeader>
 
@@ -874,9 +874,9 @@ export default function RuoliPage() {
 
                   <div className='small'>
 
-                    <strong>Ruolo di sistema privilegiato</strong> Ã¢â‚¬â€ possiede un comportamento speciale nell'accesso ai minori
+                    <strong>Ruolo di sistema privilegiato</strong> — possiede un comportamento speciale nell'accesso ai minori
 
-                    e puÃƒÂ² operare senza assegnazione manuale. La matrice permessi RBAC non ÃƒÂ¨ modificabile da questa interfaccia.
+                    e può operare senza assegnazione manuale. La matrice permessi RBAC non è modificabile da questa interfaccia.
 
                     La <strong>policy documentale ABAC</strong> (sezione sotto) rimane invece configurabile.
 
@@ -910,7 +910,7 @@ export default function RuoliPage() {
 
                             {actionLabel(p.action)}
 
-                            {p.description && <span className='text-muted ms-1'>Ã¢â‚¬â€ {p.description}</span>}
+                            {p.description && <span className='text-muted ms-1'>— {p.description}</span>}
 
                           </Badge>
 
@@ -970,7 +970,7 @@ export default function RuoliPage() {
 
                     {policy.rbac.attachments_read
 
-                      ? <Badge color='' className='badge-light-success' style={{ fontSize: 10 }}>SÃƒÂ¬</Badge>
+                      ? <Badge color='' className='badge-light-success' style={{ fontSize: 10 }}>Sì</Badge>
 
                       : <Badge color='' className='badge-light-secondary' style={{ fontSize: 10 }}>No</Badge>}
 
@@ -982,7 +982,7 @@ export default function RuoliPage() {
 
                     {policy.rbac.attachments_download
 
-                      ? <Badge color='' className='badge-light-success' style={{ fontSize: 10 }}>SÃƒÆ’Ã‚Â¬</Badge>
+                      ? <Badge color='' className='badge-light-success' style={{ fontSize: 10 }}>Sì</Badge>
 
                       : <Badge color='' className='badge-light-secondary' style={{ fontSize: 10 }}>No</Badge>}
 
@@ -994,7 +994,7 @@ export default function RuoliPage() {
 
                     {policy.rbac.attachments_upload
 
-                      ? <Badge color='' className='badge-light-success' style={{ fontSize: 10 }}>SÃƒÂ¬</Badge>
+                      ? <Badge color='' className='badge-light-success' style={{ fontSize: 10 }}>Sì</Badge>
 
                       : <Badge color='' className='badge-light-secondary' style={{ fontSize: 10 }}>No</Badge>}
 
@@ -1008,7 +1008,7 @@ export default function RuoliPage() {
 
                     Questo ruolo non ha il permesso base di lettura documenti (<code>attachments.read</code>).
 
-                    Anche se abiliti una classificazione, non potrÃƒÂ  leggere documenti finchÃƒÂ© non riceve quel permesso.
+                    Anche se abiliti una classificazione, non potrà leggere documenti finché non riceve quel permesso.
 
                   </Alert>
 
@@ -1018,8 +1018,8 @@ export default function RuoliPage() {
 
                   <Alert color='info' className='py-2 px-3 mb-3' style={{ fontSize: 12 }}>
 
-                    Questo ruolo puÃƒÂ² vedere documenti solo in preview se supera RBAC e ABAC,
-                    ma non puÃƒÂ² scaricare allegati finchÃƒÂ© non riceve il permesso <code>attachments.download</code>.
+                    Questo ruolo può vedere documenti solo in preview se supera RBAC e ABAC,
+                    ma non può scaricare allegati finché non riceve il permesso <code>attachments.download</code>.
 
                   </Alert>
 
@@ -1128,7 +1128,7 @@ export default function RuoliPage() {
 
                           </td>
 
-                          <td className='text-muted' style={{ fontSize: 11 }}>{cls.description ?? 'Ã¢â‚¬â€'}</td>
+                          <td className='text-muted' style={{ fontSize: 11 }}>{cls.description ?? '—'}</td>
 
                           <td>
 
@@ -1136,9 +1136,9 @@ export default function RuoliPage() {
 
                               ? cls.requires_minor_assignment
 
-                                ? <span className='badge badge-light-warning' style={{ fontSize: 10 }}>SÃƒÂ¬ (con assegnazione)</span>
+                                ? <span className='badge badge-light-warning' style={{ fontSize: 10 }}>Sì (con assegnazione)</span>
 
-                                : <span className='badge badge-light-success' style={{ fontSize: 10 }}>SÃƒÂ¬</span>
+                                : <span className='badge badge-light-success' style={{ fontSize: 10 }}>Sì</span>
 
                               : <span className='badge badge-light-secondary' style={{ fontSize: 10 }}>No</span>}
 
@@ -1158,7 +1158,7 @@ export default function RuoliPage() {
 
                           </td>
 
-                          <td style={{ fontSize: 11, color: '#777' }}>{cls.notes ?? 'Ã¢â‚¬â€'}</td>
+                          <td style={{ fontSize: 11, color: '#777' }}>{cls.notes ?? '—'}</td>
 
                         </tr>
 
@@ -1232,7 +1232,7 @@ export default function RuoliPage() {
 
           <Shield size={15} className='me-2' />
 
-          Modifica permessi Ã¢â‚¬â€ {detailRole?.name}
+          Modifica permessi — {detailRole?.name}
 
         </ModalHeader>
 
@@ -1264,7 +1264,7 @@ export default function RuoliPage() {
 
                         <span className='small fw-semibold'>{actionLabel(p.action)}</span>
 
-                        {p.description && <span className='text-muted ms-1 small'> Ã¢â‚¬â€ {p.description}</span>}
+                        {p.description && <span className='text-muted ms-1 small'> — {p.description}</span>}
 
                       </Label>
 
@@ -1292,7 +1292,7 @@ export default function RuoliPage() {
 
           <Button color='primary' className='d-flex align-items-center gap-1' onClick={savePermissions} disabled={savingPerms}>
 
-            <Save size={13} /> {savingPerms ? 'SalvataggioÃ¢â‚¬Â¦' : 'Salva permessi'}
+            <Save size={13} /> {savingPerms ? 'Salvataggio…' : 'Salva permessi'}
 
           </Button>
 
@@ -1352,7 +1352,7 @@ export default function RuoliPage() {
 
           <div className='alert alert-warning py-2 px-3 mt-3 mb-0' style={{ fontSize: 12 }}>
 
-            <strong>Accesso documentale Ã¢â‚¬â€ attenzione</strong><br />
+            <strong>Accesso documentale — attenzione</strong><br />
 
             I permessi di ruolo controllano l'accesso ai moduli e alle funzioni del sistema.<br />
 
@@ -1368,7 +1368,7 @@ export default function RuoliPage() {
 
         <ModalFooter>
 
-          <Button color='primary' onClick={handleSave} disabled={saving}>{saving ? 'SalvataggioÃ¢â‚¬Â¦' : 'Salva'}</Button>
+          <Button color='primary' onClick={handleSave} disabled={saving}>{saving ? 'Salvataggio…' : 'Salva'}</Button>
 
           <Button color='light' onClick={() => setModalOpen(false)}>Annulla</Button>
 
@@ -1390,13 +1390,13 @@ export default function RuoliPage() {
 
             ? <Alert color='danger'>{deleteConflict}</Alert>
 
-            : <p>Eliminare il ruolo <strong>{deleteTarget?.name}</strong>? L'operazione non ÃƒÂ¨ reversibile.</p>}
+            : <p>Eliminare il ruolo <strong>{deleteTarget?.name}</strong>? L'operazione non è reversibile.</p>}
 
         </ModalBody>
 
         <ModalFooter>
 
-          {!deleteConflict && <Button color='danger' onClick={handleDelete} disabled={deleting}>{deleting ? 'EliminazioneÃ¢â‚¬Â¦' : 'Elimina'}</Button>}
+          {!deleteConflict && <Button color='danger' onClick={handleDelete} disabled={deleting}>{deleting ? 'Eliminazione…' : 'Elimina'}</Button>}
 
           <Button color='light' onClick={() => setDeleteTarget(null)}>{deleteConflict ? 'Chiudi' : 'Annulla'}</Button>
 
@@ -1410,7 +1410,7 @@ export default function RuoliPage() {
 
       <InfoDrawer isOpen={infoOpen} onClose={() => setInfoOpen(false)} title='Informazioni sui ruoli'>
 
-        <p className='text-muted' style={{ fontSize: 14 }}>I ruoli definiscono cosa puÃƒÂ² fare un utente nel sistema. Alcuni ruoli di sistema hanno un comportamento speciale rispetto all'accesso ai minori e ai documenti.</p>
+        <p className='text-muted' style={{ fontSize: 14 }}>I ruoli definiscono cosa può fare un utente nel sistema. Alcuni ruoli di sistema hanno un comportamento speciale rispetto all'accesso ai minori e ai documenti.</p>
 
 
 
@@ -1418,21 +1418,21 @@ export default function RuoliPage() {
 
         <div className='alert alert-info py-2 px-3 mb-3' style={{ fontSize: 13 }}>
 
-          <strong>RBAC</strong> Ã¢â‚¬â€ controlla l'accesso ai moduli, alle funzioni e ai dati applicativi (es. poter aprire la sezione Minori, creare un'uscita, gestire utenti).
+          <strong>RBAC</strong> — controlla l'accesso ai moduli, alle funzioni e ai dati applicativi (es. poter aprire la sezione Minori, creare un'uscita, gestire utenti).
 
         </div>
 
         <div className='alert alert-warning py-2 px-3 mb-3' style={{ fontSize: 13 }}>
 
-          <strong>ABAC documentale</strong> Ã¢â‚¬â€ controlla l'accesso effettivo ai singoli documenti in base a: classificazione del documento, ruolo effettivo dell'utente nella struttura, assegnazione attiva al minore.<br />
+          <strong>ABAC documentale</strong> — controlla l'accesso effettivo ai singoli documenti in base a: classificazione del documento, ruolo effettivo dell'utente nella struttura, assegnazione attiva al minore.<br />
 
-          Il ruolo non sostituisce ABAC: ÃƒÂ¨ uno degli attributi usati dalla policy documentale.
+          Il ruolo non sostituisce ABAC: è uno degli attributi usati dalla policy documentale.
 
         </div>
 
         <p style={{ fontSize: 13, color: '#555' }}>
 
-          Questo significa che un utente con permesso RBAC corretto puÃƒÂ² vedere il minore, ma non necessariamente
+          Questo significa che un utente con permesso RBAC corretto può vedere il minore, ma non necessariamente
 
           tutti i suoi documenti. L'accesso documentale dipende dalla classificazione del file e da regole di policy separate.
 
@@ -1462,7 +1462,7 @@ export default function RuoliPage() {
 
                   <td><span className={`badge ${info.tipo === 'Sistema' ? 'bg-dark' : info.tipo === 'Operativo' ? 'bg-primary' : info.tipo === 'Tecnico' ? 'bg-secondary' : 'bg-info'}`} style={{ fontSize: 10 }}>{info.tipo}</span></td>
 
-                  <td className='text-center'>{info.privilegiato ? <span className='badge bg-warning text-dark' style={{ fontSize: 10 }}>SÃƒÅ’</span> : <span className='text-muted small'>no</span>}</td>
+                  <td className='text-center'>{info.privilegiato ? <span className='badge bg-warning text-dark' style={{ fontSize: 10 }}>Sì</span> : <span className='text-muted small'>no</span>}</td>
 
                   <td className='text-center'>{info.richiedeAssegnazione === null ? <span className='text-muted small'>n/a</span> : info.richiedeAssegnazione ? <span className='badge badge-light-danger' style={{ fontSize: 10 }}>Richiesta</span> : <span className='badge badge-light-success' style={{ fontSize: 10 }}>Non richiesta</span>}</td>
 
@@ -1484,7 +1484,7 @@ export default function RuoliPage() {
 
         <h6 className='fw-bold mb-2'>Classificazioni documentali</h6>
 
-        <p style={{ fontSize: 13, color: '#555' }}>Ogni documento ha una classificazione che determina chi puÃƒÂ² leggerlo e scaricarlo:</p>
+        <p style={{ fontSize: 13, color: '#555' }}>Ogni documento ha una classificazione che determina chi può leggerlo e scaricarlo:</p>
 
         <table className='table table-sm table-bordered mb-3' style={{ fontSize: 12 }}>
 
@@ -1512,15 +1512,15 @@ export default function RuoliPage() {
 
         <div className='alert alert-warning py-2 px-3 mb-3' style={{ fontSize: 13 }}>
 
-          <strong>Ruoli privilegiati</strong> Ã¢â‚¬â€ SUPER_ADMIN, DIRETTORE, COORDINATORE<br />
+          <strong>Ruoli privilegiati</strong> — SUPER_ADMIN, DIRETTORE, COORDINATORE<br />
 
-          Accedono a tutti i documenti senza assegnazione al minore. La matrice RBAC non ÃƒÂ¨ modificabile da UI.
+          Accedono a tutti i documenti senza assegnazione al minore. La matrice RBAC non è modificabile da UI.
 
         </div>
 
         <div className='alert alert-secondary py-2 px-3 mb-0' style={{ fontSize: 12 }}>
 
-          La matrice documentale completa per ruolo ÃƒÂ¨ disponibile nella{' '}
+          La matrice documentale completa per ruolo è disponibile nella{' '}
 
           <Link to='/anagrafiche/accesso-documentale'>pagina Accesso documentale</Link>.
 
