@@ -7836,6 +7836,9 @@ components:
         classification_codes:
           type: array
           items: { type: string }
+        download_classification_codes:
+          type: array
+          items: { type: string }
       required: [classification_codes]
     RoleDocumentPolicyResponse:
       type: object
@@ -7846,15 +7849,17 @@ components:
           type: object
           properties:
             attachments_read: { type: boolean }
+            attachments_download: { type: boolean }
             attachments_upload: { type: boolean }
-          required: [attachments_read, attachments_upload]
+          required: [attachments_read, attachments_download, attachments_upload]
         summary:
           type: object
           properties:
             can_read_any_documents: { type: boolean }
+            can_download_any_documents: { type: boolean }
             can_upload_documents: { type: boolean }
             explanation: { type: string }
-          required: [can_read_any_documents, can_upload_documents, explanation]
+          required: [can_read_any_documents, can_download_any_documents, can_upload_documents, explanation]
         classifications:
           type: array
           items:
@@ -7869,10 +7874,12 @@ components:
         description: { type: string, nullable: true }
         is_active: { type: boolean }
         assigned_to_role: { type: boolean }
+        download_assigned_to_role: { type: boolean }
         effective_read_access: { type: boolean }
+        effective_download_access: { type: boolean }
         requires_minor_assignment: { type: boolean }
         notes: { type: string }
-      required: [id, code, name, is_active, assigned_to_role, effective_read_access, requires_minor_assignment, notes]
+      required: [id, code, name, is_active, assigned_to_role, download_assigned_to_role, effective_read_access, effective_download_access, requires_minor_assignment, notes]
     DocumentType:
       type: object
       properties:

@@ -538,6 +538,11 @@ export interface DocumentPolicy {
   classifications: DocumentPolicyClassification[]
 }
 
+export interface DocumentPolicyWrite {
+  classification_codes: string[]
+  download_classification_codes: string[]
+}
+
 export interface SpreadsheetPreviewSheet {
   name: string
   rows: string[][]

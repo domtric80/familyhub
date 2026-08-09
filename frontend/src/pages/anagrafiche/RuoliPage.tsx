@@ -419,6 +419,7 @@ export default function RuoliPage() {
   const [policyLoading, setPolicyLoading] = useState(false)
 
   const [policyChecked, setPolicyChecked] = useState<Set<string>>(new Set())
+  const [policyDownloadChecked, setPolicyDownloadChecked] = useState<Set<string>>(new Set())
 
   const [policySaving, setPolicySaving]   = useState(false)
 
@@ -508,7 +509,11 @@ export default function RuoliPage() {
 
       else toast.error(apiError(m.reason).message ?? 'Errore caricamento permessi')
 
-      if (p.status === 'fulfilled') { setPolicy(p.value); setPolicyChecked(new Set(p.value.classifications.filter((c) => c.assigned_to_role).map((c) => c.code))) }
+      if (p.status === 'fulfilled') {
+        setPolicy(p.value)
+        setPolicyChecked(new Set(p.value.classifications.filter((c) => c.assigned_to_role).map((c) => c.code)))
+        setPolicyDownloadChecked(new Set(p.value.classifications.filter((c) => c.download_assigned_to_role).map((c) => c.code)))
+      }
 
       // policy failure is non-blocking
 
@@ -530,9 +535,14 @@ export default function RuoliPage() {
 
     try {
 
-      const updated = await adminRoleApi.updateDocumentPolicy(detailRole.id, Array.from(policyChecked))
+      const updated = await adminRoleApi.updateDocumentPolicy(detailRole.id, {
+        classification_codes: Array.from(policyChecked),
+        download_classification_codes: Array.from(policyDownloadChecked),
+      })
 
       setPolicy(updated)
+      setPolicyChecked(new Set(updated.classifications.filter((c) => c.assigned_to_role).map((c) => c.code)))
+      setPolicyDownloadChecked(new Set(updated.classifications.filter((c) => c.download_assigned_to_role).map((c) => c.code)))
 
       toast.success('Policy documentale salvata')
 
@@ -1023,7 +1033,8 @@ export default function RuoliPage() {
 
                     <tr>
 
-                      <th style={{ width: 36 }}></th>
+                      <th style={{ width: 36 }}>R</th>
+                      <th style={{ width: 36 }}>D</th>
 
                       <th>Classificazione</th>
 
@@ -1043,6 +1054,7 @@ export default function RuoliPage() {
                     {policy.classifications.map((cls) => {
 
                       const checked = policyChecked.has(cls.code)
+                      const downloadChecked = policyDownloadChecked.has(cls.code)
 
                       const canEdit = true // policy ABAC editabile per tutti i ruoli
 
@@ -1064,9 +1076,41 @@ export default function RuoliPage() {
 
                                 const s = new Set(policyChecked)
 
-                                if (e.target.checked) s.add(cls.code); else s.delete(cls.code)
+                                if (e.target.checked) {
+                                  s.add(cls.code)
+                                } else {
+                                  s.delete(cls.code)
+                                  // Auto-uncheck D when R is deselected
+                                  const ds = new Set(policyDownloadChecked)
+                                  ds.delete(cls.code)
+                                  setPolicyDownloadChecked(ds)
+                                }
 
                                 setPolicyChecked(s)
+
+                              }}
+
+                            />
+
+                          </td>
+
+                          <td className='text-center'>
+
+                            <Input
+
+                              type='checkbox'
+
+                              checked={downloadChecked}
+
+                              disabled={!canEdit || !policy.rbac.attachments_download || !checked}
+
+                              onChange={(e) => {
+
+                                const s = new Set(policyDownloadChecked)
+
+                                if (e.target.checked) s.add(cls.code); else s.delete(cls.code)
+
+                                setPolicyDownloadChecked(s)
 
                               }}
 
@@ -1128,7 +1172,7 @@ export default function RuoliPage() {
 
                 <p className='text-muted mb-0' style={{ fontSize: 11 }}>
 
-                  * Per i documenti del minore l'accesso effettivo richiede anche l'assegnazione attiva al minore.{' '}
+                  * `R` = lettura/preview, `D` = download. Il download resta attivabile solo se la stessa classificazione è già ammessa in lettura. Per i documenti del minore l'accesso effettivo richiede anche l'assegnazione attiva al minore.{' '}
 
                   <Link to='/anagrafiche/accesso-documentale' style={{ fontSize: 11 }}>Vista completa ?</Link>
 

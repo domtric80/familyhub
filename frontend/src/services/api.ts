@@ -36,6 +36,7 @@ import type {
   ExitSummary,
   DocumentAccessMatrix,
   DocumentPolicy,
+  DocumentPolicyWrite,
   StaffShiftTemplate, StaffShiftTemplateWrite,
   StaffShiftAssignment, StaffShiftAssignmentWrite,
   StaffShiftWeekView, StaffShiftMyWeek,
@@ -746,8 +747,8 @@ export const adminRoleApi = {
   getDocumentPolicy: (roleId: number) =>
     http.get<DocumentPolicy>(`/admin/roles/${roleId}/document-policy`).then((r) => r.data),
 
-  updateDocumentPolicy: (roleId: number, classificationCodes: string[]) =>
-    http.put<DocumentPolicy>(`/admin/roles/${roleId}/document-policy`, { classification_codes: classificationCodes }).then((r) => r.data),
+  updateDocumentPolicy: (roleId: number, data: DocumentPolicyWrite) =>
+    http.put<DocumentPolicy>(`/admin/roles/${roleId}/document-policy`, data).then((r) => r.data),
 }
 
 // ─── Admin — Geography sync ────────────────────────────────────────────────────────────────────────────

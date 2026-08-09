@@ -21,6 +21,14 @@ Stato: non pubblicare ancora su GitHub, in attesa chiusura UX e commit finale
 - aggiornato `docs/api/openapi.yaml` con endpoint `POST /api/admin/timesheets/{timesheetEntry}/adjustments`
 - preparato handoff UX dedicato per comportamento pagina e payload
 
+### Documenti / Policy ABAC
+
+- separata amministrazione della policy documentale per `lettura/preview` e `download`
+- aggiornato il contratto ruolo-documenti con `classification_codes` e `download_classification_codes`
+- resa esplicita la matrice classificazioni con `Ruoli lettura` e `Ruoli download`
+- aggiornati test backend per policy documentale coordinatore/admin
+- allineate API e UI ruolo per evitare download consentiti senza lettura della stessa classificazione
+
 ---
 
 ## Nota pubblicazione GitHub

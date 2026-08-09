@@ -23,7 +23,11 @@ class RoleDocumentPolicyController extends Controller
 
     public function update(SyncRoleDocumentPolicyRequest $request, Role $role): JsonResponse
     {
-        $requestedCodes = collect($request->validated('classification_codes'))
+        $requestedReadCodes = collect($request->validated('classification_codes'))
+            ->unique()
+            ->values();
+
+        $requestedDownloadCodes = collect($request->validated('download_classification_codes', []))
             ->unique()
             ->values();
 
@@ -31,28 +35,50 @@ class RoleDocumentPolicyController extends Controller
             ->orderBy('name')
             ->get();
 
-        $before = $classifications
+        $beforeRead = $classifications
             ->filter(fn (DocumentClassification $classification): bool => in_array($role->code, $classification->allowed_role_codes ?? [], true))
             ->pluck('code')
             ->values()
             ->all();
 
-        foreach ($classifications as $classification) {
-            $allowedRoleCodes = collect($classification->allowed_role_codes ?? []);
+        $beforeDownload = $classifications
+            ->filter(fn (DocumentClassification $classification): bool => in_array($role->code, $classification->allowed_download_role_codes ?? $classification->allowed_role_codes ?? [], true))
+            ->pluck('code')
+            ->values()
+            ->all();
 
-            $updatedRoleCodes = $requestedCodes->contains($classification->code)
-                ? $allowedRoleCodes->push($role->code)->unique()->values()->all()
-                : $allowedRoleCodes->reject(fn (string $roleCode): bool => $roleCode === $role->code)->values()->all();
+        foreach ($classifications as $classification) {
+            $allowedReadRoleCodes = collect($classification->allowed_role_codes ?? []);
+            $allowedDownloadRoleCodes = collect($classification->allowed_download_role_codes ?? $classification->allowed_role_codes ?? []);
+
+            $updatedReadCodes = $requestedReadCodes->contains($classification->code)
+                ? $allowedReadRoleCodes->push($role->code)->unique()->values()->all()
+                : $allowedReadRoleCodes->reject(fn (string $roleCode): bool => $roleCode === $role->code)->values()->all();
+
+            $updatedDownloadCodes = $requestedDownloadCodes->contains($classification->code)
+                ? $allowedDownloadRoleCodes->push($role->code)->unique()->values()->all()
+                : $allowedDownloadRoleCodes->reject(fn (string $roleCode): bool => $roleCode === $role->code)->values()->all();
+
+            $updatedDownloadCodes = array_values(array_intersect($updatedDownloadCodes, $updatedReadCodes));
 
             $classification->forceFill([
-                'allowed_role_codes' => $updatedRoleCodes,
+                'allowed_role_codes' => $updatedReadCodes,
+                'allowed_download_role_codes' => $updatedDownloadCodes,
             ])->save();
         }
 
-        $after = DocumentClassification::query()
+        $afterRead = DocumentClassification::query()
             ->orderBy('name')
             ->get()
             ->filter(fn (DocumentClassification $classification): bool => in_array($role->code, $classification->allowed_role_codes ?? [], true))
+            ->pluck('code')
+            ->values()
+            ->all();
+
+        $afterDownload = DocumentClassification::query()
+            ->orderBy('name')
+            ->get()
+            ->filter(fn (DocumentClassification $classification): bool => in_array($role->code, $classification->allowed_download_role_codes ?? $classification->allowed_role_codes ?? [], true))
             ->pluck('code')
             ->values()
             ->all();
@@ -65,17 +91,21 @@ class RoleDocumentPolicyController extends Controller
             'resource_id' => (string) $role->id,
             'resource_label' => $role->code,
             'operation_summary' => sprintf(
-                '%s ha modificato la visibilità documentale del ruolo %s. Classificazioni precedenti: [%s]. Classificazioni successive: [%s].',
+                '%s ha modificato la visibilita documentale del ruolo %s. Lettura precedente: [%s]. Lettura successiva: [%s]. Download precedente: [%s]. Download successivo: [%s].',
                 $actorName,
                 $role->name,
-                implode(', ', $before),
-                implode(', ', $after)
+                implode(', ', $beforeRead),
+                implode(', ', $afterRead),
+                implode(', ', $beforeDownload),
+                implode(', ', $afterDownload)
             ),
             'old_values_json' => [
-                'classification_codes' => $before,
+                'classification_codes' => $beforeRead,
+                'download_classification_codes' => $beforeDownload,
             ],
             'new_values_json' => [
-                'classification_codes' => $after,
+                'classification_codes' => $afterRead,
+                'download_classification_codes' => $afterDownload,
             ],
         ]);
         $this->auditLogService->markHandled($request);
@@ -117,9 +147,9 @@ class RoleDocumentPolicyController extends Controller
                 'can_upload_documents' => $canUploadDocuments,
                 'explanation' => $canReadDocuments
                     ? ($canDownloadDocuments
-                        ? 'Il ruolo può leggere e scaricare documenti solo se superano sia i permessi RBAC sia la policy ABAC della classificazione e, per i documenti del minore, l’assegnazione attiva al minore.'
-                        : 'Il ruolo può leggere documenti se ammessi dalla classificazione, ma non può scaricarli finché non riceve il permesso RBAC attachments.download.')
-                    : 'Il ruolo non ha il permesso RBAC attachments.read: anche se una classificazione lo ammette, non leggerà documenti finché il permesso base non viene assegnato.',
+                        ? 'Il ruolo puo leggere e scaricare documenti solo se superano sia i permessi RBAC sia la policy ABAC della classificazione e, per i documenti del minore, l assegnazione attiva al minore.'
+                        : 'Il ruolo puo leggere documenti se ammessi dalla classificazione, ma non puo scaricarli finche non riceve il permesso RBAC attachments.download.')
+                    : 'Il ruolo non ha il permesso RBAC attachments.read: anche se una classificazione lo ammette, non leggera documenti finche il permesso base non viene assegnato.',
             ],
             'classifications' => $classifications->map(function (DocumentClassification $classification) use ($role, $canReadDocuments, $canDownloadDocuments): array {
                 $allowedRoleCodes = $classification->allowed_role_codes ?? [];
@@ -136,16 +166,16 @@ class RoleDocumentPolicyController extends Controller
                     'assigned_to_role' => $allowedForRole,
                     'download_assigned_to_role' => $downloadAllowedForRole,
                     'effective_read_access' => $canReadDocuments && $allowedForRole,
-                    'effective_download_access' => $canDownloadDocuments && $downloadAllowedForRole,
+                    'effective_download_access' => $canDownloadDocuments && $allowedDownloadRoleCodes !== [] && $downloadAllowedForRole,
                     'requires_minor_assignment' => true,
                     'notes' => $canReadDocuments
                         ? ($allowedForRole
                             ? ($canDownloadDocuments
                                 ? ($downloadAllowedForRole
-                                    ? 'Lettura e download consentiti se l’utente è assegnato attivamente al minore.'
+                                    ? 'Lettura e download consentiti se l utente e assegnato attivamente al minore.'
                                     : 'Lettura consentita, ma download negato dalla policy ABAC di questa classificazione.')
-                                : 'Lettura consentita, ma download negato finché il ruolo non riceve attachments.download.')
-                            : 'Il ruolo non è ammesso da questa classificazione documentale.')
+                                : 'Lettura consentita, ma download negato finche il ruolo non riceve attachments.download.')
+                            : 'Il ruolo non e ammesso da questa classificazione documentale.')
                         : 'Manca il permesso RBAC attachments.read.',
                 ];
             })->values(),

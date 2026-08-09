@@ -23,6 +23,8 @@ class SyncRoleDocumentPolicyRequest extends FormRequest
         return [
             'classification_codes' => ['required', 'array'],
             'classification_codes.*' => ['string', Rule::in($classificationCodes)],
+            'download_classification_codes' => ['nullable', 'array'],
+            'download_classification_codes.*' => ['string', Rule::in($classificationCodes)],
         ];
     }
 }

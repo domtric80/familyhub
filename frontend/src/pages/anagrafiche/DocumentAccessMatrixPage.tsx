@@ -235,7 +235,8 @@ export default function DocumentAccessMatrixPage() {
                         <th>Codice</th>
                         <th>Nome</th>
                         <th>Descrizione</th>
-                        <th>Ruoli ammessi</th>
+                        <th>Ruoli lettura</th>
+                        <th>Ruoli download</th>
                         <th>Ass. minore richiesta</th>
                         <th>Stato</th>
                       </tr>
@@ -250,6 +251,15 @@ export default function DocumentAccessMatrixPage() {
                             {cls.allowed_role_codes.length > 0
                               ? cls.allowed_role_codes.map((rc) => (
                                   <Badge key={rc} color='' className='badge-light-primary me-1' style={{ fontSize: 10 }}>
+                                    {rc}
+                                  </Badge>
+                                ))
+                              : <span className='text-muted small'>Nessuno</span>}
+                          </td>
+                          <td>
+                            {cls.allowed_download_role_codes.length > 0
+                              ? cls.allowed_download_role_codes.map((rc) => (
+                                  <Badge key={rc} color='' className='badge-light-success me-1' style={{ fontSize: 10 }}>
                                     {rc}
                                   </Badge>
                                 ))
@@ -315,4 +325,3 @@ export default function DocumentAccessMatrixPage() {
     </>
   )
 }
-

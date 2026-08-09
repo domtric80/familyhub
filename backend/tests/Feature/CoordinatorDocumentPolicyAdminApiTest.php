@@ -72,6 +72,7 @@ class CoordinatorDocumentPolicyAdminApiTest extends TestCase
         $response = $this->withToken($this->token)
             ->putJson("/api/admin/roles/{$role->id}/document-policy", [
                 'classification_codes' => ['internal', 'restricted', 'clinical'],
+                'download_classification_codes' => ['internal', 'restricted'],
             ])
             ->assertOk()
             ->assertJsonPath('role.code', 'COORDINATORE');
@@ -83,6 +84,8 @@ class CoordinatorDocumentPolicyAdminApiTest extends TestCase
             ->all();
 
         $this->assertContains('clinical', $assigned);
+        $clinical = collect($response->json('classifications'))->firstWhere('code', 'clinical');
+        $this->assertFalse((bool) ($clinical['download_assigned_to_role'] ?? true));
     }
 
     public function test_coordinator_can_create_new_document_classification_tag(): void

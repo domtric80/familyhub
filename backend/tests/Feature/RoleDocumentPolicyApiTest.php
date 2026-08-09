@@ -48,6 +48,7 @@ class RoleDocumentPolicyApiTest extends TestCase
         $response = $this->withToken($this->token)
             ->putJson("/api/admin/roles/{$role->id}/document-policy", [
                 'classification_codes' => ['internal', 'restricted'],
+                'download_classification_codes' => ['restricted'],
             ])
             ->assertOk()
             ->assertJsonPath('role.code', 'ASSISTENTE_SOCIALE_EST');
@@ -58,7 +59,14 @@ class RoleDocumentPolicyApiTest extends TestCase
             ->values()
             ->all();
 
+        $downloadAssigned = collect($response->json('classifications'))
+            ->filter(fn (array $item): bool => (bool) $item['download_assigned_to_role'])
+            ->pluck('code')
+            ->values()
+            ->all();
+
         $this->assertSame(['internal', 'restricted'], $assigned);
+        $this->assertSame(['restricted'], $downloadAssigned);
 
         $internal = DocumentClassification::query()->where('code', 'internal')->firstOrFail();
         $restricted = DocumentClassification::query()->where('code', 'restricted')->firstOrFail();
@@ -66,6 +74,8 @@ class RoleDocumentPolicyApiTest extends TestCase
 
         $this->assertContains('ASSISTENTE_SOCIALE_EST', $internal->allowed_role_codes ?? []);
         $this->assertContains('ASSISTENTE_SOCIALE_EST', $restricted->allowed_role_codes ?? []);
+        $this->assertNotContains('ASSISTENTE_SOCIALE_EST', $internal->allowed_download_role_codes ?? []);
+        $this->assertContains('ASSISTENTE_SOCIALE_EST', $restricted->allowed_download_role_codes ?? []);
         $this->assertNotContains('ASSISTENTE_SOCIALE_EST', $clinical->allowed_role_codes ?? []);
     }
 }
