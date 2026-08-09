@@ -127,7 +127,9 @@ class GeoLoadController extends Controller
         }
 
         $availableLevels = match ($source) {
-            'geonames' => ['countries'],
+            'geonames' => in_array('cities', (array) ($summary['capabilities'] ?? []), true)
+                ? ['countries', 'regions', 'provinces', 'cities']
+                : ['countries'],
             'seed', 'istat' => ['countries', 'regions', 'provinces', 'cities'],
             default => [],
         };

@@ -5,10 +5,17 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreGeographyProviderRequest;
 use App\Models\GeographyProvider;
+use App\Services\Geography\GeoNamesGlobalCountryImporter;
 use Illuminate\Http\JsonResponse;
+use RuntimeException;
 
 class GeographyProviderController extends Controller
 {
+    public function __construct(
+        private readonly GeoNamesGlobalCountryImporter $geoNamesGlobalCountryImporter = new GeoNamesGlobalCountryImporter(),
+    ) {
+    }
+
     public function index(): JsonResponse
     {
         return response()->json(
@@ -58,5 +65,39 @@ class GeographyProviderController extends Controller
         $provider->delete();
 
         return response()->json(status: 204);
+    }
+
+    public function importCountries(GeographyProvider $provider): JsonResponse
+    {
+        try {
+            $result = $this->geoNamesGlobalCountryImporter->importAllCountries($provider, request()->user()?->id);
+        } catch (RuntimeException $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'Import nazioni completato.',
+            'data' => [
+                'provider' => [
+                    'id' => $provider->id,
+                    'code' => $provider->code,
+                    'name' => $provider->name,
+                    'driver' => $provider->driver,
+                    'mode' => $provider->mode,
+                    'format' => $provider->format,
+                ],
+                'run' => [
+                    'id' => $result['run']->id,
+                    'status' => $result['run']->status,
+                    'scope' => $result['run']->scope,
+                    'summary' => $result['run']->summary_json,
+                ],
+                'raw' => $result['raw'],
+                'loaded' => $result['loaded'],
+                'stats' => $result['stats'],
+            ],
+        ], 201);
     }
 }

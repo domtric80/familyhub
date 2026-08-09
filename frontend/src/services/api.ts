@@ -25,7 +25,7 @@ import type {
   GeoLoadRunOption, GeoLoadContinentOption, GeoLoadCountryOption, GeoLoadRegionOption, GeoLoadProvinceOption, GeoLoadCityOption,
   GeoLoadExecuteRequest, GeoLoadExecuteResponse,
   GeoProvider, GeoProviderWrite, CountryProviderMapping, CountryProviderMappingWrite,
-  GeoImportRequest, GeoImportResponse,
+  GeoImportRequest, GeoImportResponse, GeoProviderCountriesImportResponse,
   ApiError,
   EducatorAccountPayload,
   ActivityType, ActivityTypeWrite, Activity, ActivityWrite, ActivityStatus,
@@ -819,6 +819,9 @@ export const adminGeoProvidersApi = {
 
   update: (id: number, data: GeoProviderWrite) =>
     http.put<GeoProvider>(`/admin/geography-providers/${id}`, data).then((r) => r.data),
+
+  importCountries: (id: number) =>
+    http.post<GeoProviderCountriesImportResponse>(`/admin/geography-providers/${id}/import-countries`).then((r) => r.data),
 
   delete: (id: number) =>
     http.delete(`/admin/geography-providers/${id}`),

@@ -1,0 +1,3 @@
+FR.11	Ile-de-France	Ile-de-France	3012874
+FR.84	Auvergne-Rhone-Alpes	Auvergne-Rhone-Alpes	11071622
+FR.93	Provence-Alpes-Cote-d'Azur	Provence-Alpes-Cote-d'Azur	2985244

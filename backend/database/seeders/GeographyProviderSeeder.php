@@ -21,10 +21,15 @@ class GeographyProviderSeeder extends Seeder
                 'source_url' => env('GEOGRAPHY_GEONAMES_COUNTRIES_URL', 'https://download.geonames.org/export/dump/countryInfo.txt'),
                 'source_path' => null,
                 'auth_type' => 'none',
-                'auth_config_json' => null,
+                'auth_config_json' => [
+                    'countries_source_url' => env('GEOGRAPHY_GEONAMES_COUNTRIES_URL', 'https://download.geonames.org/export/dump/countryInfo.txt'),
+                    'admin1_source_url' => env('GEOGRAPHY_GEONAMES_ADMIN1_URL', 'https://download.geonames.org/export/dump/admin1CodesASCII.txt'),
+                    'admin2_source_url' => env('GEOGRAPHY_GEONAMES_ADMIN2_URL', 'https://download.geonames.org/export/dump/admin2Codes.txt'),
+                    'country_dump_url_template' => env('GEOGRAPHY_GEONAMES_COUNTRY_DUMP_URL_TEMPLATE', 'https://download.geonames.org/export/dump/{ISO}.zip'),
+                ],
                 'priority' => 100,
                 'is_active' => true,
-                'notes' => 'Provider generico mondiale per continenti, nazioni e dati geografici di base.',
+                'notes' => 'Provider generico mondiale GeoNames per nazioni, suddivisioni amministrative e città.',
             ],
         );
 

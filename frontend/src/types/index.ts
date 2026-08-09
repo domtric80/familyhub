@@ -1409,6 +1409,34 @@ export interface GeoImportResponse {
   data: GeoImportResponseData
 }
 
+export interface GeoProviderCountriesImportResponseData {
+  provider: {
+    id: number
+    code: string
+    name: string
+    driver: string
+    mode: string
+    format?: string | null
+  }
+  run: {
+    id: number
+    status: string
+    scope: string
+    summary?: Record<string, unknown> | null
+  }
+  raw: GeoLoadExecuteResponse
+  loaded: GeoLoadExecuteResponse
+  stats: {
+    created_countries: number
+    updated_countries: number
+  }
+}
+
+export interface GeoProviderCountriesImportResponse {
+  message: string
+  data: GeoProviderCountriesImportResponseData
+}
+
 export interface ApiError {
   message: string
   errors?: Record<string, string[]>

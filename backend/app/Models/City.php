@@ -16,7 +16,24 @@ class City extends Model
         'name',
         'cadastre_code',
         'postal_code',
+        'geoname_id',
+        'latitude',
+        'longitude',
+        'population',
+        'timezone',
+        'feature_code',
+        'geonames_modified_at',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'latitude' => 'decimal:7',
+            'longitude' => 'decimal:7',
+            'population' => 'integer',
+            'geonames_modified_at' => 'date',
+        ];
+    }
 
     public function province(): BelongsTo
     {

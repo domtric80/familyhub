@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\City;
 use App\Models\Country;
 use App\Models\GeographyProvider;
 use Database\Seeders\DatabaseSeeder;
@@ -29,7 +30,7 @@ class GeographyImportApiTest extends TestCase
         $this->token = (string) $login->json('access_token');
     }
 
-    public function test_can_import_country_on_demand_with_generic_provider(): void
+    public function test_can_import_country_on_demand_with_generic_provider_and_load_geonames_cities(): void
     {
         $france = Country::query()->create([
             'iso_code' => 'FR',
@@ -39,8 +40,14 @@ class GeographyImportApiTest extends TestCase
         $provider = GeographyProvider::query()->where('code', 'GEONAMES')->firstOrFail();
         $provider->update([
             'mode' => 'local_file',
-            'source_path' => base_path('tests/Fixtures/geonames-countryInfo-sample.txt'),
+            'source_path' => base_path('tests/Fixtures/geonames-countryInfo-fr-sample.txt'),
             'source_url' => null,
+            'auth_config_json' => [
+                'countries_source_path' => base_path('tests/Fixtures/geonames-countryInfo-fr-sample.txt'),
+                'admin1_source_path' => base_path('tests/Fixtures/geonames-admin1CodesASCII-fr-sample.txt'),
+                'admin2_source_path' => base_path('tests/Fixtures/geonames-admin2Codes-fr-sample.txt'),
+                'country_dump_source_path_template' => base_path('tests/Fixtures/{ISO}.zip'),
+            ],
         ]);
 
         $this->withToken($this->token)
@@ -49,7 +56,19 @@ class GeographyImportApiTest extends TestCase
             ])
             ->assertCreated()
             ->assertJsonPath('data.provider.code', 'GEONAMES')
-            ->assertJsonPath('data.loaded.countries', 1);
+            ->assertJsonPath('data.loaded.countries', 1)
+            ->assertJsonPath('data.loaded.regions', 3)
+            ->assertJsonPath('data.loaded.provinces', 3)
+            ->assertJsonPath('data.loaded.cities', 3);
+
+        $this->assertDatabaseHas('regions', ['country_id' => $france->id, 'code' => '11', 'name' => 'Ile-de-France']);
+        $this->assertDatabaseHas('provinces', ['code' => '75', 'name' => 'Paris']);
+        $this->assertDatabaseHas('cities', ['name' => 'Paris', 'geoname_id' => 2988507]);
+
+        $paris = City::query()->where('name', 'Paris')->firstOrFail();
+        $this->assertSame('Europe/Paris', $paris->timezone);
+        $this->assertSame('PPLC', $paris->feature_code);
+        $this->assertSame(2138551, $paris->population);
     }
 
     public function test_can_import_italy_on_demand_with_istat_provider(): void

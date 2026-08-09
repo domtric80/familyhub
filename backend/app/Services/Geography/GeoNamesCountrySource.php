@@ -19,7 +19,7 @@ class GeoNamesCountrySource
         'SA' => 'Sud America',
     ];
 
-    public function fetch(?string $localFile = null): array
+    public function fetch(?string $localFile = null, ?string $sourceUrl = null): array
     {
         if ($localFile) {
             if (! is_file($localFile)) {
@@ -41,7 +41,7 @@ class GeoNamesCountrySource
             ];
         }
 
-        $url = (string) config('geography.sources.geonames.countries_url');
+        $url = trim((string) ($sourceUrl ?: config('geography.sources.geonames.countries_url')));
         $response = Http::timeout(60)->accept('text/plain')->get($url);
         $response->throw();
 

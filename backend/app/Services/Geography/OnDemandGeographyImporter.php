@@ -3,8 +3,15 @@
 namespace App\Services\Geography;
 
 use App\Models\Country;
+use App\Models\City;
 use App\Models\GeoImportRun;
+use App\Models\GeoSourceCityRaw;
+use App\Models\GeoSourceCountryRaw;
+use App\Models\GeoSourceProvinceRaw;
+use App\Models\GeoSourceRegionRaw;
 use App\Models\GeographyProvider;
+use App\Models\Province;
+use App\Models\Region;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -17,6 +24,7 @@ class OnDemandGeographyImporter
         private readonly IstatCsvRawImporter $istatImporter = new IstatCsvRawImporter(),
         private readonly CanonicalGeographyLoader $canonicalLoader = new CanonicalGeographyLoader(),
         private readonly GeoNamesCountrySource $geoNamesCountrySource = new GeoNamesCountrySource(),
+        private readonly GeoNamesCountryDumpSource $geoNamesCountryDumpSource = new GeoNamesCountryDumpSource(),
     ) {
     }
 
@@ -89,50 +97,206 @@ class OnDemandGeographyImporter
 
     private function importGeoNamesCountry(Country $country, GeographyProvider $provider, ?int $initiatedByUserId): array
     {
+        $this->guardAgainstUnsafeGeoNamesCanonicalOverwrite($country, $provider);
+
         $run = $this->createRun('on_demand_country', 'geonames_country_import', $initiatedByUserId, [
             'source' => 'geonames',
-            'dataset' => 'countries',
+            'dataset' => 'country_dump',
             'country_iso_code' => $country->iso_code,
             'provider_code' => $provider->code,
             'mode' => $provider->mode,
         ]);
 
         try {
-            $payload = $this->resolveGeoNamesPayload($provider);
-            $sourceFile = $this->geoNamesCountrySource->persistFile($payload);
-            $rows = $this->geoNamesCountrySource->parseCountries((string) $payload['content']);
+            $settings = $this->resolveGeoNamesSettings($provider);
 
-            $match = collect($rows)->first(fn (array $row) => strtoupper((string) ($row['iso_code'] ?? '')) === strtoupper($country->iso_code));
+            $countriesPayload = $this->resolveGeoNamesCountriesPayload($provider, $settings);
+            $countriesSourceFile = $this->geoNamesCountrySource->persistFile($countriesPayload);
+            $countryRows = $this->geoNamesCountrySource->parseCountries((string) $countriesPayload['content']);
+
+            $match = collect($countryRows)->first(
+                fn (array $row) => strtoupper((string) ($row['iso_code'] ?? '')) === strtoupper($country->iso_code)
+            );
 
             if (! $match) {
                 throw new RuntimeException("Nazione {$country->iso_code} non trovata nel dataset del provider {$provider->code}.");
             }
 
-            DB::transaction(function () use ($country, $match): void {
+            $admin1Payload = $this->resolveGeoNamesTextPayload(
+                localPath: $this->resolveConfiguredLocalPath($settings, 'admin1_source_path'),
+                remoteUrl: $this->resolveConfiguredUrl(
+                    $settings,
+                    'admin1_source_url',
+                    (string) config('geography.sources.geonames.admin1_url')
+                ),
+                fallbackName: 'admin1CodesASCII.txt',
+            );
+            $admin1SourceFile = $this->geoNamesCountryDumpSource->persistFile($admin1Payload, 'admin1', 'GeoNames admin1');
+            $regions = $this->geoNamesCountryDumpSource->parseAdmin1((string) $admin1Payload['content'], (string) $match['iso_code']);
+
+            $admin2Payload = $this->resolveGeoNamesTextPayload(
+                localPath: $this->resolveConfiguredLocalPath($settings, 'admin2_source_path'),
+                remoteUrl: $this->resolveConfiguredUrl(
+                    $settings,
+                    'admin2_source_url',
+                    (string) config('geography.sources.geonames.admin2_url')
+                ),
+                fallbackName: 'admin2Codes.txt',
+            );
+            $admin2SourceFile = $this->geoNamesCountryDumpSource->persistFile($admin2Payload, 'admin2', 'GeoNames admin2');
+            $provinces = $this->geoNamesCountryDumpSource->parseAdmin2((string) $admin2Payload['content'], (string) $match['iso_code']);
+
+            $countryDumpPayload = $this->resolveGeoNamesCountryDumpPayload($provider, $settings, (string) $match['iso_code']);
+            $countryDumpSourceFile = $this->geoNamesCountryDumpSource->persistFile($countryDumpPayload, 'country_dump', 'GeoNames country dump');
+            $countryDumpTxt = $this->geoNamesCountryDumpSource->extractFirstTxtFromZip(
+                (string) $countryDumpPayload['content'],
+                (string) $countryDumpPayload['file_name'],
+            );
+            $cities = $this->geoNamesCountryDumpSource->parseCountryDump((string) $countryDumpTxt['content'], (string) $match['iso_code']);
+
+            $structures = $this->buildGeoNamesStructure(
+                countryIsoCode: (string) $match['iso_code'],
+                countryName: (string) $match['name'],
+                countryData: $match,
+                regions: $regions,
+                provinces: $provinces,
+                cities: $cities,
+            );
+
+            DB::transaction(function () use (
+                $country,
+                $match,
+                $run,
+                $countriesSourceFile,
+                $admin1SourceFile,
+                $admin2SourceFile,
+                $countryDumpSourceFile,
+                $structures
+            ): void {
                 $country->update([
                     'iso_code' => strtoupper((string) $match['iso_code']),
                     'name' => (string) $match['name'],
                 ]);
+
+                GeoSourceCountryRaw::query()->updateOrCreate(
+                    [
+                        'geo_import_run_id' => $run->id,
+                        'source_system' => 'geonames',
+                        'dataset_code' => 'countries',
+                        'source_record_key' => (string) $structures['country']['source_record_key'],
+                    ],
+                    [
+                        'geo_source_file_id' => $countriesSourceFile->id,
+                        'source_name' => (string) $structures['country']['source_name'],
+                        'iso_code' => (string) $structures['country']['iso_code'],
+                        'iso3_code' => $structures['country']['iso3_code'],
+                        'continent_code' => $structures['country']['continent_code'],
+                        'continent_name' => $structures['country']['continent_name'],
+                        'raw_payload_json' => $structures['country']['raw_payload_json'],
+                        'normalized_payload_json' => $structures['country']['normalized_payload_json'],
+                    ],
+                );
+
+                foreach ($structures['regions'] as $region) {
+                    GeoSourceRegionRaw::query()->updateOrCreate(
+                        [
+                            'geo_import_run_id' => $run->id,
+                            'source_system' => 'geonames',
+                            'dataset_code' => 'admin1',
+                            'source_record_key' => (string) $region['source_record_key'],
+                        ],
+                        [
+                            'geo_source_file_id' => $admin1SourceFile->id,
+                            'source_parent_key' => (string) $region['source_parent_key'],
+                            'source_name' => (string) $region['source_name'],
+                            'code' => $region['code'],
+                            'istat_code' => null,
+                            'raw_payload_json' => $region['raw_payload_json'],
+                            'normalized_payload_json' => $region['normalized_payload_json'],
+                        ],
+                    );
+                }
+
+                foreach ($structures['provinces'] as $province) {
+                    GeoSourceProvinceRaw::query()->updateOrCreate(
+                        [
+                            'geo_import_run_id' => $run->id,
+                            'source_system' => 'geonames',
+                            'dataset_code' => 'admin2',
+                            'source_record_key' => (string) $province['source_record_key'],
+                        ],
+                        [
+                            'geo_source_file_id' => $admin2SourceFile->id,
+                            'source_parent_key' => (string) $province['source_parent_key'],
+                            'source_name' => (string) $province['source_name'],
+                            'code' => $province['code'],
+                            'istat_code' => null,
+                            'vehicle_code' => null,
+                            'raw_payload_json' => $province['raw_payload_json'],
+                            'normalized_payload_json' => $province['normalized_payload_json'],
+                        ],
+                    );
+                }
+
+                foreach ($structures['cities'] as $cityRow) {
+                    GeoSourceCityRaw::query()->updateOrCreate(
+                        [
+                            'geo_import_run_id' => $run->id,
+                            'source_system' => 'geonames',
+                            'dataset_code' => 'country_dump',
+                            'source_record_key' => (string) $cityRow['source_record_key'],
+                        ],
+                        [
+                            'geo_source_file_id' => $countryDumpSourceFile->id,
+                            'source_parent_key' => (string) $cityRow['source_parent_key'],
+                            'source_name' => (string) $cityRow['source_name'],
+                            'istat_code' => null,
+                            'cadastre_code' => null,
+                            'postal_code' => null,
+                            'raw_payload_json' => $cityRow['raw_payload_json'],
+                            'normalized_payload_json' => $cityRow['normalized_payload_json'],
+                        ],
+                    );
+                }
             });
+
+            $raw = [
+                'countries' => 1,
+                'regions' => count($structures['regions']),
+                'provinces' => count($structures['provinces']),
+                'cities' => count($structures['cities']),
+            ];
+            $loaded = $this->canonicalLoader->loadFromRun($run->id, 'geonames');
+            $publishedCount = (int) (
+                ($loaded['countries'] ?? 0)
+                + ($loaded['regions'] ?? 0)
+                + ($loaded['provinces'] ?? 0)
+                + ($loaded['cities'] ?? 0)
+            );
 
             $run->update([
                 'status' => 'completed',
                 'finished_at' => now(),
-                'source_file_count' => 1,
-                'raw_record_count' => count($rows),
-                'normalized_record_count' => count($rows),
-                'published_record_count' => 1,
+                'source_file_count' => 4,
+                'raw_record_count' => array_sum($raw),
+                'normalized_record_count' => array_sum($raw),
+                'published_record_count' => $publishedCount,
                 'issue_count' => 0,
                 'error_count' => 0,
                 'summary_json' => array_merge($run->summary_json ?? [], [
-                    'source_file_id' => $sourceFile->id,
-                    'countries_parsed' => count($rows),
-                    'loaded' => [
-                        'countries' => 1,
-                        'regions' => 0,
-                        'provinces' => 0,
-                        'cities' => 0,
+                    'source_file_ids' => [
+                        'countries' => $countriesSourceFile->id,
+                        'admin1' => $admin1SourceFile->id,
+                        'admin2' => $admin2SourceFile->id,
+                        'country_dump' => $countryDumpSourceFile->id,
                     ],
+                    'countries_parsed' => count($countryRows),
+                    'regions_parsed' => $raw['regions'],
+                    'provinces_parsed' => $raw['provinces'],
+                    'cities_parsed' => $raw['cities'],
+                    'raw' => $raw,
+                    'loaded' => $loaded,
+                    'capabilities' => ['countries', 'regions', 'provinces', 'cities'],
                 ]),
             ]);
         } catch (\Throwable $throwable) {
@@ -152,19 +316,18 @@ class OnDemandGeographyImporter
             'run' => $run->fresh(),
             'provider' => $provider,
             'country' => $country,
-            'raw' => [
+            'raw' => $run->fresh()->summary_json['raw'] ?? [
                 'countries' => 1,
                 'regions' => 0,
                 'provinces' => 0,
                 'cities' => 0,
             ],
-            'loaded' => [
+            'loaded' => $run->fresh()->summary_json['loaded'] ?? [
                 'countries' => 1,
                 'regions' => 0,
                 'provinces' => 0,
                 'cities' => 0,
             ],
-            'warning' => 'Per il provider generico è attivo solo il popolamento della nazione. Suddivisioni amministrative non ancora disponibili.',
         ];
     }
 
@@ -209,13 +372,278 @@ class OnDemandGeographyImporter
         };
     }
 
-    private function resolveGeoNamesPayload(GeographyProvider $provider): array
+    private function resolveGeoNamesSettings(GeographyProvider $provider): array
     {
+        return is_array($provider->auth_config_json) ? $provider->auth_config_json : [];
+    }
+
+    private function resolveGeoNamesCountriesPayload(GeographyProvider $provider, array $settings): array
+    {
+        $providerLocalPath = $this->requireLocalPathIfApplicable($provider);
+        $providerSourceUrl = trim((string) ($provider->source_url ?? ''));
+
+        $defaultCountriesLocalPath = $this->resolveConfiguredLocalPath($settings, 'countries_source_path');
+        $defaultCountriesUrl = $this->resolveConfiguredUrl(
+            $settings,
+            'countries_source_url',
+            (string) config('geography.sources.geonames.countries_url')
+        );
+
         return match ($provider->mode) {
-            'local_file' => $this->geoNamesCountrySource->fetch($this->requireLocalPath($provider)),
-            'remote_file' => $this->fetchRemoteTextFile($provider),
+            'local_file' => $this->geoNamesCountrySource->fetch(
+                $defaultCountriesLocalPath
+                    ?: ($providerLocalPath && ! $this->looksLikeZipPath($providerLocalPath) ? $providerLocalPath : null)
+                    ?: throw new RuntimeException('Per il provider GeoNames locale manca il file countryInfo.txt.')
+            ),
+            'remote_file' => $this->resolveGeoNamesTextPayload(
+                localPath: $defaultCountriesLocalPath,
+                remoteUrl: ! $this->looksLikeZipUrl($providerSourceUrl) && $providerSourceUrl !== ''
+                    ? $providerSourceUrl
+                    : $defaultCountriesUrl,
+                fallbackName: 'countryInfo.txt',
+            ),
             default => throw new RuntimeException("Mode {$provider->mode} non supportato dal driver {$provider->driver}."),
         };
+    }
+
+    private function resolveGeoNamesCountryDumpPayload(GeographyProvider $provider, array $settings, string $countryIsoCode): array
+    {
+        $templatePath = $this->resolveConfiguredLocalPath($settings, 'country_dump_source_path_template');
+        $templateUrl = $this->resolveConfiguredUrl(
+            $settings,
+            'country_dump_url_template',
+            (string) config('geography.sources.geonames.country_dump_url_template')
+        );
+
+        $localPath = $templatePath ? $this->replaceCountryTemplate($templatePath, $countryIsoCode) : null;
+        $remoteUrl = $templateUrl ? $this->replaceCountryTemplate($templateUrl, $countryIsoCode) : null;
+
+        if (! $localPath && ! $remoteUrl) {
+            if ($provider->mode === 'local_file' && $provider->source_path && str_ends_with(strtolower((string) $provider->source_path), '.zip')) {
+                $localPath = (string) $provider->source_path;
+            } elseif ($provider->mode === 'remote_file' && $provider->source_url && str_ends_with(strtolower((string) $provider->source_url), '.zip')) {
+                $remoteUrl = (string) $provider->source_url;
+            }
+        }
+
+        return $this->geoNamesCountryDumpSource->fetchBinary(
+            $localPath,
+            $remoteUrl,
+            "{$countryIsoCode}.zip",
+        );
+    }
+
+    private function guardAgainstUnsafeGeoNamesCanonicalOverwrite(Country $country, GeographyProvider $provider): void
+    {
+        $hasCanonicalHierarchy = Region::query()->where('country_id', $country->id)->exists()
+            || Province::query()->whereHas('region', fn ($query) => $query->where('country_id', $country->id))->exists()
+            || City::query()->whereHas('province.region', fn ($query) => $query->where('country_id', $country->id))->exists();
+
+        if (! $hasCanonicalHierarchy) {
+            return;
+        }
+
+        $hasCountrySpecificNonGeoNamesProvider = $country->providers()
+            ->where('geography_providers.driver', '!=', 'geonames')
+            ->where('geography_providers.type', 'country_specific')
+            ->wherePivot('is_active', true)
+            ->exists();
+
+        if (! $hasCountrySpecificNonGeoNamesProvider) {
+            return;
+        }
+
+        throw new RuntimeException(
+            "La nazione {$country->iso_code} ha già una gerarchia geografica canonica gestita da un provider paese-specifico. ".
+            'GeoNames non può sovrascrivere regioni, province e città esistenti. '.
+            'Usa GeoNames per nazioni non ancora popolate oppure come sorgente di arricchimento in uno step dedicato.'
+        );
+    }
+
+    private function resolveGeoNamesTextPayload(?string $localPath, ?string $remoteUrl, string $fallbackName): array
+    {
+        return $this->geoNamesCountryDumpSource->fetchText($localPath, $remoteUrl, $fallbackName);
+    }
+
+    private function resolveConfiguredLocalPath(array $settings, string $key): ?string
+    {
+        $value = trim((string) ($settings[$key] ?? ''));
+
+        return $value !== '' ? $value : null;
+    }
+
+    private function resolveConfiguredUrl(array $settings, string $key, ?string $fallback = null): ?string
+    {
+        $value = trim((string) ($settings[$key] ?? ''));
+        if ($value !== '') {
+            return $value;
+        }
+
+        $fallback = trim((string) $fallback);
+
+        return $fallback !== '' ? $fallback : null;
+    }
+
+    private function requireLocalPathIfApplicable(GeographyProvider $provider): ?string
+    {
+        $path = trim((string) ($provider->source_path ?? ''));
+
+        if ($path === '') {
+            return null;
+        }
+
+        if (! is_file($path)) {
+            throw new RuntimeException("Provider {$provider->code}: file non trovato in {$path}.");
+        }
+
+        return $path;
+    }
+
+    private function looksLikeZipUrl(string $value): bool
+    {
+        $value = strtolower(trim($value));
+
+        return $value !== '' && (str_ends_with($value, '.zip') || str_contains($value, '.zip?'));
+    }
+
+    private function looksLikeZipPath(string $value): bool
+    {
+        $value = strtolower(trim($value));
+
+        return $value !== '' && str_ends_with($value, '.zip');
+    }
+
+    private function replaceCountryTemplate(string $template, string $countryIsoCode): string
+    {
+        return str_replace(
+            ['{ISO}', '{iso}'],
+            [strtoupper($countryIsoCode), strtolower($countryIsoCode)],
+            $template,
+        );
+    }
+
+    private function buildGeoNamesStructure(
+        string $countryIsoCode,
+        string $countryName,
+        array $countryData,
+        array $regions,
+        array $provinces,
+        array $cities,
+    ): array {
+        $countryIsoCode = strtoupper($countryIsoCode);
+
+        $regionMap = [];
+        foreach ($regions as $region) {
+            $regionMap[$region['source_record_key']] = [
+                'source_record_key' => $region['source_record_key'],
+                'source_parent_key' => $region['source_parent_key'],
+                'source_name' => $region['source_name'],
+                'code' => $region['code'],
+                'raw_payload_json' => $region,
+                'normalized_payload_json' => [
+                    'code' => $region['code'],
+                    'ascii_name' => $region['ascii_name'],
+                    'geoname_id' => $region['geoname_id'],
+                ],
+            ];
+        }
+
+        $provinceMap = [];
+        foreach ($provinces as $province) {
+            $provinceMap[$province['source_record_key']] = [
+                'source_record_key' => $province['source_record_key'],
+                'source_parent_key' => $province['source_parent_key'],
+                'source_name' => $province['source_name'],
+                'code' => $province['code'],
+                'raw_payload_json' => $province,
+                'normalized_payload_json' => [
+                    'code' => $province['code'],
+                    'ascii_name' => $province['ascii_name'],
+                    'geoname_id' => $province['geoname_id'],
+                ],
+            ];
+        }
+
+        $cityRows = [];
+
+        foreach ($cities as $city) {
+            $regionKey = (string) $city['region_key'];
+            $provinceKey = (string) $city['province_key'];
+
+            if (! isset($regionMap[$regionKey])) {
+                $regionCode = (string) ($city['region_code'] ?: '00');
+                $regionMap[$regionKey] = [
+                    'source_record_key' => $regionKey,
+                    'source_parent_key' => $countryIsoCode,
+                    'source_name' => "Regione {$regionCode}",
+                    'code' => $regionCode,
+                    'raw_payload_json' => [
+                        'synthetic' => true,
+                        'source' => 'country_dump',
+                        'code' => $regionCode,
+                    ],
+                    'normalized_payload_json' => [
+                        'code' => $regionCode,
+                        'synthetic' => true,
+                    ],
+                ];
+            }
+
+            if (! isset($provinceMap[$provinceKey])) {
+                $provinceCode = (string) ($city['province_code'] ?: '00');
+                $provinceMap[$provinceKey] = [
+                    'source_record_key' => $provinceKey,
+                    'source_parent_key' => $regionKey,
+                    'source_name' => "Provincia {$provinceCode}",
+                    'code' => $provinceCode,
+                    'raw_payload_json' => [
+                        'synthetic' => true,
+                        'source' => 'country_dump',
+                        'code' => $provinceCode,
+                    ],
+                    'normalized_payload_json' => [
+                        'code' => $provinceCode,
+                        'synthetic' => true,
+                    ],
+                ];
+            }
+
+            $cityRows[] = [
+                'source_record_key' => $city['source_record_key'],
+                'source_parent_key' => $provinceKey,
+                'source_name' => $city['source_name'],
+                'raw_payload_json' => $city,
+                'normalized_payload_json' => [
+                    'geoname_id' => (int) $city['source_record_key'],
+                    'latitude' => $city['latitude'],
+                    'longitude' => $city['longitude'],
+                    'population' => $city['population'],
+                    'timezone' => $city['timezone'],
+                    'feature_code' => $city['feature_code'],
+                    'geonames_modified_at' => $city['modification_date'],
+                    'ascii_name' => $city['ascii_name'],
+                    'alternate_names' => $city['alternate_names'],
+                    'admin3_code' => $city['admin3_code'],
+                    'admin4_code' => $city['admin4_code'],
+                ],
+            ];
+        }
+
+        return [
+            'country' => [
+                'source_record_key' => $countryIsoCode,
+                'source_name' => $countryName,
+                'iso_code' => $countryIsoCode,
+                'iso3_code' => $countryData['iso3_code'] ?? null,
+                'continent_code' => $countryData['continent_code'] ?? null,
+                'continent_name' => $countryData['continent_name'] ?? null,
+                'raw_payload_json' => $countryData,
+                'normalized_payload_json' => $countryData,
+            ],
+            'regions' => array_values($regionMap),
+            'provinces' => array_values($provinceMap),
+            'cities' => $cityRows,
+        ];
     }
 
     private function requireLocalPath(GeographyProvider $provider): string
@@ -254,27 +682,6 @@ class OnDemandGeographyImporter
         file_put_contents($target, $response->body());
 
         return $target;
-    }
-
-    private function fetchRemoteTextFile(GeographyProvider $provider): array
-    {
-        $url = trim((string) $provider->source_url);
-
-        if ($url === '') {
-            throw new RuntimeException("Provider {$provider->code} non configurato: source_url mancante.");
-        }
-
-        $response = Http::timeout(120)->accept('text/plain')->get($url);
-        $response->throw();
-        $host = parse_url($url, PHP_URL_HOST);
-
-        return [
-            'content' => $response->body(),
-            'file_name' => basename(parse_url($url, PHP_URL_PATH) ?: 'source.txt'),
-            'source_url' => $url,
-            'source_domain' => is_string($host) ? $host : null,
-            'mime_type' => $response->header('Content-Type'),
-        ];
     }
 
     private function extractCsvFromZip(string $zipPath, GeographyProvider $provider): string

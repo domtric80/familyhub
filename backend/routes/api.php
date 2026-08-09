@@ -308,6 +308,7 @@ Route::middleware(['auth:sanctum', 'admin.api', 'audit.api'])->prefix('admin')->
     Route::post('/geography-providers', [GeographyProviderController::class, 'store'])->middleware('permission.api:geography_providers.create');
     Route::get('/geography-providers/{provider}', [GeographyProviderController::class, 'show'])->middleware('permission.api:geography_providers.read');
     Route::put('/geography-providers/{provider}', [GeographyProviderController::class, 'update'])->middleware('permission.api:geography_providers.update');
+    Route::post('/geography-providers/{provider}/import-countries', [GeographyProviderController::class, 'importCountries'])->middleware('permission.api:geography_sync.run');
     Route::delete('/geography-providers/{provider}', [GeographyProviderController::class, 'destroy'])->middleware('permission.api:geography_providers.delete');
 
     Route::get('/countries/{country}/geography-providers', [CountryGeographyProviderController::class, 'index'])->middleware('permission.api:geography_providers.read');

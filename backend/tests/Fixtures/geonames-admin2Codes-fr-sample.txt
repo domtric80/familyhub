@@ -1,0 +1,3 @@
+FR.11.75	Paris	Paris	2988506
+FR.84.69	Rhone	Rhone	2996943
+FR.93.13	Bouches-du-Rhone	Bouches-du-Rhone	3031359

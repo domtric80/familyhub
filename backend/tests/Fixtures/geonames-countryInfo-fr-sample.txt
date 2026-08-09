@@ -1,0 +1,2 @@
+#ISO	ISO3	ISO-Numeric	fips	Country	Capital	Area(in sq km)	Population	Continent	tld	CurrencyCode	CurrencyName	Phone	Postal Code Format	Postal Code Regex	Languages	geonameid	neighbours	EquivalentFipsCode
+FR	FRA	250	FR	France	Paris	547030	67081000	EU	.fr	EUR	Euro	33			fr-FR	3017382	BE,DE,CH,IT,ES,LU	

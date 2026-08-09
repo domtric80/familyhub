@@ -2550,6 +2550,26 @@ paths:
       responses:
         '204':
           description: Provider eliminato
+  /admin/geography-providers/{provider}/import-countries:
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: importCountriesFromGeographyProvider
+      parameters:
+        - $ref: '#/components/parameters/GeographyProviderId'
+      responses:
+        '201':
+          description: Import globale nazioni completato
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  data:
+                    $ref: '#/components/schemas/GeographyProviderCountriesImportExecutionResult'
+        '422':
+          $ref: '#/components/responses/ValidationError'
         '409':
           description: Provider associato a nazioni
   /admin/countries/{country}/geography-providers:
@@ -7862,6 +7882,11 @@ components:
           type: object
           nullable: true
           additionalProperties: true
+          description: >
+            Per il driver `geonames` può contenere `countries_source_url`,
+            `countries_source_path`, `admin1_source_url`, `admin1_source_path`,
+            `admin2_source_url`, `admin2_source_path`,
+            `country_dump_url_template`, `country_dump_source_path_template`.
         priority: { type: integer }
         is_active: { type: boolean }
         notes: { type: string, nullable: true }
@@ -7886,6 +7911,10 @@ components:
           type: object
           nullable: true
           additionalProperties: true
+          description: >
+            Configurazione avanzata del driver. Per `geonames` i campi supportati
+            sono `countries_source_url|path`, `admin1_source_url|path`,
+            `admin2_source_url|path`, `country_dump_url_template|path_template`.
         priority: { type: integer, nullable: true }
         is_active: { type: boolean, nullable: true }
         notes: { type: string, nullable: true }
@@ -7990,7 +8019,42 @@ components:
           $ref: '#/components/schemas/GeographyLevelCounters'
         loaded:
           $ref: '#/components/schemas/GeographyLevelCounters'
-        warning: { type: string, nullable: true }
+        warning:
+          type: string
+          nullable: true
+          description: >
+            Warning opzionale di compatibilità. Dal 2026-08-09 il driver GeoNames
+            può importare anche regioni, province e città oltre alla nazione.
+    GeographyProviderCountriesImportExecutionResult:
+      type: object
+      properties:
+        provider:
+          type: object
+          properties:
+            id: { type: integer }
+            code: { type: string }
+            name: { type: string }
+            driver: { type: string }
+            mode: { type: string }
+            format: { type: string, nullable: true }
+        run:
+          type: object
+          properties:
+            id: { type: integer }
+            status: { type: string }
+            scope: { type: string }
+            summary:
+              type: object
+              additionalProperties: true
+        raw:
+          $ref: '#/components/schemas/GeographyLevelCounters'
+        loaded:
+          $ref: '#/components/schemas/GeographyLevelCounters'
+        stats:
+          type: object
+          properties:
+            created_countries: { type: integer }
+            updated_countries: { type: integer }
     GeoSyncRun:
       type: object
       properties:

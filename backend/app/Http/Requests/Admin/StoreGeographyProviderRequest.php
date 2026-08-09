@@ -61,8 +61,8 @@ class StoreGeographyProviderRequest extends FormRequest
                 $validator->errors()->add('type', 'Il driver ISTAT può essere usato solo con provider di tipo paese specifico.');
             }
 
-            if ($this->input('driver') === 'geonames' && $this->filled('format') && $this->input('format') !== 'txt') {
-                $validator->errors()->add('format', 'Il driver GeoNames usa il formato txt.');
+            if ($this->input('driver') === 'geonames' && $this->filled('format') && ! in_array($this->input('format'), ['txt', 'zip'], true)) {
+                $validator->errors()->add('format', 'Il driver GeoNames usa il formato txt o zip.');
             }
         });
     }

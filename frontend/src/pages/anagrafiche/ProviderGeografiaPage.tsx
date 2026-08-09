@@ -46,7 +46,7 @@ function sourceDisplay(p: GeoProvider) {
 /** Livelli supportati in base al driver */
 function supportedLevels(p: GeoProvider): string[] {
   const d = (p.driver ?? '').toLowerCase()
-  if (d === 'istat') return ['Nazione', 'Regioni', 'Province', 'Città']
+  if (d === 'istat' || d === 'geonames') return ['Nazione', 'Regioni', 'Province', 'Città']
   return ['Nazione']
 }
 
@@ -86,6 +86,7 @@ function CapabilityBox({ provider }: { provider: GeoProvider }) {
   const levels = supportedLevels(provider)
   const isFull = levels.includes('Città')
   const providerName = provider.name
+  const driver = (provider.driver ?? '').toLowerCase()
 
   return (
     <Card className='border-info mb-0'>
@@ -112,7 +113,9 @@ function CapabilityBox({ provider }: { provider: GeoProvider }) {
         </div>
         <p className='mb-0 small text-muted'>
           {isFull
-            ? 'Questo provider popola il database geografico italiano con regioni, province e città, in base al dataset ISTAT configurato.'
+            ? driver === 'geonames'
+              ? 'Questo provider importa la gerarchia geografica completa della nazione selezionata (nazione, regioni, province, città). Il CAP potrebbe non essere disponibile nel dataset GeoNames.'
+              : 'Questo provider popola il database geografico italiano con regioni, province e città, in base al dataset ISTAT configurato.'
             : 'Questo provider aggiorna solo l\'anagrafica della nazione. I livelli amministrativi inferiori non sono disponibili con il provider corrente.'}
         </p>
       </CardBody>
@@ -768,6 +771,11 @@ export default function ProviderGeografiaPage() {
               <Input value={provForm.source_url} onChange={(e) => setProvForm((p) => ({ ...p, source_url: e.target.value }))} placeholder='https://...' />
             </FormGroup>
           )}
+          {provForm.driver === 'geonames' && (
+            <Alert color='light' className='border py-2 px-3 mb-3' style={{ fontSize: 13 }}>
+              ℹ️ Il driver GeoNames importa nazione, regioni, province e città. Il formato primario può essere <strong>txt</strong> (countryInfo) o <strong>zip</strong> (dump per città). Tramite <code>auth_config_json</code> è possibile definire le sorgenti ausiliarie: <code>admin1_source_url</code>, <code>admin2_source_url</code>, <code>country_dump_url_template</code> (o le varianti <code>_source_path</code> per file locali). Il placeholder <code>{'{ISO}'}</code> viene sostituito con il codice ISO della nazione.
+            </Alert>
+          )}
           {provForm.mode === 'api' && (
             <Row>
               <Col md='4'>
@@ -795,6 +803,21 @@ export default function ProviderGeografiaPage() {
                 </FormGroup>
               </Col>
             </Row>
+          )}
+          {provForm.driver === 'geonames' && provForm.mode !== 'api' && (
+            <FormGroup>
+              <Label>Sorgenti ausiliarie GeoNames (JSON)</Label>
+              <Input
+                type='textarea' rows={4}
+                value={provForm.auth_config_json}
+                onChange={(e) => setProvForm((p) => ({ ...p, auth_config_json: e.target.value }))}
+                invalid={!jsonValid(provForm.auth_config_json)}
+                placeholder={`{\n  "countries_source_url": "https://download.geonames.org/export/dump/countryInfo.txt",\n  "admin1_source_url": "https://download.geonames.org/export/dump/admin1CodesASCII.txt",\n  "admin2_source_url": "https://download.geonames.org/export/dump/admin2Codes.txt",\n  "country_dump_url_template": "https://download.geonames.org/export/dump/{ISO}.zip"\n}`}
+                style={{ fontFamily: 'monospace', fontSize: 12 }}
+              />
+              <FormFeedback>JSON non valido</FormFeedback>
+              <small className='text-muted'>Lasciare vuoto per usare le URL GeoNames ufficiali predefinite configurate nel backend.</small>
+            </FormGroup>
           )}
           <Row>
             <Col md='10'>

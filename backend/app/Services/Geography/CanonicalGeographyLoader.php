@@ -183,8 +183,21 @@ class CanonicalGeographyLoader
 
                     $city->province_id = $parent->id;
                     $city->name = $cityRow->source_name;
-                    $city->cadastre_code = $cityRow->cadastre_code;
-                    $city->postal_code = $cityRow->postal_code;
+                    if ($cityRow->cadastre_code) {
+                        $city->cadastre_code = $cityRow->cadastre_code;
+                    }
+                    if ($cityRow->postal_code) {
+                        $city->postal_code = $cityRow->postal_code;
+                    }
+
+                    $normalized = is_array($cityRow->normalized_payload_json) ? $cityRow->normalized_payload_json : [];
+                    $city->geoname_id = $normalized['geoname_id'] ?? $city->geoname_id;
+                    $city->latitude = $normalized['latitude'] ?? $city->latitude;
+                    $city->longitude = $normalized['longitude'] ?? $city->longitude;
+                    $city->population = $normalized['population'] ?? $city->population;
+                    $city->timezone = $normalized['timezone'] ?? $city->timezone;
+                    $city->feature_code = $normalized['feature_code'] ?? $city->feature_code;
+                    $city->geonames_modified_at = $normalized['geonames_modified_at'] ?? $city->geonames_modified_at;
                     $city->save();
                     $cities++;
                 }
