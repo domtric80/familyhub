@@ -142,7 +142,8 @@ Route::middleware(['auth:sanctum', 'admin.api', 'audit.api'])->prefix('admin')->
     Route::get('/staff-members/{staff_member}', [StaffMemberController::class, 'show'])->middleware('permission.api:staff_members.read');
     Route::post('/staff-members/{staff_member}/link-user', [StaffMemberController::class, 'linkUser'])->middleware('permission.api:staff_members.update,staff_member');
     Route::get('/staff-members/{staff_member}/documents/{document}/preview', [StaffMemberController::class, 'previewDocument'])->middleware('permission.api:attachments.read,staff_member');
-    Route::get('/staff-members/{staff_member}/documents/{document}/download', [StaffMemberController::class, 'downloadDocument'])->middleware('permission.api:attachments.read,staff_member');
+    Route::get('/staff-members/{staff_member}/documents/{document}/preview-structured', [StaffMemberController::class, 'previewDocumentStructured'])->middleware('permission.api:attachments.read,staff_member');
+    Route::get('/staff-members/{staff_member}/documents/{document}/download', [StaffMemberController::class, 'downloadDocument'])->middleware('permission.api:attachments.download,staff_member');
     Route::put('/staff-members/{staff_member}', [StaffMemberController::class, 'update'])->middleware('permission.api:staff_members.update,staff_member');
     Route::delete('/staff-members/{staff_member}', [StaffMemberController::class, 'destroy'])->middleware('permission.api:staff_members.delete,staff_member');
 
@@ -361,7 +362,8 @@ Route::middleware(['auth:sanctum', 'minors.api', 'audit.api'])->prefix('minors')
     Route::get('/{minor}/documents', [MinorController::class, 'listDocuments'])->middleware('permission.api:attachments.read,minor');
     Route::post('/{minor}/documents', [MinorController::class, 'storeDocument'])->middleware('permission.api:attachments.upload,minor');
     Route::get('/{minor}/documents/{document}/preview', [MinorController::class, 'previewDocument'])->middleware('permission.api:attachments.read,minor');
-    Route::get('/{minor}/documents/{document}/download', [MinorController::class, 'downloadDocument'])->middleware('permission.api:attachments.read,minor');
+    Route::get('/{minor}/documents/{document}/preview-structured', [MinorController::class, 'previewDocumentStructured'])->middleware('permission.api:attachments.read,minor');
+    Route::get('/{minor}/documents/{document}/download', [MinorController::class, 'downloadDocument'])->middleware('permission.api:attachments.download,minor');
 });
 
 Route::middleware(['auth:sanctum', 'minors.api', 'audit.api'])->prefix('exits')->group(function (): void {

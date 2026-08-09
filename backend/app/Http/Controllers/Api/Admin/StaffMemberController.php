@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\StoreStaffMemberRequest;
 use App\Models\StaffDocument;
 use App\Models\StaffMember;
 use App\Services\AuditLogService;
+use App\Services\SpreadsheetPreviewService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -18,6 +19,7 @@ class StaffMemberController extends Controller
 {
     public function __construct(
         private readonly AuditLogService $auditLogService = new AuditLogService(),
+        private readonly SpreadsheetPreviewService $spreadsheetPreviewService = new SpreadsheetPreviewService(),
     ) {
     }
 
@@ -205,11 +207,60 @@ class StaffMemberController extends Controller
         );
     }
 
-    public function downloadDocument(Request $request, StaffMember $staffMember, StaffDocument $document)
+    public function previewDocumentStructured(Request $request, StaffMember $staffMember, StaffDocument $document): JsonResponse
     {
         abort_unless($document->staff_member_id === $staffMember->id, 404);
 
         if (! $request->user() || ! $request->user()->hasPermission('attachments.read', $staffMember->facility_id)) {
+            throw new HttpException(403, 'Permesso insufficiente per visualizzare il documento dello staff.');
+        }
+
+        $attachment = $document->attachment()->firstOrFail();
+
+        if ($attachment->security_status !== 'clean') {
+            throw new HttpException(423, 'Documento non disponibile: verifica di sicurezza non completata o non superata.');
+        }
+
+        if (! $this->spreadsheetPreviewService->canRender($attachment->mime_type, $attachment->original_name)) {
+            throw new HttpException(422, 'Anteprima strutturata disponibile solo per file XLSX.');
+        }
+
+        $summary = sprintf(
+            '%s ha visualizzato la preview strutturata del documento staff %s di %s %s (%s).',
+            $this->auditLogService->resolveActorDisplayName($request->user()),
+            $attachment->original_name,
+            $staffMember->first_name,
+            $staffMember->last_name,
+            $staffMember->employee_code
+        );
+
+        $this->auditLogService->record($request, [
+            'facility_id' => $staffMember->facility_id,
+            'action' => 'read',
+            'resource_type' => 'staff_document_preview_structured',
+            'resource_id' => (string) $document->id,
+            'resource_label' => $attachment->original_name,
+            'operation_summary' => $summary,
+            'new_values_json' => [
+                'staff_member_id' => $staffMember->id,
+                'staff_document_id' => $document->id,
+                'attachment_id' => $attachment->id,
+                'mime_type' => $attachment->mime_type,
+                'preview_mode' => 'structured_spreadsheet',
+            ],
+        ]);
+        $this->auditLogService->markHandled($request);
+
+        return response()->json(
+            $this->spreadsheetPreviewService->buildFromAttachment($attachment)
+        );
+    }
+
+    public function downloadDocument(Request $request, StaffMember $staffMember, StaffDocument $document)
+    {
+        abort_unless($document->staff_member_id === $staffMember->id, 404);
+
+        if (! $request->user() || ! $request->user()->hasPermission('attachments.download', $staffMember->facility_id)) {
             throw new HttpException(403, 'Permesso insufficiente per scaricare il documento dello staff.');
         }
 
@@ -230,7 +281,7 @@ class StaffMemberController extends Controller
 
         $this->auditLogService->record($request, [
             'facility_id' => $staffMember->facility_id,
-            'action' => 'read',
+            'action' => 'download',
             'resource_type' => 'staff_document_download',
             'resource_id' => (string) $document->id,
             'resource_label' => $attachment->original_name,

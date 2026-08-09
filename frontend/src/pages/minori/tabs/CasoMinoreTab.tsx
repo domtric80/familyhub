@@ -53,8 +53,7 @@ function findCityParents(geo: Country[], cityId: number) {
 /** Apre il documento in una nuova tab per la visualizzazione */
 async function openDoc(minorId: number, docId: number) {
   try {
-    const resp = await minorApi.downloadDocument(minorId, docId)
-    const blob = resp.data as Blob
+    const blob = await minorApi.previewDocument(minorId, docId)
     const url = URL.createObjectURL(blob)
     window.open(url, '_blank')
     // Revoca dopo 60s — il tab ha già caricato il file

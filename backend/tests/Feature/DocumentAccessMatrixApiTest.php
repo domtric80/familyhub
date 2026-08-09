@@ -34,6 +34,7 @@ class DocumentAccessMatrixApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('meta.model', 'rbac_plus_abac')
             ->assertJsonPath('meta.document_rbac_permissions.read', 'attachments.read')
+            ->assertJsonPath('meta.document_rbac_permissions.download', 'attachments.download')
             ->assertJsonPath('meta.minor_assignment_required_for_sensitive_minor_documents', true);
 
         $roles = collect($response->json('roles'));
@@ -48,36 +49,49 @@ class DocumentAccessMatrixApiTest extends TestCase
         $this->assertNotNull($psychologist);
         $this->assertNotNull($pediatrician);
 
-        $coordinatorRestricted = collect($coordinator['document_access'])->firstWhere('classification_code', 'restricted');
         $coordinatorClinical = collect($coordinator['document_access'])->firstWhere('classification_code', 'clinical');
+        $coordinatorRestricted = collect($coordinator['document_access'])->firstWhere('classification_code', 'restricted');
         $educatorClinical = collect($educator['document_access'])->firstWhere('classification_code', 'clinical');
+        $educatorInternal = collect($educator['document_access'])->firstWhere('classification_code', 'internal');
         $psychologistClinical = collect($psychologist['document_access'])->firstWhere('classification_code', 'clinical');
         $pediatricianClinical = collect($pediatrician['document_access'])->firstWhere('classification_code', 'clinical');
 
         $this->assertNotNull($coordinatorRestricted);
         $this->assertNotNull($coordinatorClinical);
         $this->assertNotNull($educatorClinical);
+        $this->assertNotNull($educatorInternal);
         $this->assertNotNull($psychologistClinical);
         $this->assertNotNull($pediatricianClinical);
 
         $this->assertTrue((bool) $coordinator['rbac']['attachments_read']);
+        $this->assertTrue((bool) $coordinator['rbac']['attachments_download']);
         $this->assertTrue((bool) $coordinatorRestricted['allowed_by_classification']);
         $this->assertTrue((bool) $coordinatorRestricted['effective_read_access']);
+        $this->assertTrue((bool) $coordinatorRestricted['effective_download_access']);
         $this->assertFalse((bool) $coordinatorClinical['allowed_by_classification']);
         $this->assertFalse((bool) $coordinatorClinical['effective_read_access']);
+        $this->assertFalse((bool) $coordinatorClinical['effective_download_access']);
 
         $this->assertTrue((bool) $educator['rbac']['attachments_read']);
+        $this->assertFalse((bool) $educator['rbac']['attachments_download']);
+        $this->assertTrue((bool) $educatorInternal['effective_read_access']);
+        $this->assertFalse((bool) $educatorInternal['effective_download_access']);
         $this->assertFalse((bool) $educatorClinical['allowed_by_classification']);
         $this->assertFalse((bool) $educatorClinical['effective_read_access']);
 
         $this->assertTrue((bool) $psychologist['rbac']['attachments_read']);
+        $this->assertTrue((bool) $psychologist['rbac']['attachments_download']);
         $this->assertTrue((bool) $psychologistClinical['allowed_by_classification']);
         $this->assertTrue((bool) $psychologistClinical['effective_read_access']);
+        $this->assertTrue((bool) $psychologistClinical['effective_download_access']);
         $this->assertSame('allowed_if_minor_assignment_active', $psychologistClinical['effective_read_rule']);
+        $this->assertSame('allowed_if_minor_assignment_active', $psychologistClinical['effective_download_rule']);
 
         $this->assertTrue((bool) $pediatrician['rbac']['attachments_read']);
+        $this->assertTrue((bool) $pediatrician['rbac']['attachments_download']);
         $this->assertTrue((bool) $pediatricianClinical['allowed_by_classification']);
         $this->assertTrue((bool) $pediatricianClinical['effective_read_access']);
+        $this->assertTrue((bool) $pediatricianClinical['effective_download_access']);
         $this->assertSame('allowed_if_minor_assignment_active', $pediatricianClinical['effective_read_rule']);
     }
 }

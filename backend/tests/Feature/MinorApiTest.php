@@ -1194,6 +1194,94 @@ class MinorApiTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_educator_can_preview_internal_minor_document_but_cannot_download_it(): void
+    {
+        Storage::fake('s3');
+
+        $facility = Facility::query()->firstOrFail();
+        $city = City::query()->where('name', 'Roma')->firstOrFail();
+        $minorStatus = MinorStatus::query()->where('code', 'ACTIVE')->firstOrFail();
+        $genderIdentity = GenderIdentity::query()->where('code', 'MALE')->firstOrFail();
+        $documentType = DocumentType::query()->where('code', 'MINOR_ID')->firstOrFail();
+        $educatorRole = Role::query()->where('code', 'EDUCATORE')->firstOrFail();
+        $adminUser = User::query()->where('email', 'admin@familyhub.local')->firstOrFail();
+
+        $user = User::query()->create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'email' => 'educatore-preview@familyhub.local',
+            'password' => Hash::make('password'),
+            'first_name' => 'Elena',
+            'last_name' => 'Educatrice',
+            'is_active' => true,
+            'mfa_required' => false,
+        ]);
+
+        UserFacilityRole::query()->create([
+            'user_id' => $user->id,
+            'facility_id' => $facility->id,
+            'role_id' => $educatorRole->id,
+            'valid_from' => now()->subDay(),
+            'valid_to' => null,
+            'is_active' => true,
+            'assigned_by_user_id' => $adminUser->id,
+        ]);
+
+        $token = $this->postJson('/api/auth/login', [
+            'email' => 'educatore-preview@familyhub.local',
+            'password' => 'password',
+            'device_name' => 'minor-test-educator-preview',
+        ])->assertOk()->json('access_token');
+
+        $minorId = Minor::query()->create([
+            'facility_id' => $facility->id,
+            'internal_code' => 'MIN-0005A',
+            'first_name' => 'Lia',
+            'last_name' => 'Verde',
+            'birth_date' => '2014-02-01',
+            'birth_city_id' => $city->id,
+            'gender_identity_id' => $genderIdentity->id,
+            'entry_date' => '2026-06-18',
+            'minor_status_id' => $minorStatus->id,
+        ])->id;
+
+        Storage::disk('s3')->put('minors/test/documento-interno-preview.pdf', 'internal-content');
+
+        $attachment = Attachment::query()->create([
+            'facility_id' => $facility->id,
+            'owner_type' => \App\Models\Minor::class,
+            'owner_id' => $minorId,
+            'document_type_id' => $documentType->id,
+            'disk' => 's3',
+            'bucket' => 'test-bucket',
+            'path' => 'minors/test/documento-interno-preview.pdf',
+            'original_name' => 'documento-interno-preview.pdf',
+            'mime_type' => 'application/pdf',
+            'size_bytes' => strlen('internal-content'),
+            'sha256' => hash('sha256', 'internal-content'),
+            'is_encrypted' => true,
+            'security_status' => 'clean',
+            'released_at' => now(),
+            'uploaded_by_user_id' => $adminUser->id,
+        ]);
+
+        $documentId = MinorDocument::query()->create([
+            'minor_id' => $minorId,
+            'document_type_id' => $documentType->id,
+            'attachment_id' => $attachment->id,
+            'classification' => 'internal',
+        ])->id;
+
+        $this->assignUserToMinor($user, $minorId, $facility->id, $adminUser->id);
+
+        $this->withToken($token)
+            ->get("/api/minors/{$minorId}/documents/{$documentId}/preview")
+            ->assertOk();
+
+        $this->withToken($token)
+            ->get("/api/minors/{$minorId}/documents/{$documentId}/download")
+            ->assertForbidden();
+    }
+
     public function test_psychologist_can_download_clinical_minor_document(): void
     {
         Storage::fake('s3');
@@ -1573,5 +1661,72 @@ class MinorApiTest extends TestCase
             ->assertJsonPath('pei_trends.summary.linked_journal_events', 1)
             ->assertJsonPath('pei_trends.objective_trends.0.objective_id', $objectiveId)
             ->assertJsonPath('pei_trends.objective_trends.0.series.1.source_type', 'minor_activity');
+    }
+
+    public function test_super_admin_can_read_structured_preview_for_xlsx_minor_document(): void
+    {
+        Storage::fake('s3');
+
+        $facility = Facility::query()->firstOrFail();
+        $city = City::query()->where('name', 'Roma')->firstOrFail();
+        $minorStatus = MinorStatus::query()->where('code', 'ACTIVE')->firstOrFail();
+        $genderIdentity = GenderIdentity::query()->where('code', 'MALE')->firstOrFail();
+        $documentType = DocumentType::query()->where('code', 'MINOR_ID')->firstOrFail();
+        $adminUser = User::query()->where('email', 'admin@familyhub.local')->firstOrFail();
+
+        $minorId = Minor::query()->create([
+            'facility_id' => $facility->id,
+            'internal_code' => 'MIN-XLSX-01',
+            'first_name' => 'Excel',
+            'last_name' => 'Preview',
+            'birth_date' => '2014-08-01',
+            'birth_city_id' => $city->id,
+            'gender_identity_id' => $genderIdentity->id,
+            'entry_date' => '2026-06-18',
+            'minor_status_id' => $minorStatus->id,
+        ])->id;
+
+        Storage::disk('s3')->put('minors/test/structured-preview.xlsx', $this->fakeXlsxBinary());
+
+        $attachment = Attachment::query()->create([
+            'facility_id' => $facility->id,
+            'owner_type' => \App\Models\Minor::class,
+            'owner_id' => $minorId,
+            'document_type_id' => $documentType->id,
+            'disk' => 's3',
+            'bucket' => 'test-bucket',
+            'path' => 'minors/test/structured-preview.xlsx',
+            'original_name' => 'structured-preview.xlsx',
+            'mime_type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'size_bytes' => strlen($this->fakeXlsxBinary()),
+            'sha256' => hash('sha256', $this->fakeXlsxBinary()),
+            'is_encrypted' => true,
+            'security_status' => 'clean',
+            'released_at' => now(),
+            'uploaded_by_user_id' => $adminUser->id,
+        ]);
+
+        $documentId = MinorDocument::query()->create([
+            'minor_id' => $minorId,
+            'document_type_id' => $documentType->id,
+            'attachment_id' => $attachment->id,
+            'classification' => 'internal',
+        ])->id;
+
+        $this->withToken($this->token)
+            ->getJson("/api/minors/{$minorId}/documents/{$documentId}/preview-structured")
+            ->assertOk()
+            ->assertJsonPath('kind', 'spreadsheet')
+            ->assertJsonPath('format', 'xlsx')
+            ->assertJsonPath('sheets.0.name', 'Foglio1')
+            ->assertJsonPath('sheets.0.rows.0.0', 'Nome')
+            ->assertJsonPath('sheets.0.rows.0.1', 'Valore')
+            ->assertJsonPath('sheets.0.rows.1.0', 'Comune')
+            ->assertJsonPath('sheets.0.rows.1.1', 'Roma');
+    }
+
+    private function fakeXlsxBinary(): string
+    {
+        return (string) base64_decode('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', true);
     }
 }

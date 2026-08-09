@@ -10,25 +10,18 @@ import type { DocumentAccessMatrix, DocumentAccessRole, DocumentAccessEntry } fr
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function AccessBadge({ entry }: { entry: DocumentAccessEntry }) {
-  if (!entry.effective_read_access) {
-    if (!entry.allowed_by_classification) {
-      return (
-        <span className='d-flex align-items-center gap-1 text-danger small'>
-          <XCircle size={12} /> Non consentito
-        </span>
-      )
-    }
+function AccessBadge({ access, hasRbac = true }: { access: boolean; hasRbac?: boolean }) {
+  if (!hasRbac) {
     return (
       <span className='d-flex align-items-center gap-1 text-warning small'>
         <AlertTriangle size={12} /> No RBAC base
       </span>
     )
   }
-  if (entry.requires_minor_assignment) {
+  if (!access) {
     return (
-      <span className='d-flex align-items-center gap-1 text-warning small'>
-        <CheckCircle size={12} /> Con assegnazione
+      <span className='d-flex align-items-center gap-1 text-danger small'>
+        <XCircle size={12} /> Non consentito
       </span>
     )
   }
@@ -37,6 +30,14 @@ function AccessBadge({ entry }: { entry: DocumentAccessEntry }) {
       <CheckCircle size={12} /> Sì
     </span>
   )
+}
+
+function ReadAccessBadge({ entry }: { entry: DocumentAccessEntry }) {
+  return <AccessBadge access={entry.effective_read_access} hasRbac={entry.allowed_by_classification !== false || entry.effective_read_access} />
+}
+
+function DownloadAccessBadge({ entry }: { entry: DocumentAccessEntry }) {
+  return <AccessBadge access={entry.effective_download_access} />
 }
 
 function RbacBadge({ value }: { value: boolean }) {
@@ -70,6 +71,7 @@ function RoleAccessRow({ role, classifications }: {
           </div>
         </td>
         <td><RbacBadge value={role.rbac.attachments_read} /></td>
+        <td><RbacBadge value={role.rbac.attachments_download} /></td>
         <td><RbacBadge value={role.rbac.attachments_upload} /></td>
         <td>
           {readable.length > 0
@@ -86,15 +88,17 @@ function RoleAccessRow({ role, classifications }: {
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={5} style={{ background: '#f8f9fa', padding: '12px 20px' }}>
+          <td colSpan={6} style={{ background: '#f8f9fa', padding: '12px 20px' }}>
             <div className='fw-semibold small text-muted mb-2'>Accesso per classificazione</div>
             <table className='table table-sm table-bordered mb-2' style={{ fontSize: 12 }}>
               <thead className='table-light'>
                 <tr>
                   <th>Classificazione</th>
-                  <th>Accesso effettivo</th>
-                  <th>Regola</th>
-                  <th>Note backend</th>
+                  <th>Lettura effettiva</th>
+                  <th>Regola lettura</th>
+                  <th>Download effettivo</th>
+                  <th>Regola download</th>
+                  <th>Note</th>
                 </tr>
               </thead>
               <tbody>
@@ -109,17 +113,25 @@ function RoleAccessRow({ role, classifications }: {
                           <Badge color='' className='badge-light-secondary ms-1' style={{ fontSize: 9 }}>inattiva</Badge>
                         )}
                       </td>
-                      <td><AccessBadge entry={entry} /></td>
+                      <td><ReadAccessBadge entry={entry} /></td>
                       <td style={{ fontSize: 11, color: '#555' }}>{entry.effective_read_rule || '—'}</td>
+                      <td><DownloadAccessBadge entry={entry} /></td>
+                      <td style={{ fontSize: 11, color: '#555' }}>{entry.effective_download_rule || '—'}</td>
                       <td style={{ fontSize: 11, color: '#777' }}>{entry.notes ?? '—'}</td>
                     </tr>
                   ))}
               </tbody>
             </table>
             {!role.rbac.attachments_read && (
-              <div className='alert alert-warning py-2 px-3 mb-0' style={{ fontSize: 12 }}>
+              <div className='alert alert-warning py-2 px-3 mb-2' style={{ fontSize: 12 }}>
                 <strong>Attenzione:</strong> questo ruolo non dispone del permesso RBAC <code>attachments.read</code> di base.
                 Anche se una classificazione lo ammettesse, non potrebbe leggere documenti.
+              </div>
+            )}
+            {!role.rbac.attachments_download && (
+              <div className='alert alert-info py-2 px-3 mb-0' style={{ fontSize: 12 }}>
+                Questo ruolo non dispone del permesso RBAC <code>attachments.download</code>: gli utenti con questo ruolo
+                possono aprire documenti in preview ma non scaricarli sul proprio device.
               </div>
             )}
           </td>
@@ -180,14 +192,14 @@ export default function DocumentAccessMatrixPage() {
             <div className='alert alert-info mb-0' style={{ fontSize: 13 }}>
               <strong>RBAC</strong> — controlla l'accesso ai moduli e alle funzioni del sistema
               (es. poter aprire la sezione Documenti, caricare un file).
-              I permessi chiave per i documenti sono <code>attachments.read</code> e <code>attachments.upload</code>.
+              I permessi chiave per i documenti sono <code>attachments.read</code>, <code>attachments.download</code> e <code>attachments.upload</code>.
             </div>
           </Col>
           <Col md='6'>
             <div className='alert alert-warning mb-0' style={{ fontSize: 13 }}>
               <strong>ABAC documentale</strong> — controlla l'accesso effettivo ai singoli documenti
               in base a classificazione, ruolo nella struttura e assegnazione attiva al minore.<br />
-              <strong>Accesso documento = RBAC base + classificazione ammessa + assegnazione minore</strong>
+              <strong>Preview documento = attachments.read + classificazione ammessa + assegnazione minore</strong><br /><strong>Download documento = attachments.download + classificazione ammessa + assegnazione minore</strong>
             </div>
           </Col>
         </Row>
@@ -273,8 +285,9 @@ export default function DocumentAccessMatrixPage() {
                     <thead className='table-light'>
                       <tr>
                         <th>Ruolo</th>
-                        <th>Lettura doc.</th>
-                        <th>Upload doc.</th>
+                        <th>Lettura (RBAC)</th>
+                        <th>Download (RBAC)</th>
+                        <th>Upload (RBAC)</th>
                         <th>Classificazioni leggibili</th>
                         <th></th>
                       </tr>
@@ -302,3 +315,4 @@ export default function DocumentAccessMatrixPage() {
     </>
   )
 }
+

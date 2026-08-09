@@ -14,6 +14,7 @@ class DocumentClassification extends Model
         'name',
         'description',
         'allowed_role_codes',
+        'allowed_download_role_codes',
         'is_active',
     ];
 
@@ -21,6 +22,7 @@ class DocumentClassification extends Model
     {
         return [
             'allowed_role_codes' => 'array',
+            'allowed_download_role_codes' => 'array',
             'is_active' => 'boolean',
         ];
     }

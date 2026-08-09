@@ -452,7 +452,7 @@ const CLASSIFICATION_BADGE: Record<string, string> = {
 }
 
 function DocumentiTab({ minorId, initialDocuments }: DocumentiTabProps) {
-  const { user } = useAuth()
+  const { user, hasPermission } = useAuth()
   const [documents, setDocuments] = useState<MinorDocument[]>(initialDocuments)
   const [documentTypes, setDocumentTypes] = useState<LookupItem[]>([])
   const [typesLoading, setTypesLoading] = useState(true)
@@ -586,13 +586,10 @@ function DocumentiTab({ minorId, initialDocuments }: DocumentiTabProps) {
       if (status === 423) {
         setDownloadErrors((prev) => ({ ...prev, [doc.id]: 'Documento in verifica sicurezza — download non disponibile fino al completamento della scansione.' }))
       } else if (status === 403) {
-        // Distingui ABAC clinical da generica 403
-        const classCode = (doc as { document_classification?: { code?: string } }).document_classification?.code
-        const isClinicale = classCode === 'clinical'
-        const msg = isClinicale
-          ? 'Accesso negato: il tuo profilo non dispone del livello richiesto per i documenti clinici di questo minore.'
-          : 'Non hai i permessi necessari per accedere a questo documento.'
+        // Download bloccato da RBAC o policy ABAC della classificazione
+        const msg = 'Download non consentito per il tuo ruolo o per la classificazione del documento.'
         setDownloadErrors((prev) => ({ ...prev, [doc.id]: msg }))
+        throw err  // permette a DocPreviewModal di mostrare il messaggio inline
       } else if (status === 404) {
         setDownloadErrors((prev) => ({ ...prev, [doc.id]: 'Documento non più disponibile.' }))
       } else {
@@ -845,11 +842,10 @@ function DocumentiTab({ minorId, initialDocuments }: DocumentiTabProps) {
           onClose={() => setPreviewDoc(null)}
           fileName={previewDoc.attachment?.original_name ?? `documento-${previewDoc.id}`}
           mimeType={previewDoc.attachment?.mime_type ?? ''}
-          fetchBlob={async () => {
-            const resp = await minorApi.downloadDocument(minorId, previewDoc.id)
-            return resp.data as Blob
-          }}
+          fetchBlob={async () => minorApi.previewDocument(minorId, previewDoc.id)}
+          fetchSpreadsheetPreview={async () => minorApi.previewDocumentStructured(minorId, previewDoc.id)}
           onDownload={() => handleDownload(previewDoc)}
+          canDownload={hasPermission('attachments.download')}
         />
       )}
     </div>

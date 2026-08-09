@@ -95,6 +95,7 @@ class RoleDocumentPolicyController extends Controller
             ->get();
 
         $canReadDocuments = $role->permissions->contains('code', 'attachments.read');
+        $canDownloadDocuments = $role->permissions->contains('code', 'attachments.download');
         $canUploadDocuments = $role->permissions->contains('code', 'attachments.upload');
 
         return [
@@ -107,18 +108,24 @@ class RoleDocumentPolicyController extends Controller
             ],
             'rbac' => [
                 'attachments_read' => $canReadDocuments,
+                'attachments_download' => $canDownloadDocuments,
                 'attachments_upload' => $canUploadDocuments,
             ],
             'summary' => [
                 'can_read_any_documents' => $canReadDocuments,
+                'can_download_any_documents' => $canDownloadDocuments,
                 'can_upload_documents' => $canUploadDocuments,
                 'explanation' => $canReadDocuments
-                    ? 'Il ruolo può accedere al modulo documenti, ma la visibilità effettiva dipende dalle classificazioni abilitate e, per i documenti del minore, dall’assegnazione attiva al minore.'
+                    ? ($canDownloadDocuments
+                        ? 'Il ruolo può leggere e scaricare documenti solo se superano sia i permessi RBAC sia la policy ABAC della classificazione e, per i documenti del minore, l’assegnazione attiva al minore.'
+                        : 'Il ruolo può leggere documenti se ammessi dalla classificazione, ma non può scaricarli finché non riceve il permesso RBAC attachments.download.')
                     : 'Il ruolo non ha il permesso RBAC attachments.read: anche se una classificazione lo ammette, non leggerà documenti finché il permesso base non viene assegnato.',
             ],
-            'classifications' => $classifications->map(function (DocumentClassification $classification) use ($role, $canReadDocuments): array {
+            'classifications' => $classifications->map(function (DocumentClassification $classification) use ($role, $canReadDocuments, $canDownloadDocuments): array {
                 $allowedRoleCodes = $classification->allowed_role_codes ?? [];
+                $allowedDownloadRoleCodes = $classification->allowed_download_role_codes ?? $allowedRoleCodes;
                 $allowedForRole = in_array($role->code, $allowedRoleCodes, true);
+                $downloadAllowedForRole = in_array($role->code, $allowedDownloadRoleCodes, true);
 
                 return [
                     'id' => $classification->id,
@@ -127,11 +134,17 @@ class RoleDocumentPolicyController extends Controller
                     'description' => $classification->description,
                     'is_active' => (bool) $classification->is_active,
                     'assigned_to_role' => $allowedForRole,
+                    'download_assigned_to_role' => $downloadAllowedForRole,
                     'effective_read_access' => $canReadDocuments && $allowedForRole,
+                    'effective_download_access' => $canDownloadDocuments && $downloadAllowedForRole,
                     'requires_minor_assignment' => true,
                     'notes' => $canReadDocuments
                         ? ($allowedForRole
-                            ? 'Consentito se l’utente è assegnato attivamente al minore.'
+                            ? ($canDownloadDocuments
+                                ? ($downloadAllowedForRole
+                                    ? 'Lettura e download consentiti se l’utente è assegnato attivamente al minore.'
+                                    : 'Lettura consentita, ma download negato dalla policy ABAC di questa classificazione.')
+                                : 'Lettura consentita, ma download negato finché il ruolo non riceve attachments.download.')
                             : 'Il ruolo non è ammesso da questa classificazione documentale.')
                         : 'Manca il permesso RBAC attachments.read.',
                 ];

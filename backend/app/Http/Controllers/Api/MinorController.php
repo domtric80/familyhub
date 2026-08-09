@@ -37,6 +37,7 @@ use App\Services\MinorAccessService;
 use App\Services\AuditLogService;
 use App\Services\MinorHistoryService;
 use App\Services\MinorPeiHistoryService;
+use App\Services\SpreadsheetPreviewService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -52,6 +53,7 @@ class MinorController extends Controller
         private readonly MinorPeiHistoryService $minorPeiHistoryService = new MinorPeiHistoryService(),
         private readonly AuditLogService $auditLogService = new AuditLogService(),
         private readonly MinorAccessService $minorAccessService = new MinorAccessService(),
+        private readonly SpreadsheetPreviewService $spreadsheetPreviewService = new SpreadsheetPreviewService(),
     )
     {
     }
@@ -1094,7 +1096,7 @@ class MinorController extends Controller
     {
         abort_unless($document->minor_id === $minor->id, 404);
         $classificationCode = (string) ($document->classification_code ?: $document->classification);
-        $this->authorizeDocumentAction(request()->user(), $minor->facility_id, 'read', $classificationCode);
+        $this->authorizeDocumentAction(request()->user(), $minor->facility_id, 'download', $classificationCode);
 
         $attachment = $document->attachment()->firstOrFail();
 
@@ -1123,7 +1125,7 @@ class MinorController extends Controller
         $this->auditLogService->record(request(), [
             'facility_id' => $minor->facility_id,
             'minor_id' => $minor->id,
-            'action' => 'read',
+            'action' => 'download',
             'resource_type' => 'minor_document_download',
             'resource_id' => (string) $document->id,
             'resource_label' => $attachment->original_name,
@@ -1193,6 +1195,63 @@ class MinorController extends Controller
                 'Content-Type' => $attachment->mime_type ?: 'application/octet-stream',
                 'Content-Disposition' => 'inline; filename="'.$attachment->original_name.'"',
             ]
+        );
+    }
+
+    public function previewDocumentStructured(Minor $minor, MinorDocument $document): JsonResponse
+    {
+        abort_unless($document->minor_id === $minor->id, 404);
+        $classificationCode = (string) ($document->classification_code ?: $document->classification);
+        $this->authorizeDocumentAction(request()->user(), $minor->facility_id, 'read', $classificationCode);
+
+        $attachment = $document->attachment()->firstOrFail();
+
+        if ($attachment->security_status !== 'clean') {
+            throw new HttpException(423, 'Documento non disponibile: verifica di sicurezza non completata o non superata.');
+        }
+
+        if (! $this->spreadsheetPreviewService->canRender($attachment->mime_type, $attachment->original_name)) {
+            throw new HttpException(422, 'Anteprima strutturata disponibile solo per file XLSX.');
+        }
+
+        $summary = sprintf(
+            '%s ha visualizzato la preview strutturata del documento %s del minore %s %s (%s).',
+            $this->auditLogService->resolveActorDisplayName(request()->user()),
+            $attachment->original_name,
+            $minor->first_name,
+            $minor->last_name,
+            $minor->internal_code
+        );
+
+        $this->minorHistoryService->recordAccess($minor, 'minor_document_structured_preview_viewed', request()->user(), [
+            'minor_document_id' => $document->id,
+            'attachment_id' => $attachment->id,
+            'document_name' => $attachment->original_name,
+            'classification' => $classificationCode,
+            'ip_address' => request()->ip(),
+            'operation_summary' => $summary,
+        ]);
+
+        $this->auditLogService->record(request(), [
+            'facility_id' => $minor->facility_id,
+            'minor_id' => $minor->id,
+            'action' => 'read',
+            'resource_type' => 'minor_document_preview_structured',
+            'resource_id' => (string) $document->id,
+            'resource_label' => $attachment->original_name,
+            'operation_summary' => $summary,
+            'new_values_json' => [
+                'minor_document_id' => $document->id,
+                'attachment_id' => $attachment->id,
+                'classification' => $classificationCode,
+                'mime_type' => $attachment->mime_type,
+                'preview_mode' => 'structured_spreadsheet',
+            ],
+        ]);
+        $this->auditLogService->markHandled(request());
+
+        return response()->json(
+            $this->spreadsheetPreviewService->buildFromAttachment($attachment)
         );
     }
 

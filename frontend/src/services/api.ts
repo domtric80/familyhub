@@ -271,6 +271,9 @@ export const staffMemberApi = {
   previewDocument: (staffId: number, documentId: number) =>
     http.get(`/admin/staff-members/${staffId}/documents/${documentId}/preview`, { responseType: 'blob' }).then((r) => r.data as Blob),
 
+  previewDocumentStructured: (staffId: number, documentId: number) =>
+    http.get<import('../types').SpreadsheetPreviewPayload>(`/admin/staff-members/${staffId}/documents/${documentId}/preview-structured`).then((r) => r.data),
+
   downloadDocument: (staffId: number, documentId: number) =>
     http.get(`/admin/staff-members/${staffId}/documents/${documentId}/download`, { responseType: 'blob' }).then((r) => r.data as Blob),
 }
@@ -879,6 +882,9 @@ export const minorApi = {
 
   previewDocument: (minorId: number, documentId: number) =>
     http.get(`/minors/${minorId}/documents/${documentId}/preview`, { responseType: 'blob' }).then((r) => r.data as Blob),
+
+  previewDocumentStructured: (minorId: number, documentId: number) =>
+    http.get<import('../types').SpreadsheetPreviewPayload>(`/minors/${minorId}/documents/${documentId}/preview-structured`).then((r) => r.data),
 
   // Contatti — lista (GET /minors/{id}/contacts non esiste: i contatti sono embedded in GET /minors/{id})
   listContacts: (id: number) =>

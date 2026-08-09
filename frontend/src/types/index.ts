@@ -466,6 +466,7 @@ export interface DocumentAccessClassification {
   description: string | null
   is_active: boolean
   allowed_role_codes: string[]
+  allowed_download_role_codes: string[]
   assignment_required_for_minor_documents: boolean
 }
 
@@ -474,9 +475,12 @@ export interface DocumentAccessEntry {
   classification_name: string
   classification_active: boolean
   allowed_by_classification: boolean
+  allowed_by_download_classification: boolean
   requires_minor_assignment: boolean
   effective_read_access: boolean
+  effective_download_access: boolean
   effective_read_rule: string
+  effective_download_rule: string
   notes: string | null
 }
 
@@ -488,6 +492,7 @@ export interface DocumentAccessRole {
   is_system: boolean
   rbac: {
     attachments_read: boolean
+    attachments_download: boolean
     attachments_upload: boolean
   }
   document_access: DocumentAccessEntry[]
@@ -500,6 +505,7 @@ export interface DocumentAccessMatrix {
     minor_assignment_required_for_sensitive_minor_documents: boolean
     document_rbac_permissions: {
       read: string
+      download: string
       upload: string
     }
   }
@@ -513,16 +519,47 @@ export interface DocumentPolicyClassification {
   description: string | null
   is_active: boolean
   assigned_to_role: boolean
+  download_assigned_to_role: boolean
   effective_read_access: boolean
+  effective_download_access: boolean
   requires_minor_assignment: boolean
   notes: string | null
 }
 
 export interface DocumentPolicy {
   role: { id: number; code: string; name: string }
-  rbac: { attachments_read: boolean; attachments_upload: boolean }
-  summary: string
+  rbac: { attachments_read: boolean; attachments_download: boolean; attachments_upload: boolean }
+  summary: {
+    can_read_any_documents: boolean
+    can_download_any_documents: boolean
+    can_upload_documents: boolean
+    explanation: string
+  }
   classifications: DocumentPolicyClassification[]
+}
+
+export interface SpreadsheetPreviewSheet {
+  name: string
+  rows: string[][]
+  preview_row_count: number
+  max_column_count: number
+  truncated_rows: boolean
+  truncated_columns: boolean
+}
+
+export interface SpreadsheetPreviewPayload {
+  kind: 'spreadsheet'
+  format: 'xlsx'
+  file_name: string
+  mime_type: string
+  truncated_sheets: boolean
+  limits: {
+    max_sheets: number
+    max_rows_per_sheet: number
+    max_columns_per_sheet: number
+    max_cell_length: number
+  }
+  sheets: SpreadsheetPreviewSheet[]
 }
 
 export interface Assignment {

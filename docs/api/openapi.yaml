@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: FamilyHub API
-  version: 1.1.0
+  version: 1.1.1
   summary: API applicative per autenticazione, anagrafiche amministrative e gestione minori.
   description: >
     Specifica iniziale delle API FamilyHub. Ogni modifica funzionale alle route o ai payload
@@ -1956,6 +1956,10 @@ paths:
       tags: [Admin]
       security: [{ bearerAuth: [] }]
       operationId: previewStaffDocument
+      summary: Preview inline documento staff
+      description: >-
+        La preview richiede il permesso RBAC `attachments.read` e rispetta le
+        regole ABAC della classificazione documentale in modalita `read`.
       parameters:
         - name: staff_member
           in: path
@@ -1974,11 +1978,40 @@ paths:
           description: Permesso insufficiente
         '423':
           description: Documento bloccato in quarantena o non ancora validato
+  /admin/staff-members/{staff_member}/documents/{document}/preview-structured:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: previewStaffDocumentStructured
+      summary: Preview strutturata documento staff XLSX
+      description: >-
+        Restituisce una preview JSON read-only del foglio Excel senza inviare il
+        file originale al browser. Richiede `attachments.read`.
+      parameters:
+        - name: staff_member
+          in: path
+          required: true
+          schema: { type: integer }
+        - $ref: '#/components/parameters/DocumentId'
+      responses:
+        '200':
+          description: Preview strutturata spreadsheet
+        '403':
+          description: Permesso insufficiente
+        '422':
+          description: Il file non supporta la preview strutturata
+        '423':
+          description: Documento bloccato in quarantena o non ancora validato
   /admin/staff-members/{staff_member}/documents/{document}/download:
     get:
       tags: [Admin]
       security: [{ bearerAuth: [] }]
       operationId: downloadStaffDocument
+      summary: Download documento staff
+      description: >-
+        Il download richiede il permesso RBAC `attachments.download`. Il fatto
+        che un documento sia visibile in preview non implica che sia
+        scaricabile.
       parameters:
         - name: staff_member
           in: path
@@ -3723,6 +3756,10 @@ paths:
       tags: [Minors]
       security: [{ bearerAuth: [] }]
       operationId: previewMinorDocument
+      summary: Preview inline documento minore
+      description: >-
+        La preview richiede il permesso RBAC `attachments.read` e applica le
+        regole ABAC della classificazione documentale in modalita `read`.
       parameters:
         - $ref: '#/components/parameters/MinorId'
         - $ref: '#/components/parameters/DocumentId'
@@ -3738,11 +3775,38 @@ paths:
           description: Permesso documentale o classificazione non consentiti
         '423':
           description: Documento bloccato in quarantena o non ancora validato
+  /minors/{minor}/documents/{document}/preview-structured:
+    get:
+      tags: [Minors]
+      security: [{ bearerAuth: [] }]
+      operationId: previewMinorDocumentStructured
+      summary: Preview strutturata documento minore XLSX
+      description: >-
+        Restituisce una preview JSON read-only del foglio Excel senza inviare il
+        file originale al browser. Richiede `attachments.read` e applica ABAC
+        in modalità `read`.
+      parameters:
+        - $ref: '#/components/parameters/MinorId'
+        - $ref: '#/components/parameters/DocumentId'
+      responses:
+        '200':
+          description: Preview strutturata spreadsheet
+        '403':
+          description: Permesso documentale o classificazione non consentiti
+        '422':
+          description: Il file non supporta la preview strutturata
+        '423':
+          description: Documento bloccato in quarantena o non ancora validato
   /minors/{minor}/documents/{document}/download:
     get:
       tags: [Minors]
       security: [{ bearerAuth: [] }]
       operationId: downloadMinorDocument
+      summary: Download documento minore
+      description: >-
+        Il download richiede il permesso RBAC `attachments.download` e applica
+        le regole ABAC della classificazione documentale in modalita `download`.
+        Un utente puo quindi avere preview consentita ma download negato.
       parameters:
         - $ref: '#/components/parameters/MinorId'
         - $ref: '#/components/parameters/DocumentId'

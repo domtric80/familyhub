@@ -857,10 +857,8 @@ export default function AvvicinamentiMinoreTab({ minorId }: { minorId: number })
           onClose={() => { setPreviewDocId(null); setPreviewDocName('') }}
           fileName={previewDocName}
           mimeType={minorDocs.find((d) => d.id === previewDocId)?.attachment?.mime_type ?? ''}
-          fetchBlob={async () => {
-            const res = await minorApi.downloadDocument(minorId, previewDocId)
-            return res.data as Blob
-          }}
+          fetchBlob={async () => minorApi.previewDocument(minorId, previewDocId)}
+          fetchSpreadsheetPreview={async () => minorApi.previewDocumentStructured(minorId, previewDocId)}
           canDownload={hasPermission('attachments.download')}
         />
       )}

@@ -66,9 +66,14 @@ class MinorAccessService
                 ->firstWhere('code', $classification);
         }
 
-        $allowedRoles = $classificationRules instanceof DocumentClassification
-            ? ($classificationRules->allowed_role_codes ?? null)
-            : ($classificationRules['allowed_roles'] ?? null);
+        $allowedRoles = match ($action) {
+            'download' => $classificationRules instanceof DocumentClassification
+                ? ($classificationRules->allowed_download_role_codes ?? $classificationRules->allowed_role_codes ?? null)
+                : ($classificationRules['allowed_download_roles'] ?? $classificationRules['allowed_roles'] ?? null),
+            default => $classificationRules instanceof DocumentClassification
+                ? ($classificationRules->allowed_role_codes ?? null)
+                : ($classificationRules['allowed_roles'] ?? null),
+        };
 
         if (is_array($allowedRoles) && ! $user->hasRoleIn($allowedRoles)) {
             return false;
