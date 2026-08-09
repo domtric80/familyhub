@@ -1261,6 +1261,10 @@ export const timesheetApi = {
     http.post<any>(`/admin/timesheets/${id}/reject`, { reason }).then((r) => normalizeTimesheetEntry(r.data)),
   addAdjustment: (id: number, data: TimesheetAdjustmentWrite) =>
     http.post<any>(`/admin/timesheets/${id}/adjustments`, data).then((r) => normalizeTimesheetEntry(r.data)),
+  approveAdjustment: (timesheetId: number, adjustmentId: number, review_notes?: string) =>
+    http.post<any>(`/admin/timesheets/${timesheetId}/adjustments/${adjustmentId}/approve`, { review_notes }).then((r) => normalizeTimesheetEntry(r.data)),
+  rejectAdjustment: (timesheetId: number, adjustmentId: number, review_notes: string) =>
+    http.post<any>(`/admin/timesheets/${timesheetId}/adjustments/${adjustmentId}/reject`, { review_notes }).then((r) => normalizeTimesheetEntry(r.data)),
   exportMonthly: (params: { facility_id: number; year: number; month: number; format: 'csv' }) =>
     http.get('/admin/timesheets/export.csv', { params, responseType: 'blob' }),
 }

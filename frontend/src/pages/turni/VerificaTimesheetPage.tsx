@@ -84,6 +84,10 @@ export default function VerificaTimesheetPage() {
   const [rejectModal, setRejectModal] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const [adjustmentModal, setAdjustmentModal] = useState(false)
+  const [adjustmentReviewModal, setAdjustmentReviewModal] = useState(false)
+  const [adjustmentReviewMode, setAdjustmentReviewMode] = useState<'approve' | 'reject'>('approve')
+  const [selectedAdjustmentId, setSelectedAdjustmentId] = useState<number | null>(null)
+  const [adjustmentReviewNotes, setAdjustmentReviewNotes] = useState('')
   const [adjustmentForm, setAdjustmentForm] = useState<TimesheetAdjustmentWrite>({
     adjustment_type: 'manual_correction',
     delta_minutes: 0,
@@ -169,9 +173,37 @@ export default function VerificaTimesheetPage() {
       setEntries((prev) => prev.map((item) => item.id === detail.id ? updated : item))
       setDetail(updated)
       setAdjustmentModal(false)
-      toast.success('Rettifica timesheet registrata con successo.')
+      toast.success('Richiesta di rettifica registrata e in attesa di approvazione.')
     } catch (e) {
       toast.error(apiError(e).message ?? 'Errore creazione rettifica.')
+    } finally {
+      setActing(false)
+    }
+  }
+
+  const openAdjustmentReviewModal = (adjustmentId: number, mode: 'approve' | 'reject') => {
+    setSelectedAdjustmentId(adjustmentId)
+    setAdjustmentReviewMode(mode)
+    setAdjustmentReviewNotes('')
+    setAdjustmentReviewModal(true)
+  }
+
+  const handleAdjustmentReview = async () => {
+    if (!detail || !selectedAdjustmentId) return
+    if (adjustmentReviewMode === 'reject' && !adjustmentReviewNotes.trim()) return
+
+    setActing(true)
+    try {
+      const updated = adjustmentReviewMode === 'approve'
+        ? await timesheetApi.approveAdjustment(detail.id, selectedAdjustmentId, adjustmentReviewNotes.trim() || undefined)
+        : await timesheetApi.rejectAdjustment(detail.id, selectedAdjustmentId, adjustmentReviewNotes.trim())
+
+      setEntries((prev) => prev.map((item) => item.id === detail.id ? updated : item))
+      setDetail(updated)
+      setAdjustmentReviewModal(false)
+      toast.success(adjustmentReviewMode === 'approve' ? 'Rettifica approvata.' : 'Rettifica rifiutata.')
+    } catch (e) {
+      toast.error(apiError(e).message ?? 'Errore revisione rettifica.')
     } finally {
       setActing(false)
     }
@@ -302,7 +334,7 @@ export default function VerificaTimesheetPage() {
         </CardBody>
       </Card>
 
-      <Modal isOpen={!!detail && !rejectModal && !adjustmentModal} toggle={() => setDetail(null)} size='lg'>
+      <Modal isOpen={!!detail && !rejectModal && !adjustmentModal && !adjustmentReviewModal} toggle={() => setDetail(null)} size='lg'>
         {detail && (
           <>
             <ModalHeader toggle={() => setDetail(null)}>
@@ -349,7 +381,7 @@ export default function VerificaTimesheetPage() {
                 <>
                   <div className='fw-semibold small mb-1' style={{ color: '#7366ff' }}>Rettifiche</div>
                   <Table size='sm' className='mb-3'>
-                    <thead><tr><th>Tipo</th><th>Δ min</th><th>Motivo</th><th>Stato</th><th>Creata il</th></tr></thead>
+                    <thead><tr><th>Tipo</th><th>Delta min</th><th>Motivo</th><th>Stato</th><th>Creata il</th><th>Revisione</th><th /></tr></thead>
                     <tbody>
                       {detail.adjustments.map((adjustment) => (
                         <tr key={adjustment.id}>
@@ -358,6 +390,26 @@ export default function VerificaTimesheetPage() {
                           <td className='small'>{adjustment.reason}</td>
                           <td><span className='badge badge-light-secondary'>{adjustment.status}</span></td>
                           <td className='small'>{fmtDateTime(adjustment.created_at)}</td>
+                          <td className='small'>
+                            {adjustment.reviewed_at ? (
+                              <>
+                                <div>{fmtDateTime(adjustment.reviewed_at)}</div>
+                                {adjustment.review_notes ? <div className='text-muted'>{adjustment.review_notes}</div> : null}
+                              </>
+                             ) : '?'}
+                          </td>
+                          <td className='text-end text-nowrap'>
+                            {adjustment.status === 'pending' && (
+                              <>
+                                <Button size='sm' color='success' className='py-0 px-2 me-1' disabled={acting} onClick={() => openAdjustmentReviewModal(adjustment.id, 'approve')}>
+                                  <Check size={12} />
+                                </Button>
+                                <Button size='sm' color='danger' className='py-0 px-2' disabled={acting} onClick={() => openAdjustmentReviewModal(adjustment.id, 'reject')}>
+                                  <X size={12} />
+                                </Button>
+                              </>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -430,20 +482,45 @@ export default function VerificaTimesheetPage() {
         </ModalBody>
         <ModalFooter>
           <Button color='primary' disabled={acting || !adjustmentForm.reason.trim() || adjustmentForm.delta_minutes === 0} onClick={handleAdjustmentSubmit}>
-            {acting ? 'Salvataggio…' : 'Crea rettifica'}
+            {acting ? 'Salvataggio...' : 'Invia richiesta'}
           </Button>
           <Button color='secondary' onClick={() => setAdjustmentModal(false)}>Annulla</Button>
+        </ModalFooter>
+      </Modal>
+
+      <Modal isOpen={adjustmentReviewModal} toggle={() => setAdjustmentReviewModal(false)}>
+        <ModalHeader toggle={() => setAdjustmentReviewModal(false)}>
+          {adjustmentReviewMode === 'approve' ? 'Approva rettifica' : 'Rifiuta rettifica'}
+        </ModalHeader>
+        <ModalBody>
+          <Input
+            type='textarea'
+            rows={4}
+            placeholder={adjustmentReviewMode === 'approve' ? 'Note revisione facoltative...' : 'Motivo del rifiuto...'}
+            value={adjustmentReviewNotes}
+            onChange={(e) => setAdjustmentReviewNotes(e.target.value)}
+          />
+        </ModalBody>
+        <ModalFooter>
+          <Button
+            color={adjustmentReviewMode === 'approve' ? 'success' : 'danger'}
+            disabled={acting || (adjustmentReviewMode === 'reject' && !adjustmentReviewNotes.trim())}
+            onClick={handleAdjustmentReview}
+          >
+            {acting ? 'Salvataggio...' : adjustmentReviewMode === 'approve' ? 'Conferma approvazione' : 'Conferma rifiuto'}
+          </Button>
+          <Button color='secondary' onClick={() => setAdjustmentReviewModal(false)}>Annulla</Button>
         </ModalFooter>
       </Modal>
 
       <Modal isOpen={rejectModal} toggle={() => setRejectModal(false)}>
         <ModalHeader toggle={() => setRejectModal(false)}>Motivo rifiuto</ModalHeader>
         <ModalBody>
-          <Input type='textarea' rows={3} placeholder='Indica il motivo del rifiuto…' value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
+          <Input type='textarea' rows={3} placeholder='Indica il motivo del rifiuto...' value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
         </ModalBody>
         <ModalFooter>
           <Button color='danger' disabled={!rejectReason.trim() || acting} onClick={handleReject}>
-            {acting ? 'Rifiuto…' : 'Conferma rifiuto'}
+            {acting ? 'Rifiuto...' : 'Conferma rifiuto'}
           </Button>
           <Button color='secondary' onClick={() => setRejectModal(false)}>Annulla</Button>
         </ModalFooter>
@@ -452,7 +529,7 @@ export default function VerificaTimesheetPage() {
       <InfoDrawer isOpen={infoOpen} onClose={() => setInfoOpen(false)} title='Verifica timesheet — Guida'>
         <p>Qui puoi revisionare e approvare le entry timesheet degli operatori della struttura.</p>
         <p>Le entry nello stato <em>Inviato</em> sono in attesa di approvazione. Le anomalie indicano scostamenti o timbrature incomplete.</p>
-        <p>Usa <strong>Approva</strong> per confermare l'entry, <strong>Rifiuta</strong> per rimandarla all'operatore e <strong>Aggiungi rettifica</strong> per correggere il consuntivo con audit trail.</p>
+        <p>Usa <strong>Approva</strong> per confermare l'entry, <strong>Rifiuta</strong> per rimandarla all'operatore e <strong>Aggiungi rettifica</strong> per aprire una richiesta revisionabile con audit trail.</p>
       </InfoDrawer>
     </div>
   )

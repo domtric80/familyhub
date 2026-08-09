@@ -9,17 +9,17 @@ Stato: non pubblicare ancora su GitHub, in attesa chiusura UX e commit finale
 
 ### Turni / Timesheet
 
-- attivata la creazione operativa delle rettifiche timesheet
-- introdotto audit trail dedicato alle rettifiche sul consuntivo
+- attivato il workflow rettifiche timesheet `pending -> approved/rejected`
+- introdotto audit trail dedicato alla richiesta e alla revisione delle rettifiche sul consuntivo
 - mantenuto separato lo storico timbrature dal ricalcolo dei minuti finali
-- collegata la UI coordinatore per aggiunta rettifiche da `Verifica timesheet`
+- collegata la UI coordinatore per invio richiesta, approvazione e rifiuto rettifiche da `Verifica timesheet`
 - resa visibile la lista rettifiche anche in `Le mie presenze`
-- aggiunta copertura test API per creazione rettifica con ricalcolo minuti
+- aggiunta copertura test API per creazione, approvazione e rifiuto rettifiche
 
 ### Documentazione tecnica
 
-- aggiornato `docs/api/openapi.yaml` con endpoint `POST /api/admin/timesheets/{timesheetEntry}/adjustments`
-- preparato handoff UX dedicato per comportamento pagina e payload
+- aggiornato `docs/api/openapi.yaml` con endpoint `POST /api/admin/timesheets/{timesheetEntry}/adjustments` e revisione `/approve` `/reject`
+- preparato handoff UX dedicato per comportamento pagina, stati e payload
 
 ### Documenti / Policy ABAC
 

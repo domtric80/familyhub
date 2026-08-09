@@ -151,37 +151,9 @@ class StaffTimesheetController extends Controller
             'adjustment_type' => $validated['adjustment_type'],
             'delta_minutes' => (int) $validated['delta_minutes'],
             'reason' => trim((string) $validated['reason']),
-            'status' => StaffTimesheetAdjustment::STATUS_APPROVED,
+            'status' => StaffTimesheetAdjustment::STATUS_PENDING,
             'created_by_user_id' => $request->user()?->id,
-            'reviewed_by_user_id' => $request->user()?->id,
-            'reviewed_at' => now(),
-            'review_notes' => 'Rettifica approvata contestualmente alla creazione.',
         ]);
-
-        $lifecycle = [
-            'status' => $timesheetEntry->status,
-            'submitted_at' => $timesheetEntry->submitted_at,
-            'submitted_by_user_id' => $timesheetEntry->submitted_by_user_id,
-            'approved_at' => $timesheetEntry->approved_at,
-            'approved_by_user_id' => $timesheetEntry->approved_by_user_id,
-            'locked_at' => $timesheetEntry->locked_at,
-        ];
-
-        $recomputed = $this->timesheetService->recomputeForWorkDate(
-            $timesheetEntry->facility_id,
-            $timesheetEntry->staff_member_id,
-            $timesheetEntry->work_date->toDateString(),
-            $timesheetEntry->shift_assignment_id,
-        );
-
-        if (! in_array($lifecycle['status'], [
-            StaffTimesheetEntry::STATUS_DRAFT,
-            StaffTimesheetEntry::STATUS_COMPUTED,
-        ], true)) {
-            $recomputed->forceFill($lifecycle)->save();
-        }
-
-        $recomputed->refresh()->load($this->timesheetService->baseRelations());
 
         $this->auditLogService->record($request, [
             'facility_id' => $timesheetEntry->facility_id,
@@ -190,7 +162,7 @@ class StaffTimesheetController extends Controller
             'resource_id' => (string) $adjustment->id,
             'resource_label' => sprintf('Rettifica timesheet %s', $timesheetEntry->work_date->format('Y-m-d')),
             'operation_summary' => sprintf(
-                '%s ha creato una rettifica timesheet %s (%+d minuti) per il %s.',
+                '%s ha richiesto una rettifica timesheet %s (%+d minuti) per il %s.',
                 $this->auditLogService->resolveActorDisplayName($request->user()),
                 $validated['adjustment_type'],
                 (int) $validated['delta_minutes'],
@@ -205,6 +177,76 @@ class StaffTimesheetController extends Controller
                     'status' => $adjustment->status,
                     'reason' => $adjustment->reason,
                 ],
+                'worked_minutes' => $timesheetEntry->worked_minutes,
+                'ordinary_minutes' => $timesheetEntry->ordinary_minutes,
+                'overtime_minutes' => $timesheetEntry->overtime_minutes,
+                'absence_minutes' => $timesheetEntry->absence_minutes,
+                'variance_minutes' => $timesheetEntry->variance_minutes,
+                'status' => $timesheetEntry->status,
+            ],
+        ]);
+        $this->auditLogService->markHandled($request);
+
+        return response()->json($this->show($timesheetEntry)->getData(true), 201);
+    }
+
+    public function approveAdjustment(
+        Request $request,
+        StaffTimesheetEntry $timesheetEntry,
+        StaffTimesheetAdjustment $adjustment,
+    ): JsonResponse {
+        abort_unless(
+            $adjustment->timesheet_entry_id === $timesheetEntry->id,
+            404,
+            'Rettifica non trovata per il timesheet selezionato.'
+        );
+
+        abort_if(
+            $adjustment->status !== StaffTimesheetAdjustment::STATUS_PENDING,
+            422,
+            'Solo le rettifiche in attesa possono essere approvate.'
+        );
+
+        $validated = $request->validate([
+            'review_notes' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        $before = [
+            'adjustment_status' => $adjustment->status,
+            'worked_minutes' => $timesheetEntry->worked_minutes,
+            'ordinary_minutes' => $timesheetEntry->ordinary_minutes,
+            'overtime_minutes' => $timesheetEntry->overtime_minutes,
+            'absence_minutes' => $timesheetEntry->absence_minutes,
+            'variance_minutes' => $timesheetEntry->variance_minutes,
+            'status' => $timesheetEntry->status,
+        ];
+
+        $adjustment->forceFill([
+            'status' => StaffTimesheetAdjustment::STATUS_APPROVED,
+            'reviewed_by_user_id' => $request->user()?->id,
+            'reviewed_at' => now(),
+            'review_notes' => trim((string) ($validated['review_notes'] ?? '')),
+        ])->save();
+
+        $recomputed = $this->recomputeEntryPreservingLifecycle($timesheetEntry);
+
+        $this->auditLogService->record($request, [
+            'facility_id' => $timesheetEntry->facility_id,
+            'action' => 'approve',
+            'resource_type' => 'staff_timesheet_adjustment',
+            'resource_id' => (string) $adjustment->id,
+            'resource_label' => sprintf('Rettifica timesheet %s', $timesheetEntry->work_date->format('Y-m-d')),
+            'operation_summary' => sprintf(
+                '%s ha approvato la rettifica timesheet %s (%+d minuti) per il %s.',
+                $this->auditLogService->resolveActorDisplayName($request->user()),
+                $adjustment->adjustment_type,
+                $adjustment->delta_minutes,
+                $timesheetEntry->work_date->format('Y-m-d')
+            ),
+            'old_values_json' => $before,
+            'new_values_json' => [
+                'adjustment_status' => $adjustment->status,
+                'review_notes' => $adjustment->review_notes,
                 'worked_minutes' => $recomputed->worked_minutes,
                 'ordinary_minutes' => $recomputed->ordinary_minutes,
                 'overtime_minutes' => $recomputed->overtime_minutes,
@@ -215,7 +257,61 @@ class StaffTimesheetController extends Controller
         ]);
         $this->auditLogService->markHandled($request);
 
-        return response()->json($recomputed->load($this->timesheetService->baseRelations()), 201);
+        return $this->show($recomputed);
+    }
+
+    public function rejectAdjustment(
+        Request $request,
+        StaffTimesheetEntry $timesheetEntry,
+        StaffTimesheetAdjustment $adjustment,
+    ): JsonResponse {
+        abort_unless(
+            $adjustment->timesheet_entry_id === $timesheetEntry->id,
+            404,
+            'Rettifica non trovata per il timesheet selezionato.'
+        );
+
+        abort_if(
+            $adjustment->status !== StaffTimesheetAdjustment::STATUS_PENDING,
+            422,
+            'Solo le rettifiche in attesa possono essere rifiutate.'
+        );
+
+        $validated = $request->validate([
+            'review_notes' => ['required', 'string', 'max:5000'],
+        ]);
+
+        $adjustment->forceFill([
+            'status' => StaffTimesheetAdjustment::STATUS_REJECTED,
+            'reviewed_by_user_id' => $request->user()?->id,
+            'reviewed_at' => now(),
+            'review_notes' => trim((string) $validated['review_notes']),
+        ])->save();
+
+        $this->auditLogService->record($request, [
+            'facility_id' => $timesheetEntry->facility_id,
+            'action' => 'reject',
+            'resource_type' => 'staff_timesheet_adjustment',
+            'resource_id' => (string) $adjustment->id,
+            'resource_label' => sprintf('Rettifica timesheet %s', $timesheetEntry->work_date->format('Y-m-d')),
+            'operation_summary' => sprintf(
+                '%s ha rifiutato la rettifica timesheet %s (%+d minuti) per il %s.',
+                $this->auditLogService->resolveActorDisplayName($request->user()),
+                $adjustment->adjustment_type,
+                $adjustment->delta_minutes,
+                $timesheetEntry->work_date->format('Y-m-d')
+            ),
+            'old_values_json' => [
+                'adjustment_status' => StaffTimesheetAdjustment::STATUS_PENDING,
+            ],
+            'new_values_json' => [
+                'adjustment_status' => $adjustment->status,
+                'review_notes' => $adjustment->review_notes,
+            ],
+        ]);
+        $this->auditLogService->markHandled($request);
+
+        return $this->show($timesheetEntry);
     }
 
     public function reject(Request $request, StaffTimesheetEntry $timesheetEntry): JsonResponse
@@ -373,5 +469,29 @@ class StaffTimesheetController extends Controller
         }, $filename, [
             'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
+    }
+
+    private function recomputeEntryPreservingLifecycle(StaffTimesheetEntry $timesheetEntry): StaffTimesheetEntry
+    {
+        $lifecycle = [
+            'status' => $timesheetEntry->status,
+            'submitted_at' => $timesheetEntry->submitted_at,
+            'submitted_by_user_id' => $timesheetEntry->submitted_by_user_id,
+            'approved_at' => $timesheetEntry->approved_at,
+            'approved_by_user_id' => $timesheetEntry->approved_by_user_id,
+            'locked_at' => $timesheetEntry->locked_at,
+            'notes' => $timesheetEntry->notes,
+        ];
+
+        $recomputed = $this->timesheetService->recomputeForWorkDate(
+            $timesheetEntry->facility_id,
+            $timesheetEntry->staff_member_id,
+            $timesheetEntry->work_date->toDateString(),
+            $timesheetEntry->shift_assignment_id,
+        );
+
+        $recomputed->forceFill($lifecycle)->save();
+
+        return $recomputed->refresh()->load($this->timesheetService->baseRelations());
     }
 }

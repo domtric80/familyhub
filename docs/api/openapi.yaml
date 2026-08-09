@@ -4502,9 +4502,9 @@ paths:
       security: [{ bearerAuth: [] }]
       operationId: addStaffTimesheetAdjustment
       description: >
-        Registra una rettifica sul consuntivo timesheet senza alterare lo storico timbrature.
-        La rettifica viene approvata contestualmente alla creazione e ricalcola i totali
-        dell'entry mantenendo il ciclo di stato esistente del timesheet.
+        Registra una richiesta di rettifica sul consuntivo timesheet senza alterare
+        lo storico timbrature. La rettifica nasce in stato pending e non ricalcola
+        i totali dell'entry fino alla revisione.
       parameters:
         - in: path
           name: timesheetEntry
@@ -4518,7 +4518,83 @@ paths:
               $ref: '#/components/schemas/StaffTimesheetAdjustmentWrite'
       responses:
         '201':
-          description: Rettifica creata e consuntivo aggiornato
+          description: Richiesta rettifica creata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffTimesheetEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /admin/timesheets/{timesheetEntry}/adjustments/{adjustment}/approve:
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: approveStaffTimesheetAdjustment
+      description: Approva una rettifica pending e ricalcola il consuntivo del timesheet.
+      parameters:
+        - in: path
+          name: timesheetEntry
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: adjustment
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                review_notes:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: Rettifica approvata e consuntivo aggiornato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffTimesheetEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /admin/timesheets/{timesheetEntry}/adjustments/{adjustment}/reject:
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: rejectStaffTimesheetAdjustment
+      description: Rifiuta una rettifica pending senza alterare il consuntivo del timesheet.
+      parameters:
+        - in: path
+          name: timesheetEntry
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: adjustment
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [review_notes]
+              properties:
+                review_notes:
+                  type: string
+      responses:
+        '200':
+          description: Rettifica rifiutata
           content:
             application/json:
               schema:

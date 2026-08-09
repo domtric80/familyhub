@@ -242,6 +242,8 @@ Route::middleware(['auth:sanctum', 'admin.api', 'audit.api'])->prefix('admin')->
     Route::post('/timesheets/{timesheetEntry}/approve', [AdminStaffTimesheetController::class, 'approve'])->middleware('permission.api:staff_timesheet_entries.approve');
     Route::post('/timesheets/{timesheetEntry}/reject', [AdminStaffTimesheetController::class, 'reject'])->middleware('permission.api:staff_timesheet_entries.approve');
     Route::post('/timesheets/{timesheetEntry}/adjustments', [AdminStaffTimesheetController::class, 'addAdjustment'])->middleware('permission.api:staff_timesheet_adjustments.create');
+    Route::post('/timesheets/{timesheetEntry}/adjustments/{adjustment}/approve', [AdminStaffTimesheetController::class, 'approveAdjustment'])->middleware('permission.api:staff_timesheet_adjustments.approve');
+    Route::post('/timesheets/{timesheetEntry}/adjustments/{adjustment}/reject', [AdminStaffTimesheetController::class, 'rejectAdjustment'])->middleware('permission.api:staff_timesheet_adjustments.approve');
 
     Route::get('/roles', [RoleController::class, 'index'])->middleware('permission.api:roles.read');
     Route::post('/roles', [RoleController::class, 'store'])->middleware('permission.api:roles.create');

@@ -1957,6 +1957,9 @@ export interface TimesheetAdjustment {
   status: TimesheetAdjustmentStatus
   created_by_id?: number | null
   created_at?: string | null
+  reviewed_by_id?: number | null
+  reviewed_at?: string | null
+  review_notes?: string | null
 }
 
 export interface TimesheetAdjustmentWrite {
