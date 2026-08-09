@@ -4,6 +4,17 @@ Tutte le modifiche rilevanti di FamilyHub vengono tracciate in questo file.
 
 Formato ispirato a Keep a Changelog e Semantic Versioning.
 
+## [1.2.1] - 2026-08-09
+
+### Changed
+- allineata la configurazione seed di default dei provider geografia per nuove installazioni
+- il provider `ISTAT` ora nasce preconfigurato in modalità `remote_file` con URL CSV ufficiale, senza richiedere setup manuale iniziale
+- confermata come configurazione standard la coppia di provider predefiniti `GEONAMES` + `ISTAT`
+
+### Fixed
+- evitato il caso in cui una nuova installazione trovasse `ISTAT` attivo ma non realmente utilizzabile perché inizializzato come `local_file` senza `source_path`
+- resa coerente la prima esperienza di import geografico per Italia e nazioni estere subito dopo il bootstrap
+
 ## [1.2.0] - 2026-08-09
 
 ### Added
