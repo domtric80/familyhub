@@ -4,6 +4,27 @@ Tutte le modifiche rilevanti di FamilyHub vengono tracciate in questo file.
 
 Formato ispirato a Keep a Changelog e Semantic Versioning.
 
+## [1.2.2] - 2026-08-10
+
+### Changed
+- riallineata la UX amministrativa di geografia con breadcrumb navigabili e ripristino dello stato di navigazione tra nazioni, regioni, province e città
+- completato il CRUD frontend della pagina `Organizzazioni` con modale coerente al comportamento reale del backend
+- documentati i fix UX/backend del blocco geografia con handoff dedicati e note tecniche di supporto
+
+### Fixed
+- risolto il crash di memoria nella pagina `Educatori`: il campo `Città nascita` non carica più l'intero archivio città ma usa ricerca asincrona con risultati limitati
+- corretto il contratto lookup città: `GET /api/lookups/cities` ora restituisce `[]` senza filtri e supporta ricerca controllata con `q`, `id`, `limit` e filtri geografici
+- corretto l'endpoint amministrativo nazioni e le liste gerarchiche regioni/province per restituire viste flat coerenti con il frontend
+- risolto il problema di encoding caratteri speciali in `MessaggioDetailPage`
+- corretta la validazione frontend nella pagina `Organizzazioni` che poteva mostrare errori di campo obbligatorio anche con input compilato
+
+### Security
+- ridotto il rischio di esaurimento memoria lato backend evitando preload massivi del dataset geografico in anagrafiche staff
+- mantenuti i controlli server-side sui lookup geografici limitando dimensione e forma delle risposte
+
+### Notes
+- release di patch senza reset dati e senza modifiche distruttive al database
+- verifiche eseguite: build frontend Vite e test backend geografici mirati
 ## [1.2.1] - 2026-08-09
 
 ### Changed

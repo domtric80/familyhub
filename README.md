@@ -1,6 +1,6 @@
 # FamilyHub
 
-Versione corrente: `1.2.1`
+Versione corrente: `1.2.2`
 
 Applicativo gestionale per strutture residenziali e servizi educativi, con backend Laravel, frontend React/Vite e stack infrastrutturale Docker.
 
