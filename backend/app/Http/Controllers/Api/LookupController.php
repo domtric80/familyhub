@@ -171,15 +171,42 @@ class LookupController extends Controller
 
     public function cities(): JsonResponse
     {
-        return response()->json(
-            City::query()
-                ->with('province.region.country')
-                ->when(
-                    request()->filled('province_id'),
-                    fn ($query) => $query->where('province_id', request()->integer('province_id'))
-                )
-                ->orderBy('name')
-                ->get()
-        );
+        $limit = min(max((int) request()->integer('limit', 25), 1), 100);
+        $cityId = request()->integer('id');
+        $search = trim((string) request()->string('q', ''));
+
+        $query = City::query()
+            ->with('province.region.country')
+            ->when(
+                request()->filled('province_id'),
+                fn ($builder) => $builder->where('province_id', request()->integer('province_id'))
+            )
+            ->when(
+                request()->filled('country_id'),
+                fn ($builder) => $builder->whereHas('province.region', fn ($regionQuery) => $regionQuery->where('country_id', request()->integer('country_id')))
+            )
+            ->when(
+                request()->filled('region_id'),
+                fn ($builder) => $builder->whereHas('province', fn ($provinceQuery) => $provinceQuery->where('region_id', request()->integer('region_id')))
+            )
+            ->orderBy('name');
+
+        if ($cityId > 0 && $search === '') {
+            $query->where('id', $cityId);
+        } elseif ($cityId > 0 && $search !== '') {
+            $query->where(function ($builder) use ($cityId, $search): void {
+                $builder
+                    ->where('id', $cityId)
+                    ->orWhere('name', 'like', '%' . $search . '%');
+            });
+        } elseif ($search !== '') {
+            $query->where('name', 'like', '%' . $search . '%');
+        }
+
+        if ($cityId <= 0 && $search === '' && !request()->filled('province_id') && !request()->filled('region_id') && !request()->filled('country_id')) {
+            return response()->json([]);
+        }
+
+        return response()->json($query->limit($limit)->get());
     }
 }

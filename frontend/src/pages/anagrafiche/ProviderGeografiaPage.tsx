@@ -535,7 +535,7 @@ export default function ProviderGeografiaPage() {
                                       <Link2 size={12} />
                                     </Button>
                                     {isGeoNamesGlobalProvider(p) && canImport && (
-                                      <Button color='light' size='sm' title='Importa nazioni del mondo' onClick={() => { setGlobalImportProvider(p); setGlobalImportResult(null); setGlobalImportMessage(null); setGlobalImportError(null); setGlobalImportModal(true) }}>
+                                      <Button color='light' size='sm' title='Importa tutte le nazioni del mondo' onClick={() => { setGlobalImportProvider(p); setGlobalImportResult(null); setGlobalImportMessage(null); setGlobalImportError(null); setGlobalImportModal(true) }}>
                                         <Globe size={12} className='text-primary' />
                                       </Button>
                                     )}
@@ -653,9 +653,8 @@ export default function ProviderGeografiaPage() {
                 )}
 
                 <Alert color='info' className='mb-4'>
-                  Flusso operativo: scegli la nazione e avvia l&apos;import.
-                  Se hai aperto questa schermata dal pulsante di un provider, verrà usato quel provider.
-                  In caso contrario il backend risolve il provider in base alle associazioni configurate per la nazione.
+                  <strong>Importa regioni, province e città</strong> della nazione selezionata usando il provider risolto o quello forzato.<br />
+                  <small className='text-muted'>Per importare tutte le nazioni del mondo usa invece il pulsante <Globe size={11} className='mx-1' /> sul provider GeoNames globale (tab Provider).</small>
                 </Alert>
 
                 <Row>

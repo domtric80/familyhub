@@ -26,6 +26,9 @@ function buildMapEmbedUrl(lat: string, lon: string) {
 }
 
 function buildOpenStreetMapUrl(city: City) {
+  if (city.latitude != null && city.longitude != null) {
+    return `https://www.openstreetmap.org/?mlat=${city.latitude}&mlon=${city.longitude}#map=15/${city.latitude}/${city.longitude}`
+  }
   const province = city.province?.name ?? ''
   const country = city.province?.region?.country?.name ?? ''
   const query = [city.name, province, country].filter(Boolean).join(', ')
@@ -72,6 +75,17 @@ export default function CittaDetailPage() {
 
   useEffect(() => {
     if (!city) return
+
+    if (city.latitude != null && city.longitude != null) {
+      setMap({
+        lat: String(city.latitude),
+        lon: String(city.longitude),
+        loading: false,
+        error: null,
+      })
+      return
+    }
+
     const country = city.province?.region?.country?.name ?? ''
     const region = city.province?.region?.name ?? ''
     const province = city.province?.name ?? ''
@@ -79,8 +93,11 @@ export default function CittaDetailPage() {
 
     setMap({ lat: null, lon: null, loading: true, error: null })
 
-    fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`)
-      .then((r) => r.json())
+    fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(query)}`)
+      .then((r) => {
+        if (!r.ok) throw new Error('Geocoding non disponibile')
+        return r.json()
+      })
       .then((results: { lat: string; lon: string }[]) => {
         if (results.length > 0) {
           setMap({ lat: results[0].lat, lon: results[0].lon, loading: false, error: null })
@@ -129,9 +146,30 @@ export default function CittaDetailPage() {
             <ol className='breadcrumb'>
               <li className='breadcrumb-item'><Link to='/dashboard'><Home size={14} /></Link></li>
               <li className='breadcrumb-item'><Link to='/anagrafiche/geografia'>Geografia</Link></li>
-              {country && <li className='breadcrumb-item'>{country.name}</li>}
-              {region && <li className='breadcrumb-item'>{region.name}</li>}
-              {province && <li className='breadcrumb-item'>{province.name}</li>}
+              {country && (
+                <li className='breadcrumb-item'>
+                  <button className='btn btn-link p-0 text-decoration-none' style={{ fontSize: 'inherit', lineHeight: 'inherit' }}
+                    onClick={() => navigate('/anagrafiche/geografia', { state: { countryId: country.id } })}>
+                    {country.name}
+                  </button>
+                </li>
+              )}
+              {region && (
+                <li className='breadcrumb-item'>
+                  <button className='btn btn-link p-0 text-decoration-none' style={{ fontSize: 'inherit', lineHeight: 'inherit' }}
+                    onClick={() => navigate('/anagrafiche/geografia', { state: { countryId: country!.id, regionId: region.id } })}>
+                    {region.name}
+                  </button>
+                </li>
+              )}
+              {province && (
+                <li className='breadcrumb-item'>
+                  <button className='btn btn-link p-0 text-decoration-none' style={{ fontSize: 'inherit', lineHeight: 'inherit' }}
+                    onClick={() => navigate('/anagrafiche/geografia', { state: { countryId: country!.id, regionId: region!.id, provinceId: province.id } })}>
+                    {province.name}
+                  </button>
+                </li>
+              )}
               <li className='breadcrumb-item active'>{city.name}</li>
             </ol>
           </Col>
@@ -165,6 +203,8 @@ export default function CittaDetailPage() {
                 <tbody>
                   <InfoRow label='Codice catastale' value={city.cadastre_code} />
                   <InfoRow label='CAP' value={city.postal_code} />
+                  <InfoRow label='Latitudine DB' value={city.latitude != null ? String(city.latitude) : null} />
+                  <InfoRow label='Longitudine DB' value={city.longitude != null ? String(city.longitude) : null} />
                   <InfoRow label='Codice provincia' value={province?.code} />
                   <InfoRow label='Codice regione' value={region?.code} />
                   <InfoRow label='ISO paese' value={country?.iso_code ?? country?.iso2} />

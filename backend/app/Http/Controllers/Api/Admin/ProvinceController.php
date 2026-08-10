@@ -13,11 +13,13 @@ class ProvinceController extends Controller
     {
         return response()->json(
             Province::query()
-                ->with('region.country', 'cities')
+                ->with('region.country')
+                ->withCount('cities')
                 ->when(
                     request()->filled('region_id'),
                     fn ($query) => $query->where('region_id', request()->integer('region_id'))
                 )
+                ->orderByDesc('cities_count')
                 ->orderBy('name')
                 ->get()
         );

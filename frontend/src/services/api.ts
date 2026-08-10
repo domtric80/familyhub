@@ -125,8 +125,8 @@ export const lookupsApi = {
   geography: () =>
     http.get<Country[]>('/lookups/geography').then((r) => r.data),
 
-  cities: (provinceId?: number) =>
-    http.get<City[]>('/lookups/cities', { params: provinceId ? { province_id: provinceId } : undefined }).then((r) => r.data),
+  cities: (params?: { province_id?: number; region_id?: number; country_id?: number; id?: number; q?: string; limit?: number }) =>
+    http.get<City[]>('/lookups/cities', { params }).then((r) => r.data),
 
   roles: () =>
     http.get<Role[]>('/lookups/roles').then((r) => r.data),
@@ -540,8 +540,15 @@ export const minorAssignmentApi = {
 
 // ─── Admin — Geografia ────────────────────────────────────────────────────────────────────────────
 
+// Helper: normalizza risposta array o paginata Laravel { data: [...] }
+function unwrapList<T>(d: unknown): T[] {
+  if (Array.isArray(d)) return d as T[]
+  if (d && typeof d === 'object' && Array.isArray((d as Record<string, unknown>).data)) return (d as { data: T[] }).data
+  return []
+}
+
 export const adminCountryApi = {
-  list: () => http.get<Country[]>('/admin/countries').then((r) => r.data),
+  list: () => http.get<unknown>('/admin/countries').then((r) => unwrapList<Country>(r.data)),
   create: (data: CountryWrite) => http.post<Country>('/admin/countries', data).then((r) => r.data),
   update: (id: number, data: CountryWrite) => http.put<Country>(`/admin/countries/${id}`, data).then((r) => r.data),
   delete: (id: number) => http.delete(`/admin/countries/${id}`),
@@ -549,7 +556,7 @@ export const adminCountryApi = {
 
 export const adminRegionApi = {
   list: (countryId?: number) =>
-    http.get<Region[]>('/admin/regions', { params: countryId ? { country_id: countryId } : undefined }).then((r) => r.data),
+    http.get<unknown>('/admin/regions', { params: countryId ? { country_id: countryId } : undefined }).then((r) => unwrapList<Region>(r.data)),
   create: (data: RegionWrite) => http.post<Region>('/admin/regions', data).then((r) => r.data),
   update: (id: number, data: RegionWrite) => http.put<Region>(`/admin/regions/${id}`, data).then((r) => r.data),
   delete: (id: number) => http.delete(`/admin/regions/${id}`),
@@ -557,7 +564,7 @@ export const adminRegionApi = {
 
 export const adminProvinceApi = {
   list: (regionId?: number) =>
-    http.get<Province[]>('/admin/provinces', { params: regionId ? { region_id: regionId } : undefined }).then((r) => r.data),
+    http.get<unknown>('/admin/provinces', { params: regionId ? { region_id: regionId } : undefined }).then((r) => unwrapList<Province>(r.data)),
   create: (data: ProvinceWrite) => http.post<Province>('/admin/provinces', data).then((r) => r.data),
   update: (id: number, data: ProvinceWrite) => http.put<Province>(`/admin/provinces/${id}`, data).then((r) => r.data),
   delete: (id: number) => http.delete(`/admin/provinces/${id}`),
@@ -565,7 +572,7 @@ export const adminProvinceApi = {
 
 export const adminCityApi = {
   list: (provinceId: number) =>
-    http.get<City[]>('/admin/cities', { params: { province_id: provinceId } }).then((r) => r.data),
+    http.get<unknown>('/admin/cities', { params: { province_id: provinceId } }).then((r) => unwrapList<City>(r.data)),
   get: (id: number) =>
     http.get<City>(`/admin/cities/${id}`).then((r) => r.data),
   create: (data: CityWrite) => http.post<City>('/admin/cities', data).then((r) => r.data),

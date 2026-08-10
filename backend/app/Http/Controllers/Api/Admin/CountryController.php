@@ -12,7 +12,7 @@ class CountryController extends Controller
     public function index(): JsonResponse
     {
         return response()->json(
-            Country::query()->with('regions.provinces.cities')->orderBy('name')->get()
+            Country::query()->orderBy('name')->get()
         );
     }
 

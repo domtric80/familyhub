@@ -30,6 +30,8 @@ class OnDemandGeographyImporter
 
     public function import(Country $country, GeographyProvider $provider, ?int $initiatedByUserId = null): array
     {
+        $this->prepareLongRunningImportRuntime();
+
         return match ($provider->driver) {
             'istat' => $this->importIstat($country, $provider, $initiatedByUserId),
             'geonames' => $this->importGeoNamesCountry($country, $provider, $initiatedByUserId),
@@ -367,6 +369,17 @@ class OnDemandGeographyImporter
         ]);
     }
 
+    private function prepareLongRunningImportRuntime(): void
+    {
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(0);
+        }
+
+        @ini_set('max_execution_time', '0');
+
+        DB::connection()->disableQueryLog();
+    }
+
     private function resolveInputFile(GeographyProvider $provider): string
     {
         return match ($provider->mode) {
@@ -610,7 +623,9 @@ class OnDemandGeographyImporter
             $structures['regions'][] = [
                 'source_record_key' => $regionKey,
                 'source_parent_key' => $countryIsoCode,
-                'source_name' => "Regione {$regionCode}",
+                'source_name' => $regionCode === '00'
+                    ? 'Regione non classificata (GeoNames)'
+                    : "Regione {$regionCode}",
                 'code' => $regionCode,
                 'raw_payload_json' => [
                     'synthetic' => true,
@@ -634,7 +649,9 @@ class OnDemandGeographyImporter
             $structures['provinces'][] = [
                 'source_record_key' => $provinceKey,
                 'source_parent_key' => $regionKey,
-                'source_name' => "Provincia {$provinceCode}",
+                'source_name' => $provinceCode === '00'
+                    ? 'Provincia non classificata (GeoNames)'
+                    : "Provincia {$provinceCode}",
                 'code' => $provinceCode,
                 'raw_payload_json' => [
                     'synthetic' => true,

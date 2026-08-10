@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   Container, Row, Col, Card, CardHeader, CardBody,
   Modal, ModalHeader, ModalBody, ModalFooter,
@@ -27,6 +27,7 @@ type MapState = {
   lat: string | null
   lon: string | null
   error: string | null
+  source?: 'db' | 'geocoder' | null
 }
 
 const MAP_PROVIDER = import.meta.env.VITE_CITY_MAP_PROVIDER ?? 'osm'
@@ -37,6 +38,9 @@ function buildWikipediaUrl(city: City) {
 }
 
 function buildOpenStreetMapUrl(city: City) {
+  if (city.latitude != null && city.longitude != null) {
+    return `https://www.openstreetmap.org/?mlat=${city.latitude}&mlon=${city.longitude}#map=15/${city.latitude}/${city.longitude}`
+  }
   const province = city.province?.name ?? ''
   const country = city.province?.region?.country?.name ?? ''
   const query = [city.name, province, country].filter(Boolean).join(', ')
@@ -91,7 +95,18 @@ function CityInsightCard({ city }: { city: City | null }) {
 
   useEffect(() => {
     if (!city) {
-      setMapState({ loading: false, lat: null, lon: null, error: null })
+      setMapState({ loading: false, lat: null, lon: null, error: null, source: null })
+      return
+    }
+
+    if (city.latitude != null && city.longitude != null) {
+      setMapState({
+        loading: false,
+        lat: String(city.latitude),
+        lon: String(city.longitude),
+        error: null,
+        source: 'db',
+      })
       return
     }
 
@@ -101,7 +116,7 @@ function CityInsightCard({ city }: { city: City | null }) {
     const query = [city.name, province, region, country].filter(Boolean).join(', ')
 
     let active = true
-    setMapState({ loading: true, lat: null, lon: null, error: null })
+    setMapState({ loading: true, lat: null, lon: null, error: null, source: null })
 
     fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(query)}`)
       .then(async (response) => {
@@ -111,14 +126,14 @@ function CityInsightCard({ city }: { city: City | null }) {
       .then((data) => {
         if (!active) return
         if (data.length === 0) {
-          setMapState({ loading: false, lat: null, lon: null, error: 'Coordinate non trovate automaticamente.' })
+          setMapState({ loading: false, lat: null, lon: null, error: 'Coordinate non trovate automaticamente.', source: null })
           return
         }
-        setMapState({ loading: false, lat: data[0].lat, lon: data[0].lon, error: null })
+        setMapState({ loading: false, lat: data[0].lat, lon: data[0].lon, error: null, source: 'geocoder' })
       })
       .catch(() => {
         if (!active) return
-        setMapState({ loading: false, lat: null, lon: null, error: 'Mappa temporaneamente non disponibile.' })
+        setMapState({ loading: false, lat: null, lon: null, error: 'Mappa temporaneamente non disponibile.', source: null })
       })
 
     return () => { active = false }
@@ -176,6 +191,16 @@ function CityInsightCard({ city }: { city: City | null }) {
                 </div>
               </div>
               {mapState.loading && <div className='text-muted'>Ricerca coordinate in corso…</div>}
+              {!mapState.loading && mapState.source === 'db' && (
+                <Alert color='light' className='mb-2'>
+                  Coordinate lette dal database geografico.
+                </Alert>
+              )}
+              {!mapState.loading && mapState.source === 'geocoder' && (
+                <Alert color='light' className='mb-2'>
+                  Coordinate stimate tramite geocoding esterno.
+                </Alert>
+              )}
               {!mapState.loading && mapState.lat && mapState.lon && (
                 <iframe
                   title={`map-${city.id}`}
@@ -198,9 +223,12 @@ function CityInsightCard({ city }: { city: City | null }) {
   )
 }
 
+type GeoNavState = { countryId?: number; regionId?: number; provinceId?: number } | null
+
 export default function GeografiaPage() {
   const [infoOpen, setInfoOpen] = useState(false)
   const navigate = useNavigate()
+  const location = useLocation()
   const [countries, setCountries] = useState<Country[]>([])
   const [regions, setRegions] = useState<Region[]>([])
   const [provinces, setProvinces] = useState<Province[]>([])
@@ -238,13 +266,56 @@ export default function GeografiaPage() {
   const [deleteConflict, setDeleteConflict] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
 
+  // Stato iniziale passato da CittaDetailPage via navigate(..., { state })
+  const navState = (location.state as GeoNavState) ?? null
+  const initApplied = useRef(false)
+
   useEffect(() => {
     setLoading(true)
     adminCountryApi.list()
       .then(setCountries)
-      .catch((e) => setError(apiError(e).message ?? 'Errore caricamento'))
+      .catch((e) => {
+        const ae = apiError(e)
+        const status = ae.status ? ` (HTTP ${ae.status})` : ''
+        setError((ae.message ?? 'Errore caricamento') + status)
+      })
       .finally(() => setLoading(false))
   }, [])
+
+  // Pre-selezione dei livelli quando si torna da CittaDetailPage
+  useEffect(() => {
+    if (!navState || initApplied.current || countries.length === 0) return
+    initApplied.current = true
+
+    const { countryId, regionId, provinceId } = navState
+    if (!countryId) return
+
+    const run = async () => {
+      setTableLoading(true)
+      try {
+        setSelectedCountryId(countryId)
+        const loadedRegions = await adminRegionApi.list(countryId)
+        setRegions(loadedRegions)
+
+        if (regionId) {
+          setSelectedRegionId(regionId)
+          const loadedProvinces = await adminProvinceApi.list(regionId)
+          setProvinces(loadedProvinces)
+
+          if (provinceId) {
+            setSelectedProvinceId(provinceId)
+            const loadedCities = await adminCityApi.list(provinceId)
+            setCities(loadedCities)
+          }
+        }
+      } catch {
+        // ignora errori di pre-selezione, la pagina è comunque usabile
+      } finally {
+        setTableLoading(false)
+      }
+    }
+    run()
+  }, [countries, navState]) // eslint-disable-line
 
   const activeLevel: GeoLevel = selectedProvinceId ? 'cities' : selectedRegionId ? 'provinces' : selectedCountryId ? 'regions' : 'countries'
 
@@ -266,6 +337,9 @@ export default function GeografiaPage() {
     try {
       const data = await adminRegionApi.list(countryId)
       setRegions(data)
+    } catch (e) {
+      toast.error(apiError(e).message ?? 'Errore caricamento regioni')
+      setRegions([])
     } finally { setTableLoading(false) }
   }
 
@@ -274,6 +348,9 @@ export default function GeografiaPage() {
     try {
       const data = await adminProvinceApi.list(regionId)
       setProvinces(data)
+    } catch (e) {
+      toast.error(apiError(e).message ?? 'Errore caricamento province')
+      setProvinces([])
     } finally { setTableLoading(false) }
   }
 
@@ -282,6 +359,9 @@ export default function GeografiaPage() {
     try {
       const data = await adminCityApi.list(provinceId)
       setCities(data)
+    } catch (e) {
+      toast.error(apiError(e).message ?? 'Errore caricamento città')
+      setCities([])
     } finally { setTableLoading(false) }
   }
 
@@ -467,16 +547,38 @@ export default function GeografiaPage() {
     } finally { setSaving(false) }
   }
 
-  const breadcrumbs = [
-    selectedCountryId ? countries.find((c) => c.id === selectedCountryId)?.name : null,
-    selectedRegionId ? regions.find((r) => r.id === selectedRegionId)?.name : null,
-    selectedProvinceId ? provinces.find((p) => p.id === selectedProvinceId)?.name : null,
-  ].filter(Boolean) as string[]
+  const selectedCountryName = countries.find((c) => c.id === selectedCountryId)?.name ?? '…'
+  const selectedRegionName = regions.find((r) => r.id === selectedRegionId)?.name ?? '…'
+  const selectedProvinceName = provinces.find((p) => p.id === selectedProvinceId)?.name ?? '…'
+
+  const resetToCountries = () => {
+    setSelectedCountryId(0); setSelectedRegionId(0); setSelectedProvinceId(0); setSelectedCityId(0)
+    setRegions([]); setProvinces([]); setCities([])
+  }
+  const resetToRegions = () => {
+    setSelectedRegionId(0); setSelectedProvinceId(0); setSelectedCityId(0)
+    setProvinces([]); setCities([])
+  }
+  const resetToProvinces = () => {
+    setSelectedProvinceId(0); setSelectedCityId(0)
+    setCities([])
+  }
 
   const renderTable = () => {
     if (tableLoading) return <div className='text-center py-5'><div className='loader' /></div>
 
     if (activeLevel === 'countries') {
+      if (countries.length === 0) {
+        return (
+          <div className='text-center py-5 text-muted'>
+            <p className='mb-2'>Nessuna nazione nel database.</p>
+            <p className='small'>
+              Usa <strong>Anagrafiche › Provider Geografia</strong> per importare le nazioni tramite GeoNames
+              (bottone <em>Importa nazioni</em>) oppure aggiungi una nazione manualmente con il pulsante qui sopra.
+            </p>
+          </div>
+        )
+      }
       return (
         <table className='table table-hover'>
           <thead><tr><th>Codice ISO</th><th>Nome</th><th>Azioni</th></tr></thead>
@@ -502,12 +604,13 @@ export default function GeografiaPage() {
     if (activeLevel === 'regions') {
       return (
         <table className='table table-hover'>
-          <thead><tr><th>Codice</th><th>Nome</th><th>Azioni</th></tr></thead>
+          <thead><tr><th>Codice</th><th>Nome</th><th>N. province</th><th>Azioni</th></tr></thead>
           <tbody>
             {regions.map((row) => (
               <tr key={row.id}>
                 <td><button className='btn btn-link p-0 fw-semibold' onClick={() => handleRegionSelect(row.id)}>{row.code}</button></td>
                 <td>{row.name}</td>
+                <td><span className='text-muted small'>{row.provinces_count ?? '—'}</span></td>
                 <td>
                   <div className='d-flex gap-1'>
                     <button className='btn btn-sm btn-outline-primary' onClick={() => openEdit(row)}><Edit2 size={12} /></button>
@@ -523,14 +626,26 @@ export default function GeografiaPage() {
     }
 
     if (activeLevel === 'provinces') {
+      const isSynthetic = (p: { code: string; name: string }) =>
+        p.code === '00' || p.name.toLowerCase().includes('non classificata')
       return (
         <table className='table table-hover'>
-          <thead><tr><th>Codice</th><th>Nome</th><th>Azioni</th></tr></thead>
+          <thead><tr><th>Codice</th><th>Nome</th><th>N. città</th><th>Azioni</th></tr></thead>
           <tbody>
             {provinces.map((row) => (
               <tr key={row.id}>
                 <td><button className='btn btn-link p-0 fw-semibold' onClick={() => handleProvinceSelect(row.id)}>{row.code}</button></td>
-                <td>{row.name}</td>
+                <td>
+                  <div className='d-flex flex-column gap-1'>
+                    <span>{row.name}</span>
+                    {isSynthetic(row) && (
+                      <span title='GeoNames non fornisce la provincia amministrativa per tutte le città di questa area; i comuni sono raccolti in questo contenitore tecnico.'>
+                        <Badge color='light' className='text-muted border' style={{ fontSize: 10 }}>Dato aggregato GeoNames</Badge>
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td><span className='text-muted small'>{row.cities_count ?? '—'}</span></td>
                 <td>
                   <div className='d-flex gap-1'>
                     <button className='btn btn-sm btn-outline-primary' onClick={() => openEdit(row)}><Edit2 size={12} /></button>
@@ -643,10 +758,32 @@ export default function GeografiaPage() {
               </Col>
             </Row>
 
-            <div className='d-flex flex-wrap gap-2 mb-3'>
-              <Badge color='light' className='text-primary text-uppercase'>{activeLevel}</Badge>
-              {breadcrumbs.map((item) => <Badge key={item} color='light'>{item}</Badge>)}
-              <Badge color='light'>{activeRows.length} elementi</Badge>
+            <div className='d-flex align-items-center justify-content-between mb-3'>
+              <ol className='breadcrumb mb-0'>
+                <li className={`breadcrumb-item${activeLevel === 'countries' ? ' active' : ''}`}>
+                  {activeLevel !== 'countries'
+                    ? <button className='btn btn-link p-0 text-decoration-none' style={{ fontSize: 'inherit', lineHeight: 'inherit' }} onClick={resetToCountries}>Nazioni</button>
+                    : 'Nazioni'}
+                </li>
+                {selectedCountryId > 0 && (
+                  <li className={`breadcrumb-item${activeLevel === 'regions' ? ' active' : ''}`}>
+                    {activeLevel !== 'regions'
+                      ? <button className='btn btn-link p-0 text-decoration-none' style={{ fontSize: 'inherit', lineHeight: 'inherit' }} onClick={resetToRegions}>{selectedCountryName}</button>
+                      : selectedCountryName}
+                  </li>
+                )}
+                {selectedRegionId > 0 && (
+                  <li className={`breadcrumb-item${activeLevel === 'provinces' ? ' active' : ''}`}>
+                    {activeLevel !== 'provinces'
+                      ? <button className='btn btn-link p-0 text-decoration-none' style={{ fontSize: 'inherit', lineHeight: 'inherit' }} onClick={resetToProvinces}>{selectedRegionName}</button>
+                      : selectedRegionName}
+                  </li>
+                )}
+                {selectedProvinceId > 0 && (
+                  <li className='breadcrumb-item active'>{selectedProvinceName}</li>
+                )}
+              </ol>
+              <Badge color='light' className='text-muted'>{activeRows.length} elementi</Badge>
             </div>
 
             <div className='table-responsive'>

@@ -73,7 +73,7 @@ function MessageBubble({
         >
           {fmtDt(msg.created_at)}
           {isOwn && (
-            <span className='ms-1'>Â· {senderName}</span>
+            <span className='ms-1'>· {senderName}</span>
           )}
         </div>
       </div>
@@ -261,7 +261,7 @@ export default function MessaggioDetailPage() {
               <ol className='breadcrumb'>
                 <li className='breadcrumb-item'><Link to='/dashboard'><Home size={14} /></Link></li>
                 <li className='breadcrumb-item'><Link to='/messaggi'>Messaggistica</Link></li>
-                <li className='breadcrumb-item active'>{thread?.subject ?? 'â€¦'}</li>
+                <li className='breadcrumb-item active'>{thread?.subject ?? '…'}</li>
               </ol>
             </Col>
           </Row>
@@ -284,7 +284,7 @@ export default function MessaggioDetailPage() {
                     <MessageSquare size={16} className='text-primary' />
                     <span className='fw-semibold'>{thread.subject}</span>
                     {thread.topic && (
-                      <span className='text-muted small'>â€” {thread.topic}</span>
+                      <span className='text-muted small'>— {thread.topic}</span>
                     )}
                   </div>
                   <div className='d-flex align-items-center gap-2'>
@@ -295,7 +295,7 @@ export default function MessaggioDetailPage() {
                       <Button size='sm' color='outline-success' className='d-flex align-items-center gap-1'
                         onClick={handleMarkRead} disabled={markingRead}>
                         <CheckCircle size={12} />
-                        {markingRead ? 'â€¦' : 'Segna come letto'}
+                        {markingRead ? '…' : 'Segna come letto'}
                       </Button>
                     )}
                   </div>
@@ -306,7 +306,7 @@ export default function MessaggioDetailPage() {
                   <div style={{ minHeight: 300, maxHeight: '55vh', overflowY: 'auto', padding: '8px 4px' }}>
                     {messages.length === 0 && (
                       <p className='text-muted text-center py-4'>
-                        La conversazione Ã¨ stata creata ma non contiene ancora messaggi visibili.
+                        La conversazione è stata creata ma non contiene ancora messaggi visibili.
                       </p>
                     )}
                     {messages.map((msg) => (
@@ -334,7 +334,7 @@ export default function MessaggioDetailPage() {
                       <RichTextEditor
                         value={body}
                         onChange={setBody}
-                        placeholder='Scrivi un messaggioâ€¦ (Ctrl+Invio per inviare)'
+                        placeholder='Scrivi un messaggio… (Ctrl+Invio per inviare)'
                         disabled={sending}
                         minHeight={80}
                         onCtrlEnter={handleSend}
@@ -344,7 +344,7 @@ export default function MessaggioDetailPage() {
                       <Button color='primary' size='sm' className='d-flex align-items-center gap-1'
                         onClick={handleSend} disabled={sending || !richToPlain(body).trim()}>
                         <Send size={13} />
-                        {sending ? 'Invioâ€¦' : 'Invia'}
+                        {sending ? 'Invio…' : 'Invia'}
                       </Button>
                     </div>
                   </div>
@@ -359,7 +359,7 @@ export default function MessaggioDetailPage() {
                 <CardBody>
                   <div className='mb-2'>
                     <small className='text-muted d-block'>Struttura</small>
-                    <span className='small'>{thread.facility?.name ?? 'â€”'}</span>
+                    <span className='small'>{thread.facility?.name ?? '—'}</span>
                   </div>
                   {thread.minor && (
                     <div className='mb-2'>

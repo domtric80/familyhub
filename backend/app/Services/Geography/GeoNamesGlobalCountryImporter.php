@@ -19,6 +19,7 @@ class GeoNamesGlobalCountryImporter
 
     public function importAllCountries(GeographyProvider $provider, ?int $initiatedByUserId = null): array
     {
+        $this->prepareLongRunningImportRuntime();
         $this->assertProviderSupported($provider);
 
         $run = GeoImportRun::query()->create([
@@ -199,5 +200,15 @@ class GeoNamesGlobalCountryImporter
         }
 
         return $path;
+    }
+
+    private function prepareLongRunningImportRuntime(): void
+    {
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(0);
+        }
+
+        @ini_set('max_execution_time', '0');
+        DB::connection()->disableQueryLog();
     }
 }

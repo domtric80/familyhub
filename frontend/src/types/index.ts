@@ -105,6 +105,7 @@ export interface Region {
   country_id?: number
   name: string
   code: string
+  provinces_count?: number
   provinces?: Province[]
   country?: Country | null
 }
@@ -114,6 +115,7 @@ export interface Province {
   region_id?: number
   name: string
   code: string
+  cities_count?: number
   cities?: City[]
   region?: Region | null
 }
@@ -124,6 +126,11 @@ export interface City {
   province_id?: number
   cadastre_code?: string | null
   postal_code?: string | null
+  latitude?: number | null
+  longitude?: number | null
+  population?: number | null
+  timezone?: string | null
+  feature_code?: string | null
   province?: Province | null
 }
 

@@ -32,6 +32,8 @@ export default function EducatoriPage() {
   const [facilities, setFacilities] = useState<Facility[]>([])
   const [users, setUsers] = useState<AdminUser[]>([])
   const [cities, setCities] = useState<City[]>([])
+  const [citySearch, setCitySearch] = useState('')
+  const [cityLoading, setCityLoading] = useState(false)
   const [qualifications, setQualifications] = useState<StaffQualification[]>([])
   const [statuses, setStatuses] = useState<StaffStatus[]>([])
   const [loading, setLoading] = useState(true)
@@ -55,10 +57,9 @@ export default function EducatoriPage() {
     setLoading(true)
     setError(null)
     try {
-      const [loadedFacilities, loadedUsers, loadedCities, loadedQuals, loadedStatuses, loadedStaff] = await Promise.all([
+      const [loadedFacilities, loadedUsers, loadedQuals, loadedStatuses, loadedStaff] = await Promise.all([
         facilityApi.list(),
         adminUserApi.list(),
-        lookupsApi.cities(),
         lookupsApi.staffQualifications(),
         lookupsApi.staffStatuses(),
         staffMemberApi.list({
@@ -69,7 +70,6 @@ export default function EducatoriPage() {
 
       setFacilities(loadedFacilities)
       setUsers(loadedUsers)
-      setCities(loadedCities)
       setQualifications(loadedQuals)
       setStatuses(loadedStatuses)
       setItems(loadedStaff)
@@ -82,9 +82,45 @@ export default function EducatoriPage() {
 
   useEffect(() => { load() }, [filterFacilityId, filterStatus])
 
+  useEffect(() => {
+    if (!modalOpen) return
+
+    const normalizedSearch = citySearch.trim()
+    const selectedCityId = form.birth_city_id ?? undefined
+
+    if (!selectedCityId && normalizedSearch.length < 2) {
+      setCities([])
+      return
+    }
+
+    const timeoutId = window.setTimeout(async () => {
+      setCityLoading(true)
+      try {
+        const loadedCities = await lookupsApi.cities({
+          id: selectedCityId,
+          q: normalizedSearch.length >= 2 ? normalizedSearch : undefined,
+          limit: 25,
+        })
+
+        setCities(loadedCities)
+      } catch {
+        setCities([])
+      } finally {
+        setCityLoading(false)
+      }
+    }, 250)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [modalOpen, citySearch, form.birth_city_id])
+
   const availableUsers = useMemo(
     () => users.filter((user) => !items.some((item) => item.user_id === user.id && item.id !== editTarget?.id)),
     [users, items, editTarget]
+  )
+
+  const selectedCity = useMemo(
+    () => cities.find((city) => city.id === form.birth_city_id) ?? editTarget?.birth_city ?? null,
+    [cities, form.birth_city_id, editTarget]
   )
 
   const openCreate = () => {
@@ -93,6 +129,8 @@ export default function EducatoriPage() {
       ...EMPTY_FORM,
       facility_id: filterFacilityId || facilities[0]?.id || 0,
     })
+    setCitySearch('')
+    setCities([])
     setFieldErrors({})
     setConflictMsg(null)
     setModalOpen(true)
@@ -114,9 +152,19 @@ export default function EducatoriPage() {
       qualification_code: item.qualification_code ?? '',
       status_code: item.status_code ?? '',
     })
+    setCitySearch(item.birth_city?.name ?? '')
+    setCities(item.birth_city ? [item.birth_city] : [])
     setFieldErrors({})
     setConflictMsg(null)
     setModalOpen(true)
+  }
+
+  const formatCityOption = (city: City) => {
+    const provinceName = city.province?.name
+    const regionName = city.province?.region?.name
+    const countryName = city.province?.region?.country?.name
+
+    return [city.name, provinceName, regionName, countryName].filter(Boolean).join(' — ')
   }
 
   const handleSave = async () => {
@@ -380,13 +428,43 @@ export default function EducatoriPage() {
             </div>
             <div className='col-md-8'>
               <FormGroup>
-                <Label>Città nascita</Label>
-                <Input type='select' value={form.birth_city_id ?? ''} onChange={(e) => setForm((prev) => ({ ...prev, birth_city_id: e.target.value ? Number(e.target.value) : null }))}>
-                  <option value=''>Non specificata</option>
+                <Label>Citta nascita</Label>
+                <Input
+                  value={citySearch}
+                  onChange={(e) => {
+                    setCitySearch(e.target.value)
+                    if (!e.target.value.trim()) {
+                      setForm((prev) => ({ ...prev, birth_city_id: null }))
+                    }
+                  }}
+                  placeholder='Scrivi almeno 2 caratteri per cercare la citta'
+                />
+                <small className='text-muted d-block mt-1'>
+                  Ricerca dinamica sul database geografico.
+                </small>
+                <Input
+                  type='select'
+                  className='mt-2'
+                  value={form.birth_city_id ?? ''}
+                  onChange={(e) => {
+                    const cityId = e.target.value ? Number(e.target.value) : null
+                    const city = cities.find((item) => item.id === cityId) ?? null
+                    setForm((prev) => ({ ...prev, birth_city_id: cityId }))
+                    setCitySearch(city?.name ?? '')
+                  }}
+                >
+                  <option value=''>
+                    {cityLoading ? 'Ricerca citta in corso...' : selectedCity ? 'Mantieni citta selezionata' : 'Non specificata'}
+                  </option>
                   {cities.map((city) => (
-                    <option key={city.id} value={city.id}>{city.name}</option>
+                    <option key={city.id} value={city.id}>{formatCityOption(city)}</option>
                   ))}
                 </Input>
+                {selectedCity && (
+                  <small className='text-muted d-block mt-1'>
+                    Selezionata: {formatCityOption(selectedCity)}
+                  </small>
+                )}
               </FormGroup>
             </div>
             <div className='col-md-4'>

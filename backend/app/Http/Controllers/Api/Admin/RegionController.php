@@ -13,7 +13,8 @@ class RegionController extends Controller
     {
         return response()->json(
             Region::query()
-                ->with('country', 'provinces.cities')
+                ->with('country')
+                ->withCount('provinces')
                 ->when(
                     request()->filled('country_id'),
                     fn ($query) => $query->where('country_id', request()->integer('country_id'))
