@@ -1,8 +1,28 @@
 # FamilyHub
 
-Versione corrente: `1.2.2`
+[![Versione](https://img.shields.io/badge/version-1.2.2-7366ff)](CHANGELOG.md)
+[![Licenza](https://img.shields.io/badge/license-source--available-orange)](LICENSE.md)
+[![Security](https://img.shields.io/badge/security-policy-success)](SECURITY.md)
+[![Release Process](https://img.shields.io/badge/release-process-blue)](docs/releases/RELEASE-PROCESS.md)
 
 Applicativo gestionale per strutture residenziali e servizi educativi, con backend Laravel, frontend React/Vite e stack infrastrutturale Docker.
+
+## Modello del progetto
+
+`FamilyHub` adotta un modello:
+
+- **software disponibile gratuitamente**
+- **codice sorgente visibile**
+- **uso interno consentito**
+- **servizi professionali a pagamento**
+
+Questo repository **non** e distribuito con una licenza open source OSI, ma con una licenza **source-available** che consente l'uso interno gratuito e limita rivendita, redistribuzione commerciale e SaaS concorrente.
+
+Documenti chiave:
+
+- `LICENSE.md`  termini di licenza del repository
+- `COMMERCIAL.md`  modello commerciale e servizi professionali
+- `docs/deliverables/2026-08-11-familyhub-manifesto-etico-commerciale.md`  manifesto etico-commerciale del progetto
 
 Documenti di governance:
 
@@ -11,13 +31,13 @@ Documenti di governance:
 
 ## Requisiti
 
-### Opzione A — Avvio con Docker
+### Opzione A  Avvio con Docker
 - Docker Engine 24+
 - Docker Compose v2+
 - 8 GB RAM consigliati
 - porte libere: `8100`, `5173`, `5432`, `6379`, `9000`, `9001`
 
-### Opzione B — Installazione Linux senza Docker
+### Opzione B  Installazione Linux senza Docker
 - Debian 12 / Ubuntu 24.04 LTS consigliati
 - PHP 8.3 con estensioni: `bcmath`, `ctype`, `curl`, `fileinfo`, `intl`, `json`, `mbstring`, `openssl`, `pdo_pgsql`, `redis`, `tokenizer`, `xml`, `zip`
 - Composer 2.7+
@@ -29,11 +49,11 @@ Documenti di governance:
 - MinIO oppure storage S3 compatibile
 
 ## Struttura repository
-- `backend/` — API Laravel
-- `frontend/` — UI React/Vite
-- `infra/` — appunti e componenti infrastrutturali
-- `docs/` — documentazione funzionale, API e handoff UX
-- `vendor-assets/` — asset vendor di supporto; non fanno parte della supply chain runtime dell'applicativo
+- `backend/`  API Laravel
+- `frontend/`  UI React/Vite
+- `infra/`  appunti e componenti infrastrutturali
+- `docs/`  documentazione funzionale, API e handoff UX
+- `vendor-assets/`  asset vendor di supporto; non fanno parte della supply chain runtime dell'applicativo
 
 ## Note sicurezza repository
 - i manifest `package.json` dei template vendor non runtime non vengono tracciati nel repository applicativo
@@ -289,7 +309,7 @@ sudo supervisorctl restart familyhub-worker:*
 ## Note operative
 - Non versionare .env, dump database, backup locali, log e archivi temporanei.
 - Il repository non deve contenere pacchetti ZIP di template o screenshot di lavoro.
-- Per produzione è consigliato un reverse proxy/WAF dedicato davanti a Nginx.
+- Per produzione e consigliato un reverse proxy/WAF dedicato davanti a Nginx.
 
 ## Documentazione aggiuntiva
 - Hardening produzione: docs/security/2026-08-08-production-deploy-hardening.md

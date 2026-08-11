@@ -7,6 +7,7 @@ use App\Models\Role;
 use App\Models\StaffMember;
 use App\Models\StaffShiftAssignment;
 use App\Models\StaffShiftTemplate;
+use App\Models\StaffTimesheetEntry;
 use App\Models\User;
 use App\Models\UserFacilityRole;
 use Database\Seeders\DatabaseSeeder;
@@ -182,6 +183,72 @@ class StaffShiftApiTest extends TestCase
             ])
             ->assertStatus(422)
             ->assertJsonValidationErrors(['staff_member_id']);
+    }
+
+    public function test_week_view_exposes_actual_shift_summary_and_anomalies(): void
+    {
+        $facility = Facility::query()->firstOrFail();
+        [$coordinatorToken] = $this->createFacilityUserWithStaffMember('coord.actual@familyhub.local', 'COORDINATORE', $facility->id, 'STAFF-COORD-ACTUAL');
+        [$educatorToken, $educator] = $this->createFacilityUserWithStaffMember('edu.actual@familyhub.local', 'EDUCATORE', $facility->id, 'STAFF-EDU-ACTUAL');
+
+        $template = StaffShiftTemplate::query()->create([
+            'facility_id' => $facility->id,
+            'code' => 'DAY-ACTUAL',
+            'name' => 'Turno giorno actual',
+            'start_time' => '08:00',
+            'end_time' => '16:00',
+            'minimum_staff_required' => 1,
+            'sort_order' => 10,
+            'is_active' => true,
+        ]);
+
+        $assignmentId = $this->withToken($coordinatorToken)
+            ->postJson('/api/admin/staff-shifts', [
+                'facility_id' => $facility->id,
+                'shift_template_id' => $template->id,
+                'staff_member_id' => $educator->id,
+                'shift_date' => '2026-07-13',
+                'status' => 'confirmed',
+            ])
+            ->assertCreated()
+            ->json('id');
+
+        StaffTimesheetEntry::query()->create([
+            'facility_id' => $facility->id,
+            'staff_member_id' => $educator->id,
+            'shift_assignment_id' => $assignmentId,
+            'work_date' => '2026-07-13',
+            'planned_starts_at' => '2026-07-13 08:00:00',
+            'planned_ends_at' => '2026-07-13 16:00:00',
+            'actual_starts_at' => '2026-07-13 08:15:00',
+            'actual_ends_at' => '2026-07-13 16:20:00',
+            'planned_minutes' => 480,
+            'worked_minutes' => 485,
+            'break_minutes' => 0,
+            'ordinary_minutes' => 480,
+            'overtime_minutes' => 5,
+            'night_minutes' => 0,
+            'absence_minutes' => 0,
+            'variance_minutes' => 5,
+            'status' => 'computed',
+            'anomaly_flags_json' => ['late_clock_in'],
+        ]);
+
+        $this->withToken($coordinatorToken)
+            ->getJson("/api/admin/staff-shifts/week?facility_id={$facility->id}&week_start=2026-07-13")
+            ->assertOk()
+            ->assertJsonPath('days.0.shifts.0.actual_started_count', 1)
+            ->assertJsonPath('days.0.shifts.0.actual_completed_count', 1)
+            ->assertJsonPath('days.0.shifts.0.actual_coverage_gap', 0)
+            ->assertJsonPath('days.0.shifts.0.anomaly_count', 1)
+            ->assertJsonPath('days.0.shifts.0.assignments.0.actual.started', true)
+            ->assertJsonPath('days.0.shifts.0.assignments.0.actual.completed', true)
+            ->assertJsonPath('days.0.shifts.0.assignments.0.actual.status', 'computed')
+            ->assertJsonPath('days.0.shifts.0.assignments.0.actual.has_anomaly', true)
+            ->assertJsonPath('days.0.shifts.0.assignments.0.actual.anomaly_flags.0', 'late_clock_in');
+
+        // Nota: la vista my-week resta coperta dal test dedicato `test_educator_can_read_only_own_week`.
+        // Il presente scenario verifica il nuovo contratto planned vs actual sul planner coordinatore.
     }
 
     private function createFacilityUserWithStaffMember(string $email, string $roleCode, int $facilityId, string $employeeCode): array

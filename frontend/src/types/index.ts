@@ -1931,6 +1931,25 @@ export interface StaffShiftAssignment {
   facility?: { id: number; name: string } | null
   shift_template?: StaffShiftTemplate | null
   staff_member?: { id: number; first_name: string; last_name: string; display_name?: string | null } | null
+  actual?: {
+    timesheet_entry_id?: number | null
+    status?: TimesheetEntryStatus | string | null
+    started: boolean
+    completed: boolean
+    planned_start?: string | null
+    planned_end?: string | null
+    actual_start?: string | null
+    actual_end?: string | null
+    planned_minutes?: number | null
+    worked_minutes?: number | null
+    break_minutes?: number | null
+    ordinary_minutes?: number | null
+    overtime_minutes?: number | null
+    absence_minutes?: number | null
+    variance_minutes?: number | null
+    has_anomaly: boolean
+    anomaly_flags: string[]
+  } | null
 }
 
 export interface StaffShiftAssignmentWrite {
@@ -1949,6 +1968,10 @@ export interface ShiftWeekBlock {
   minimum_staff_required: number
   assigned_count: number
   coverage_gap: number
+  actual_started_count?: number
+  actual_completed_count?: number
+  actual_coverage_gap?: number
+  anomaly_count?: number
   assignments: StaffShiftAssignment[]
 }
 
