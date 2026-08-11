@@ -4,7 +4,7 @@ import {
 } from 'reactstrap'
 import { Edit2, Save, X, FileText, Info, Eye } from 'react-feather'
 import { toast } from 'react-toastify'
-import { minorApi, lookupsApi, apiError } from '../../../services/api'
+import { minorApi, adminCountryApi, adminRegionApi, adminProvinceApi, adminCityApi, apiError } from '../../../services/api'
 import type { MinorDocument, MinorCaseDetail, MinorCaseOptions, Country, Region, Province, City } from '../../../types'
 import InfoDrawer from '../../../components/common/InfoDrawer'
 
@@ -32,22 +32,6 @@ function InfoRow({ label, value }: { label: string; value?: string | null }) {
       <span style={{ color: '#333' }}>{value ?? '—'}</span>
     </div>
   )
-}
-
-/** Trova i parent IDs di una città nell'albero geography */
-function findCityParents(geo: Country[], cityId: number) {
-  for (const country of geo) {
-    for (const region of country.regions ?? []) {
-      for (const province of region.provinces ?? []) {
-        for (const city of province.cities ?? []) {
-          if (city.id === cityId) {
-            return { countryId: country.id, regionId: region.id, provinceId: province.id }
-          }
-        }
-      }
-    }
-  }
-  return { countryId: 0, regionId: 0, provinceId: 0 }
 }
 
 /** Apre il documento in una nuova tab per la visualizzazione */
@@ -83,11 +67,15 @@ export default function CasoMinoreTab({
   const [optsErr, setOptsErr]   = useState(false)
   const [minorDocs, setMinorDocs] = useState<MinorDocument[]>([])
 
-  // Geography per cascade città di ingresso
-  const [geography, setGeography]     = useState<Country[]>([])
-  const [geoCountryId, setGeoCountryId] = useState<number>(0)
-  const [geoRegionId, setGeoRegionId]   = useState<number>(0)
+  // Geography per cascade città di ingresso — caricamento a livelli
+  const [geoCountries, setGeoCountries]   = useState<Country[]>([])
+  const [geoRegions, setGeoRegions]       = useState<Region[]>([])
+  const [geoProvinces, setGeoProvinces]   = useState<Province[]>([])
+  const [geoCities, setGeoCities]         = useState<City[]>([])
+  const [geoCountryId, setGeoCountryId]   = useState<number>(0)
+  const [geoRegionId, setGeoRegionId]     = useState<number>(0)
   const [geoProvinceId, setGeoProvinceId] = useState<number>(0)
+  const [geoLoading, setGeoLoading]       = useState(false)
 
   useEffect(() => {
     minorApi.getCaseOptions(minorId)
@@ -98,25 +86,46 @@ export default function CasoMinoreTab({
       .then(setMinorDocs)
       .catch(() => {})
 
-    lookupsApi.geography()
-      .then(setGeography)
+    adminCountryApi.list()
+      .then(setGeoCountries)
       .catch(() => {})
   }, [minorId])
 
-  // Cascade derivati
-  const geoRegions: Region[]   = geography.find((c) => c.id === geoCountryId)?.regions ?? []
-  const geoProvinces: Province[] = geoRegions.find((r) => r.id === geoRegionId)?.provinces ?? []
-  const geoCities: City[]      = geoProvinces.find((p) => p.id === geoProvinceId)?.cities ?? []
+  const openEdit = async () => {
+    setGeoCountryId(0); setGeoRegionId(0); setGeoProvinceId(0)
+    setGeoRegions([]); setGeoProvinces([]); setGeoCities([])
 
-  const openEdit = () => {
-    // Pre-popola cascade se esiste una città salvata
-    if (caseDetail?.entry_city_id && geography.length > 0) {
-      const { countryId, regionId, provinceId } = findCityParents(geography, caseDetail.entry_city_id)
-      setGeoCountryId(countryId)
-      setGeoRegionId(regionId)
-      setGeoProvinceId(provinceId)
-    } else {
-      setGeoCountryId(0); setGeoRegionId(0); setGeoProvinceId(0)
+    if (caseDetail?.entry_city_id) {
+      try {
+        setGeoLoading(true)
+        const city = await adminCityApi.get(caseDetail.entry_city_id)
+        const province = city.province
+        const region = province?.region
+        const country = region?.country
+
+        if (country?.id) {
+          setGeoCountryId(country.id)
+          const regions = await adminRegionApi.list(country.id)
+          setGeoRegions(regions)
+
+          if (region?.id) {
+            setGeoRegionId(region.id)
+            const provinces = await adminProvinceApi.list(region.id)
+            setGeoProvinces(provinces)
+
+            if (province?.id) {
+              setGeoProvinceId(province.id)
+              const cities = await adminCityApi.list(province.id)
+              setGeoCities(cities)
+            }
+          }
+        }
+      } catch {
+        setGeoCountryId(0); setGeoRegionId(0); setGeoProvinceId(0)
+        setGeoRegions([]); setGeoProvinces([]); setGeoCities([])
+      } finally {
+        setGeoLoading(false)
+      }
     }
 
     setForm({
@@ -139,17 +148,53 @@ export default function CasoMinoreTab({
 
   const setF = (k: keyof MinorCaseDetail, v: unknown) => setForm((p) => ({ ...p, [k]: v }))
 
-  const handleCountryChange = (id: number) => {
+  const handleCountryChange = async (id: number) => {
     setGeoCountryId(id); setGeoRegionId(0); setGeoProvinceId(0)
+    setGeoRegions([]); setGeoProvinces([]); setGeoCities([])
     setF('entry_city_id', null)
+
+    if (!id) return
+
+    setGeoLoading(true)
+    try {
+      setGeoRegions(await adminRegionApi.list(id))
+    } catch {
+      setGeoRegions([])
+    } finally {
+      setGeoLoading(false)
+    }
   }
-  const handleRegionChange = (id: number) => {
+  const handleRegionChange = async (id: number) => {
     setGeoRegionId(id); setGeoProvinceId(0)
+    setGeoProvinces([]); setGeoCities([])
     setF('entry_city_id', null)
+
+    if (!id) return
+
+    setGeoLoading(true)
+    try {
+      setGeoProvinces(await adminProvinceApi.list(id))
+    } catch {
+      setGeoProvinces([])
+    } finally {
+      setGeoLoading(false)
+    }
   }
-  const handleProvinceChange = (id: number) => {
+  const handleProvinceChange = async (id: number) => {
     setGeoProvinceId(id)
+    setGeoCities([])
     setF('entry_city_id', null)
+
+    if (!id) return
+
+    setGeoLoading(true)
+    try {
+      setGeoCities(await adminCityApi.list(id))
+    } catch {
+      setGeoCities([])
+    } finally {
+      setGeoLoading(false)
+    }
   }
 
   const handleSave = async () => {
@@ -295,19 +340,21 @@ export default function CasoMinoreTab({
         <Col md='3'>
           <FormGroup>
             <Label>Nazione di ingresso</Label>
-            <Input type='select' value={geoCountryId}
+            <Input type='select' value={geoCountryId} disabled={geoLoading}
               onChange={(e) => handleCountryChange(Number(e.target.value))}>
-              <option value='0'>Seleziona nazione…</option>
-              {geography.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              <option value='0'>
+                {geoLoading ? 'Caricamento…' : geoCountries.length === 0 ? 'Nessuna nazione disponibile' : 'Seleziona nazione…'}
+              </option>
+              {geoCountries.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Input>
           </FormGroup>
         </Col>
         <Col md='3'>
           <FormGroup>
             <Label>Regione</Label>
-            <Input type='select' value={geoRegionId} disabled={!geoCountryId}
+            <Input type='select' value={geoRegionId} disabled={!geoCountryId || geoLoading}
               onChange={(e) => handleRegionChange(Number(e.target.value))}>
-              <option value='0'>{geoCountryId ? 'Seleziona regione…' : '—'}</option>
+              <option value='0'>{!geoCountryId ? '—' : geoLoading ? 'Caricamento…' : 'Seleziona regione…'}</option>
               {geoRegions.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
             </Input>
           </FormGroup>
@@ -315,9 +362,9 @@ export default function CasoMinoreTab({
         <Col md='3'>
           <FormGroup>
             <Label>Provincia</Label>
-            <Input type='select' value={geoProvinceId} disabled={!geoRegionId}
+            <Input type='select' value={geoProvinceId} disabled={!geoRegionId || geoLoading}
               onChange={(e) => handleProvinceChange(Number(e.target.value))}>
-              <option value='0'>{geoRegionId ? 'Seleziona provincia…' : '—'}</option>
+              <option value='0'>{!geoRegionId ? '—' : geoLoading ? 'Caricamento…' : 'Seleziona provincia…'}</option>
               {geoProvinces.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </Input>
           </FormGroup>
@@ -325,9 +372,9 @@ export default function CasoMinoreTab({
         <Col md='3'>
           <FormGroup>
             <Label>Città di ingresso</Label>
-            <Input type='select' value={form.entry_city_id ?? ''} disabled={!geoProvinceId}
+            <Input type='select' value={form.entry_city_id ?? ''} disabled={!geoProvinceId || geoLoading}
               onChange={(e) => setF('entry_city_id', Number(e.target.value) || null)}>
-              <option value=''>{geoProvinceId ? 'Seleziona città…' : '—'}</option>
+              <option value=''>{!geoProvinceId ? '—' : geoLoading ? 'Caricamento…' : 'Seleziona città…'}</option>
               {geoCities.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Input>
           </FormGroup>
