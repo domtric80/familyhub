@@ -4,7 +4,7 @@ import {
   Modal, ModalHeader, ModalBody, ModalFooter,
   Table,
 } from 'reactstrap'
-import { LogIn, LogOut, Coffee, Play, Info, AlertTriangle, Clock } from 'react-feather'
+import { LogIn, LogOut, Coffee, Play, Info, AlertTriangle, Clock, MapPin } from 'react-feather'
 import { toast } from 'react-toastify'
 import { attendanceApi, timesheetApi, apiError } from '../../services/api'
 import type { AttendanceEvent, TimesheetEntry, TimesheetEntryStatus } from '../../types'
@@ -257,11 +257,30 @@ export default function MiePresentePage() {
                   <div className='mb-3' style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {[...detail.attendance_events].sort((a, b) => a.occurred_at.localeCompare(b.occurred_at)).map((event) => {
                       const meta = EVENT_LABELS[event.event_type] ?? { label: event.event_type, icon: null, color: '#999' }
+                      const lat = event.geo_latitude ?? event.latitude
+                      const lon = event.geo_longitude ?? event.longitude
+                      const hasGeo = lat != null && lon != null
+                      const osmUrl = hasGeo
+                        ? `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=17/${lat}/${lon}`
+                        : null
                       return (
-                        <div key={event.id} style={{ display: 'flex', gap: 10, fontSize: 12, padding: '4px 8px', background: '#f4f5f7', borderRadius: 4 }}>
+                        <div key={event.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, padding: '4px 8px', background: '#f4f5f7', borderRadius: 4 }}>
                           <span style={{ color: meta.color, fontWeight: 600 }}>{meta.label}</span>
                           <span>{fmtTime(event.occurred_at)}</span>
-                          <span className='text-muted ms-auto'>{event.source}</span>
+                          <span className='text-muted'>{event.source}</span>
+                          <span className='ms-auto d-flex align-items-center gap-1'>
+                            {hasGeo ? (
+                              <a href={osmUrl!} target='_blank' rel='noopener noreferrer'
+                                className='d-flex align-items-center gap-1 text-success text-decoration-none'
+                                style={{ fontSize: 10 }}>
+                                <MapPin size={10} /> Posizione disponibile
+                              </a>
+                            ) : (
+                              <span className='text-muted' style={{ fontSize: 10 }}>
+                                <MapPin size={10} /> Posizione assente
+                              </span>
+                            )}
+                          </span>
                         </div>
                       )
                     })}

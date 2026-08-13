@@ -4,7 +4,7 @@ import {
   Table, Row, Col, Input, FormGroup, Label, Alert,
   Modal, ModalHeader, ModalBody, ModalFooter,
 } from 'reactstrap'
-import { Check, X, AlertTriangle, Info, Clock, ChevronDown, Plus } from 'react-feather'
+import { Check, X, AlertTriangle, Info, Clock, ChevronDown, Plus, MapPin } from 'react-feather'
 import { toast } from 'react-toastify'
 import { timesheetApi, staffMemberApi, facilityApi, apiError } from '../../services/api'
 import type { TimesheetAdjustmentWrite, TimesheetEntry, TimesheetEntryStatus, Facility } from '../../types'
@@ -352,13 +352,34 @@ export default function VerificaTimesheetPage() {
                 <>
                   <div className='fw-semibold small mb-1' style={{ color: '#7366ff' }}>Presenze registrate</div>
                   <div className='mb-3' style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {[...detail.attendance_events].sort((a, b) => a.occurred_at.localeCompare(b.occurred_at)).map((event) => (
-                      <div key={event.id} style={{ display: 'flex', gap: 10, fontSize: 12, padding: '4px 8px', background: '#f4f5f7', borderRadius: 4 }}>
-                        <span className='fw-semibold'>{event.event_type}</span>
-                        <span>{fmtTime(event.occurred_at)}</span>
-                        <span className='text-muted ms-auto'>{event.source}</span>
-                      </div>
-                    ))}
+                    {[...detail.attendance_events].sort((a, b) => a.occurred_at.localeCompare(b.occurred_at)).map((event) => {
+                      const lat = event.geo_latitude ?? event.latitude
+                      const lon = event.geo_longitude ?? event.longitude
+                      const hasGeo = lat != null && lon != null
+                      const osmUrl = hasGeo
+                        ? `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=17/${lat}/${lon}`
+                        : null
+                      return (
+                        <div key={event.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, padding: '4px 8px', background: '#f4f5f7', borderRadius: 4 }}>
+                          <span className='fw-semibold'>{event.event_type}</span>
+                          <span>{fmtTime(event.occurred_at)}</span>
+                          <span className='text-muted'>{event.source}</span>
+                          <span className='ms-auto d-flex align-items-center gap-1'>
+                            {hasGeo ? (
+                              <a href={osmUrl!} target='_blank' rel='noopener noreferrer'
+                                className='d-flex align-items-center gap-1 text-success text-decoration-none'
+                                style={{ fontSize: 10 }}>
+                                <MapPin size={10} /> Posizione disponibile
+                              </a>
+                            ) : (
+                              <span className='text-muted' style={{ fontSize: 10 }}>
+                                <MapPin size={10} /> Posizione assente
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      )
+                    })}
                   </div>
                 </>
               )}

@@ -2044,6 +2044,8 @@ export interface AttendanceEvent {
   occurred_at: string
   latitude?: number | null
   longitude?: number | null
+  geo_latitude?: number | null
+  geo_longitude?: number | null
   notes?: string | null
   staff_member?: { id: number; first_name: string; last_name: string } | null
 }
@@ -2234,6 +2236,9 @@ export interface TimesheetDashboardOpenAnomaly extends TimesheetDashboardSummary
   overtime_minutes: number
   absence_minutes: number
   anomaly_flags: string[]
+  actual_start?: string | null
+  actual_end?: string | null
+  night_minutes?: number | null
 }
 
 export interface TimesheetDashboardOvertimeEntry extends TimesheetDashboardSummaryEntryRef {
@@ -2272,6 +2277,42 @@ export interface TimesheetDashboardSummary {
   absence_reconciliations_count: number
   absence_reconciled_minutes_total: number
   pending_adjustments_count: number
+  night_minutes_total?: number | null
+  minimum_rest_violations_count?: number | null
+  maximum_daily_hours_violations_count?: number | null
+  weekly_hours_threshold_exceeded_count?: number | null
+  staff_with_open_anomalies_count?: number | null
+}
+
+export interface TimesheetDashboardStaffTotal {
+  staff_member: {
+    id: number
+    first_name: string
+    last_name: string
+    display_name?: string | null
+    employee_code?: string | null
+  }
+  entries_total: number
+  worked_minutes_total: number
+  ordinary_minutes_total: number
+  overtime_minutes_total: number
+  night_minutes_total: number
+  absence_minutes_total: number
+  anomaly_entries_count: number
+  minimum_rest_violations_count: number
+  maximum_daily_hours_violations_count: number
+  pending_adjustments_count: number
+}
+
+export interface TimesheetDashboardFacilityTotal {
+  facility: { id: number; name: string }
+  entries_total: number
+  worked_minutes_total: number
+  ordinary_minutes_total: number
+  overtime_minutes_total: number
+  night_minutes_total: number
+  absence_minutes_total: number
+  anomaly_entries_count: number
 }
 
 export interface TimesheetCoordinatorDashboardResponse {
@@ -2280,4 +2321,6 @@ export interface TimesheetCoordinatorDashboardResponse {
   top_overtime_entries: TimesheetDashboardOvertimeEntry[]
   absence_reconciliations: TimesheetDashboardAbsenceReconciliation[]
   pending_adjustments: TimesheetDashboardPendingAdjustment[]
+  staff_totals?: TimesheetDashboardStaffTotal[]
+  facility_totals?: TimesheetDashboardFacilityTotal[]
 }

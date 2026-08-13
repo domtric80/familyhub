@@ -48,15 +48,21 @@ function RbacBadge({ value }: { value: boolean }) {
 
 // ─── Drawer espandibile per ruolo ─────────────────────────────────────────────
 
+function assignmentRuleLabel(rule?: string) {
+  if (rule === 'bypass_for_privileged_role') return { text: 'Bypass assegnazione minore', cls: 'badge-light-success' }
+  if (rule === 'active_minor_assignment_required') return { text: 'Richiede assegnazione minore', cls: 'badge-light-warning' }
+  return { text: rule ?? '—', cls: 'badge-light-secondary' }
+}
+
 function RoleAccessRow({ role, classifications }: {
   role: DocumentAccessRole
   classifications: string[]
 }) {
   const [expanded, setExpanded] = useState(false)
 
-  const readable = role.document_access
-    .filter((e) => e.effective_read_access)
-    .map((e) => e.classification_name)
+  const readableCount = role.summary?.readable_classifications_count ?? role.document_access.filter((e) => e.effective_read_access).length
+  const downloadableCount = role.summary?.downloadable_classifications_count ?? role.document_access.filter((e) => e.effective_download_access).length
+  const assignmentInfo = assignmentRuleLabel(role.summary?.minor_assignment_rule)
 
   return (
     <>
@@ -65,20 +71,29 @@ function RoleAccessRow({ role, classifications }: {
         onClick={() => setExpanded((v) => !v)}
       >
         <td>
-          <div className='d-flex align-items-center gap-2'>
+          <div className='d-flex align-items-center gap-2 flex-wrap'>
             <span className='fw-semibold'>{role.name}</span>
             <code style={{ fontSize: 11, color: '#888' }}>{role.code}</code>
+            {role.role_has_minor_assignment_bypass && (
+              <Badge color='' className='badge-light-info' style={{ fontSize: 10 }}>Ruolo privilegiato</Badge>
+            )}
+          </div>
+          <div className='mt-1'>
+            <Badge color='' className={`${assignmentInfo.cls}`} style={{ fontSize: 10 }}>{assignmentInfo.text}</Badge>
           </div>
         </td>
         <td><RbacBadge value={role.rbac.attachments_read} /></td>
         <td><RbacBadge value={role.rbac.attachments_download} /></td>
         <td><RbacBadge value={role.rbac.attachments_upload} /></td>
         <td>
-          {readable.length > 0
-            ? readable.map((n) => (
-                <Badge key={n} color='' className='badge-light-primary me-1' style={{ fontSize: 10 }}>{n}</Badge>
-              ))
-            : <span className='text-muted small'>Nessuna</span>}
+          <div className='small'>
+            <span className='text-success fw-semibold'>{readableCount}</span>
+            <span className='text-muted'> lettura</span>
+          </div>
+          <div className='small'>
+            <span className='text-primary fw-semibold'>{downloadableCount}</span>
+            <span className='text-muted'> download</span>
+          </div>
         </td>
         <td>
           <span className='text-muted small' style={{ fontSize: 11 }}>
@@ -205,12 +220,24 @@ export default function DocumentAccessMatrixPage() {
         </Row>
 
         {/* Avviso ruoli nuovi */}
-        <div className='alert alert-secondary mb-4 d-flex align-items-start gap-2' style={{ fontSize: 13 }}>
+        <div className='alert alert-secondary mb-3 d-flex align-items-start gap-2' style={{ fontSize: 13 }}>
           <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 2 }} />
           <div>
             <strong>Ruoli personalizzati</strong> — un ruolo con il permesso <code>attachments.read</code>
             può vedere il modulo documenti, ma se non è incluso tra i ruoli ammessi da una classificazione,
             non potrà leggere i documenti di quella classificazione. Il permesso RBAC da solo non è sufficiente.
+          </div>
+        </div>
+
+        {/* Deny by default per nuove classificazioni */}
+        <div className='alert alert-danger mb-4 d-flex align-items-start gap-2' style={{ fontSize: 13 }}>
+          <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 2 }} />
+          <div>
+            <strong>Nuove classificazioni — negate di default.</strong>{' '}
+            Le nuove classificazioni restano non accessibili finché non viene configurata la policy ABAC dei ruoli.
+            {matrix?.meta.unknown_classification_policy?.explanation && (
+              <span className='text-muted'>{' '}{matrix.meta.unknown_classification_policy.explanation}</span>
+            )}
           </div>
         </div>
 
@@ -313,10 +340,15 @@ export default function DocumentAccessMatrixPage() {
                     </tbody>
                   </table>
                 </div>
-                <p className='text-muted mt-3 mb-0' style={{ fontSize: 11 }}>
-                  * La lettura dei documenti del minore richiede anche un'assegnazione attiva al minore per i ruoli operativi.
-                  I ruoli privilegiati (SUPER_ADMIN, DIRETTORE, COORDINATORE) hanno accesso senza assegnazione puntuale.
-                </p>
+                {matrix.meta.privileged_role_codes.length > 0 && (
+                  <p className='text-muted mt-3 mb-0' style={{ fontSize: 11 }}>
+                    * Ruoli privilegiati (bypass assegnazione minore):{' '}
+                    {matrix.meta.privileged_role_codes.map((code) => (
+                      <code key={code} className='me-1'>{code}</code>
+                    ))}.
+                    Tutti gli altri ruoli richiedono assegnazione attiva al minore.
+                  </p>
+                )}
               </CardBody>
             </Card>
           </>

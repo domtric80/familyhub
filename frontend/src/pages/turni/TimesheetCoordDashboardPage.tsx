@@ -4,11 +4,13 @@ import {
   Container, Row, Col, Card, CardBody, CardHeader,
   Button, Alert, Input, FormGroup, Label, Badge, Table,
 } from 'reactstrap'
-import { Home, AlertTriangle, TrendingUp, UserX, Clock, ExternalLink } from 'react-feather'
+import { Home, AlertTriangle, TrendingUp, UserX, Clock, ExternalLink, Moon, Users } from 'react-feather'
 import { timesheetApi, facilityApi, apiError } from '../../services/api'
 import type {
   TimesheetCoordinatorDashboardResponse,
   TimesheetDashboardSummary,
+  TimesheetDashboardStaffTotal,
+  TimesheetDashboardFacilityTotal,
   Facility,
 } from '../../types'
 
@@ -47,14 +49,20 @@ function staffName(s?: { first_name: string; last_name: string; display_name?: s
   return s.display_name?.trim() || `${s.last_name} ${s.first_name}`
 }
 
+// Flags con resa visiva "alta priorità"
+const HIGH_PRIORITY_FLAGS = new Set(['minimum_rest_violation', 'maximum_daily_hours_exceeded', 'weekly_hours_threshold_exceeded'])
+
 function anomalyLabel(flag: string) {
   const MAP: Record<string, string> = {
     late_clock_in: 'Entrata tardiva',
     early_clock_out: 'Uscita anticipata',
     missing_clock_out: 'Uscita mancante',
     missing_clock_in: 'Entrata mancante',
-    overtime_detected: 'Straordinario',
-    absence_detected: 'Assenza rilevata',
+    overtime_detected: 'Straordinario rilevato',
+    absence_detected: 'Assenza / copertura incompleta',
+    maximum_daily_hours_exceeded: 'Superamento ore giornaliere',
+    minimum_rest_violation: 'Riposo minimo non rispettato',
+    weekly_hours_threshold_exceeded: 'Superamento soglia settimanale',
   }
   return MAP[flag] ?? flag
 }
@@ -250,6 +258,46 @@ export default function TimesheetCoordDashboardPage() {
           </Col>
         </Row>
 
+        {/* ── KPI Row 2: anomalie avanzate ── */}
+        <Row className='mb-4 g-3'>
+          <Col xs='6' md='3'>
+            <KpiCard
+              label='Ore notturne'
+              value={s != null ? minsToHM(s.night_minutes_total) : '—'}
+              sub='nel periodo filtrato'
+              color='#3a5bd9'
+              icon={<Moon size={20} />}
+            />
+          </Col>
+          <Col xs='6' md='3'>
+            <KpiCard
+              label='Violazioni riposo minimo'
+              value={s?.minimum_rest_violations_count ?? '—'}
+              sub='nel periodo filtrato'
+              color='#e74c3c'
+              icon={<AlertTriangle size={20} />}
+            />
+          </Col>
+          <Col xs='6' md='3'>
+            <KpiCard
+              label='Superamenti ore giornaliere'
+              value={s?.maximum_daily_hours_violations_count ?? '—'}
+              sub='nel periodo filtrato'
+              color='#e67e22'
+              icon={<TrendingUp size={20} />}
+            />
+          </Col>
+          <Col xs='6' md='3'>
+            <KpiCard
+              label='Operatori con anomalie'
+              value={s?.staff_with_open_anomalies_count ?? '—'}
+              sub='anomalie aperte'
+              color='#8e44ad'
+              icon={<Users size={20} />}
+            />
+          </Col>
+        </Row>
+
         {/* ── Tabelle operative ── */}
         <Row className='g-3'>
 
@@ -273,7 +321,7 @@ export default function TimesheetCoordDashboardPage() {
                         <td className='text-nowrap'>{minsToHM(row.variance_minutes)}</td>
                         <td>
                           {row.anomaly_flags.map((f) => (
-                            <Badge key={f} color='' className='badge-light-warning me-1' style={{ fontSize: 10 }}>
+                            <Badge key={f} color='' className={`me-1 ${HIGH_PRIORITY_FLAGS.has(f) ? 'badge-light-danger' : 'badge-light-warning'}`} style={{ fontSize: 10 }}>
                               {anomalyLabel(f)}
                             </Badge>
                           ))}
@@ -370,6 +418,101 @@ export default function TimesheetCoordDashboardPage() {
           </Col>
 
         </Row>
+
+        {/* ── Ore per operatore ── */}
+        {data && (data.staff_totals ?? []).length > 0 && (
+          <Card className='mb-4'>
+            <CardHeader className='py-2'>
+              <span className='fw-semibold small'>Ore per operatore</span>
+              <Badge color='secondary' pill className='ms-2'>{data.staff_totals!.length}</Badge>
+            </CardHeader>
+            <CardBody className='p-0' style={{ overflowX: 'auto' }}>
+              <Table size='sm' className='mb-0 align-middle' style={{ fontSize: 12 }}>
+                <thead className='table-light'>
+                  <tr>
+                    <th>Operatore</th>
+                    <th className='text-center'>Entry</th>
+                    <th className='text-center'>Lavorate</th>
+                    <th className='text-center'>Straord.</th>
+                    <th className='text-center'>Notturne</th>
+                    <th className='text-center'>Assenze</th>
+                    <th className='text-center'>Anomalie</th>
+                    <th className='text-center'>Rettifiche</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.staff_totals!.map((row: TimesheetDashboardStaffTotal) => (
+                    <tr key={row.staff_member.id}>
+                      <td>
+                        <div className='fw-semibold'>{staffName(row.staff_member)}</div>
+                        {row.staff_member.employee_code && (
+                          <div className='text-muted' style={{ fontSize: 10 }}>{row.staff_member.employee_code}</div>
+                        )}
+                      </td>
+                      <td className='text-center'>{row.entries_total}</td>
+                      <td className='text-center'>{minsToHM(row.worked_minutes_total)}</td>
+                      <td className='text-center text-warning fw-semibold'>{minsToHM(row.overtime_minutes_total)}</td>
+                      <td className='text-center' style={{ color: '#3a5bd9' }}>{minsToHM(row.night_minutes_total)}</td>
+                      <td className='text-center text-muted'>{minsToHM(row.absence_minutes_total)}</td>
+                      <td className='text-center'>
+                        {row.anomaly_entries_count > 0
+                          ? <Badge color='' className='badge-light-danger' style={{ fontSize: 10 }}>{row.anomaly_entries_count}</Badge>
+                          : <span className='text-muted'>—</span>}
+                      </td>
+                      <td className='text-center'>
+                        {row.pending_adjustments_count > 0
+                          ? <Badge color='' className='badge-light-warning' style={{ fontSize: 10 }}>{row.pending_adjustments_count}</Badge>
+                          : <span className='text-muted'>—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </CardBody>
+          </Card>
+        )}
+
+        {/* ── Totali per struttura ── */}
+        {data && (data.facility_totals ?? []).length > 0 && (
+          <Card className='mb-4'>
+            <CardHeader className='py-2'>
+              <span className='fw-semibold small'>Totali per struttura</span>
+              <Badge color='secondary' pill className='ms-2'>{data.facility_totals!.length}</Badge>
+            </CardHeader>
+            <CardBody className='p-0' style={{ overflowX: 'auto' }}>
+              <Table size='sm' className='mb-0 align-middle' style={{ fontSize: 12 }}>
+                <thead className='table-light'>
+                  <tr>
+                    <th>Struttura</th>
+                    <th className='text-center'>Entry</th>
+                    <th className='text-center'>Lavorate</th>
+                    <th className='text-center'>Straord.</th>
+                    <th className='text-center'>Notturne</th>
+                    <th className='text-center'>Assenze</th>
+                    <th className='text-center'>Con anomalie</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.facility_totals!.map((row: TimesheetDashboardFacilityTotal) => (
+                    <tr key={row.facility.id}>
+                      <td className='fw-semibold'>{row.facility.name}</td>
+                      <td className='text-center'>{row.entries_total}</td>
+                      <td className='text-center'>{minsToHM(row.worked_minutes_total)}</td>
+                      <td className='text-center text-warning fw-semibold'>{minsToHM(row.overtime_minutes_total)}</td>
+                      <td className='text-center' style={{ color: '#3a5bd9' }}>{minsToHM(row.night_minutes_total)}</td>
+                      <td className='text-center text-muted'>{minsToHM(row.absence_minutes_total)}</td>
+                      <td className='text-center'>
+                        {row.anomaly_entries_count > 0
+                          ? <Badge color='' className='badge-light-danger' style={{ fontSize: 10 }}>{row.anomaly_entries_count}</Badge>
+                          : <span className='text-muted'>—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </CardBody>
+          </Card>
+        )}
 
         {/* Info extra */}
         <div className='text-muted mt-3 mb-4' style={{ fontSize: 11 }}>
