@@ -859,6 +859,126 @@ class StaffTimesheetApiTest extends TestCase
             ->assertJsonPath('pending_adjustments.0.timesheet_entry_id', $entryTwoId);
     }
 
+    public function test_dashboard_summary_includes_advanced_anomalies_and_staff_facility_totals(): void
+    {
+        $facility = Facility::query()->firstOrFail();
+        [$coordinator] = $this->createFacilityUserWithStaffMember('coord.timesheet.advanced@familyhub.local', 'COORDINATORE', $facility->id, 'STAFF-TS-COORD-ADV');
+        [$educator, $educatorStaffMember] = $this->createFacilityUserWithStaffMember('edu.timesheet.advanced@familyhub.local', 'EDUCATORE', $facility->id, 'STAFF-TS-EDU-ADV');
+
+        Sanctum::actingAs($coordinator);
+        $templateId = $this
+            ->postJson('/api/admin/staff-shift-templates', [
+                'facility_id' => $facility->id,
+                'code' => 'ADV1',
+                'name' => 'Turno avanzato',
+                'start_time' => '08:00',
+                'end_time' => '16:00',
+                'minimum_staff_required' => 1,
+                'sort_order' => 10,
+                'is_active' => true,
+            ])
+            ->assertCreated()
+            ->json('id');
+
+        $firstAssignmentId = $this
+            ->postJson('/api/admin/staff-shifts', [
+                'facility_id' => $facility->id,
+                'shift_template_id' => $templateId,
+                'staff_member_id' => $educatorStaffMember->id,
+                'shift_date' => '2026-07-29',
+                'status' => 'planned',
+            ])
+            ->assertCreated()
+            ->json('id');
+
+        $secondAssignmentId = $this
+            ->postJson('/api/admin/staff-shifts', [
+                'facility_id' => $facility->id,
+                'shift_template_id' => $templateId,
+                'staff_member_id' => $educatorStaffMember->id,
+                'shift_date' => '2026-07-30',
+                'status' => 'planned',
+            ])
+            ->assertCreated()
+            ->json('id');
+
+        Sanctum::actingAs($educator);
+        $this->postJson('/api/staff/attendance-events', [
+            'facility_id' => $facility->id,
+            'shift_assignment_id' => $firstAssignmentId,
+            'event_type' => 'clock_in',
+            'occurred_at' => '2026-07-29T08:00:00+02:00',
+            'geo_latitude' => 41.902782,
+            'geo_longitude' => 12.496366,
+        ])->assertCreated();
+
+        $firstEntryId = $this->postJson('/api/staff/attendance-events', [
+            'facility_id' => $facility->id,
+            'shift_assignment_id' => $firstAssignmentId,
+            'event_type' => 'clock_out',
+            'occurred_at' => '2026-07-29T20:30:00+02:00',
+            'geo_latitude' => 41.902782,
+            'geo_longitude' => 12.496366,
+        ])->assertCreated()->json('timesheet_entry.id');
+
+        $this->postJson('/api/staff/attendance-events', [
+            'facility_id' => $facility->id,
+            'shift_assignment_id' => $secondAssignmentId,
+            'event_type' => 'clock_in',
+            'occurred_at' => '2026-07-30T05:30:00+02:00',
+            'geo_latitude' => 41.903000,
+            'geo_longitude' => 12.497000,
+        ])->assertCreated();
+
+        $secondEntryId = $this->postJson('/api/staff/attendance-events', [
+            'facility_id' => $facility->id,
+            'shift_assignment_id' => $secondAssignmentId,
+            'event_type' => 'clock_out',
+            'occurred_at' => '2026-07-30T14:00:00+02:00',
+            'geo_latitude' => 41.903000,
+            'geo_longitude' => 12.497000,
+        ])->assertCreated()->json('timesheet_entry.id');
+
+        Sanctum::actingAs($coordinator);
+
+        $response = $this
+            ->getJson("/api/admin/timesheets/dashboard-summary?facility_id={$facility->id}&date_from=2026-07-01&date_to=2026-07-31")
+            ->assertOk()
+            ->assertJsonPath('summary.entries_total', 2)
+            ->assertJsonPath('summary.overtime_minutes_total', 300)
+            ->assertJsonPath('summary.night_minutes_total', 30)
+            ->assertJsonPath('summary.minimum_rest_violations_count', 1)
+            ->assertJsonPath('summary.maximum_daily_hours_violations_count', 1)
+            ->assertJsonPath('summary.staff_with_open_anomalies_count', 1)
+            ->assertJsonPath('open_anomalies.0.id', $secondEntryId);
+
+        $json = $response->json();
+
+        $this->assertNotEmpty($json['staff_totals']);
+        $this->assertSame($educatorStaffMember->id, $json['staff_totals'][0]['staff_member']['id']);
+        $this->assertSame(2, $json['staff_totals'][0]['entries_total']);
+        $this->assertSame(1260, $json['staff_totals'][0]['worked_minutes_total']);
+        $this->assertSame(300, $json['staff_totals'][0]['overtime_minutes_total']);
+        $this->assertSame(30, $json['staff_totals'][0]['night_minutes_total']);
+        $this->assertSame(1, $json['staff_totals'][0]['minimum_rest_violations_count']);
+        $this->assertSame(1, $json['staff_totals'][0]['maximum_daily_hours_violations_count']);
+
+        $this->assertNotEmpty($json['facility_totals']);
+        $this->assertSame($facility->id, $json['facility_totals'][0]['facility']['id']);
+        $this->assertSame(2, $json['facility_totals'][0]['entries_total']);
+        $this->assertSame(1260, $json['facility_totals'][0]['worked_minutes_total']);
+
+        $detail = $this
+            ->getJson("/api/admin/timesheets/{$firstEntryId}")
+            ->assertOk()
+            ->assertJsonPath('attendance_events.0.geo_latitude', '41.9027820')
+            ->assertJsonPath('attendance_events.0.geo_longitude', '12.4963660')
+            ->json();
+
+        $this->assertContains('maximum_daily_hours_exceeded', $detail['anomaly_flags_json']);
+        $this->assertContains('overtime_detected', $detail['anomaly_flags_json']);
+    }
+
     private function createFacilityUserWithStaffMember(string $email, string $roleCode, int $facilityId, string $employeeCode): array
     {
         $admin = User::query()->where('email', 'admin@familyhub.local')->firstOrFail();

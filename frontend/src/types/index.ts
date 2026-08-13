@@ -475,6 +475,8 @@ export interface DocumentAccessClassification {
   allowed_role_codes: string[]
   allowed_download_role_codes: string[]
   assignment_required_for_minor_documents: boolean
+  allowed_role_count: number
+  allowed_download_role_count: number
 }
 
 export interface DocumentAccessEntry {
@@ -483,7 +485,9 @@ export interface DocumentAccessEntry {
   classification_active: boolean
   allowed_by_classification: boolean
   allowed_by_download_classification: boolean
+  role_has_minor_assignment_bypass: boolean
   requires_minor_assignment: boolean
+  assignment_rule: string
   effective_read_access: boolean
   effective_download_access: boolean
   effective_read_rule: string
@@ -497,10 +501,16 @@ export interface DocumentAccessRole {
   name: string
   description: string | null
   is_system: boolean
+  role_has_minor_assignment_bypass: boolean
   rbac: {
     attachments_read: boolean
     attachments_download: boolean
     attachments_upload: boolean
+  }
+  summary: {
+    readable_classifications_count: number
+    downloadable_classifications_count: number
+    minor_assignment_rule: string
   }
   document_access: DocumentAccessEntry[]
 }
@@ -510,6 +520,12 @@ export interface DocumentAccessMatrix {
     model: string
     summary: string
     minor_assignment_required_for_sensitive_minor_documents: boolean
+    privileged_role_codes: string[]
+    unknown_classification_policy: {
+      read: string
+      download: string
+      explanation: string
+    }
     document_rbac_permissions: {
       read: string
       download: string
@@ -521,25 +537,41 @@ export interface DocumentAccessMatrix {
 }
 
 export interface DocumentPolicyClassification {
+  id: number
   code: string
   name: string
   description: string | null
   is_active: boolean
   assigned_to_role: boolean
   download_assigned_to_role: boolean
+  role_has_minor_assignment_bypass: boolean
   effective_read_access: boolean
   effective_download_access: boolean
   requires_minor_assignment: boolean
+  assignment_rule: string
   notes: string | null
 }
 
 export interface DocumentPolicy {
   role: { id: number; code: string; name: string }
   rbac: { attachments_read: boolean; attachments_download: boolean; attachments_upload: boolean }
+  meta: {
+    privileged_role_codes: string[]
+    role_has_minor_assignment_bypass: boolean
+    unknown_classification_policy: {
+      read: string
+      download: string
+      explanation: string
+    }
+  }
   summary: {
     can_read_any_documents: boolean
     can_download_any_documents: boolean
     can_upload_documents: boolean
+    readable_classifications_count: number
+    downloadable_classifications_count: number
+    role_has_minor_assignment_bypass: boolean
+    minor_assignment_rule: string
     explanation: string
   }
   classifications: DocumentPolicyClassification[]

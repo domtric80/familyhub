@@ -12,6 +12,10 @@ use Illuminate\Support\Collection;
 
 class StaffTimesheetService
 {
+    private const MIN_REST_MINUTES = 660; // 11h
+    private const MAX_DAILY_WORK_MINUTES = 720; // 12h
+    private const WEEKLY_WORK_THRESHOLD_MINUTES = 2880; // 48h
+
     public function isMonthLocked(int $facilityId, string $workDate): bool
     {
         $date = Carbon::parse($workDate);
@@ -179,6 +183,35 @@ class StaffTimesheetService
             $anomalies[] = 'no_break_logged';
         }
 
+        if ($overtimeMinutes > 0) {
+            $anomalies[] = 'overtime_detected';
+        }
+
+        if ($absenceMinutes > 0 && $plannedMinutes > 0) {
+            $anomalies[] = 'absence_detected';
+        }
+
+        if ($workedMinutes > self::MAX_DAILY_WORK_MINUTES) {
+            $anomalies[] = 'maximum_daily_hours_exceeded';
+        }
+
+        $restMinutes = $this->calculateRestMinutesBeforeEntry($entry, $actualStartsAt);
+        if ($restMinutes !== null && $restMinutes < self::MIN_REST_MINUTES) {
+            $anomalies[] = 'minimum_rest_violation';
+        }
+
+        $weeklyWorkedMinutes = $this->calculateWeeklyWorkedMinutes(
+            $facilityId,
+            $staffMemberId,
+            $workDate,
+            $entry->id ?: null,
+            $workedMinutes
+        );
+
+        if ($weeklyWorkedMinutes > self::WEEKLY_WORK_THRESHOLD_MINUTES) {
+            $anomalies[] = 'weekly_hours_threshold_exceeded';
+        }
+
         $entry->fill([
             'shift_assignment_id' => $assignment?->id,
             'planned_starts_at' => $plannedStartsAt,
@@ -253,5 +286,47 @@ class StaffTimesheetService
         }
 
         return max(0, $minutes - min($minutes, $breakMinutes));
+    }
+
+    private function calculateRestMinutesBeforeEntry(StaffTimesheetEntry $entry, ?Carbon $actualStartsAt): ?int
+    {
+        if (! $actualStartsAt) {
+            return null;
+        }
+
+        $previousEntry = StaffTimesheetEntry::query()
+            ->where('facility_id', $entry->facility_id)
+            ->where('staff_member_id', $entry->staff_member_id)
+            ->whereNotNull('actual_ends_at')
+            ->where('id', '!=', $entry->id ?: 0)
+            ->where('actual_ends_at', '<', $actualStartsAt)
+            ->orderByDesc('actual_ends_at')
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $previousEntry?->actual_ends_at) {
+            return null;
+        }
+
+        return (int) $previousEntry->actual_ends_at->diffInMinutes($actualStartsAt);
+    }
+
+    private function calculateWeeklyWorkedMinutes(
+        int $facilityId,
+        int $staffMemberId,
+        string $workDate,
+        ?int $currentEntryId,
+        int $currentWorkedMinutes,
+    ): int {
+        $windowStart = Carbon::parse($workDate)->subDays(6)->toDateString();
+
+        $historicalWorkedMinutes = (int) StaffTimesheetEntry::query()
+            ->where('facility_id', $facilityId)
+            ->where('staff_member_id', $staffMemberId)
+            ->whereBetween('work_date', [$windowStart, $workDate])
+            ->when($currentEntryId, fn ($query) => $query->where('id', '!=', $currentEntryId))
+            ->sum('worked_minutes');
+
+        return $historicalWorkedMinutes + max(0, $currentWorkedMinutes);
     }
 }

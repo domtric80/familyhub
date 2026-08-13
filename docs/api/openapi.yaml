@@ -4745,13 +4745,31 @@ paths:
                       approved_or_locked_entries_count: { type: integer }
                       open_anomalies_count: { type: integer }
                       overtime_minutes_total: { type: integer }
+                      night_minutes_total: { type: integer }
                       absence_reconciliations_count: { type: integer }
                       absence_reconciled_minutes_total: { type: integer }
                       pending_adjustments_count: { type: integer }
+                      minimum_rest_violations_count: { type: integer }
+                      maximum_daily_hours_violations_count: { type: integer }
+                      weekly_hours_threshold_exceeded_count: { type: integer }
+                      staff_with_open_anomalies_count: { type: integer }
                   open_anomalies:
                     type: array
                     items:
                       type: object
+                      properties:
+                        id: { type: integer }
+                        work_date: { type: string, format: date }
+                        status: { type: string }
+                        actual_start: { type: string, format: date-time, nullable: true }
+                        actual_end: { type: string, format: date-time, nullable: true }
+                        variance_minutes: { type: integer }
+                        overtime_minutes: { type: integer }
+                        night_minutes: { type: integer }
+                        absence_minutes: { type: integer }
+                        anomaly_flags:
+                          type: array
+                          items: { type: string }
                   top_overtime_entries:
                     type: array
                     items:
@@ -4764,6 +4782,48 @@ paths:
                     type: array
                     items:
                       type: object
+                  staff_totals:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        staff_member:
+                          type: object
+                          nullable: true
+                          properties:
+                            id: { type: integer }
+                            first_name: { type: string }
+                            last_name: { type: string }
+                            display_name: { type: string, nullable: true }
+                            employee_code: { type: string, nullable: true }
+                        entries_total: { type: integer }
+                        worked_minutes_total: { type: integer }
+                        ordinary_minutes_total: { type: integer }
+                        overtime_minutes_total: { type: integer }
+                        night_minutes_total: { type: integer }
+                        absence_minutes_total: { type: integer }
+                        anomaly_entries_count: { type: integer }
+                        minimum_rest_violations_count: { type: integer }
+                        maximum_daily_hours_violations_count: { type: integer }
+                        pending_adjustments_count: { type: integer }
+                  facility_totals:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        facility:
+                          type: object
+                          nullable: true
+                          properties:
+                            id: { type: integer }
+                            name: { type: string }
+                        entries_total: { type: integer }
+                        worked_minutes_total: { type: integer }
+                        ordinary_minutes_total: { type: integer }
+                        overtime_minutes_total: { type: integer }
+                        night_minutes_total: { type: integer }
+                        absence_minutes_total: { type: integer }
+                        anomaly_entries_count: { type: integer }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -6967,13 +7027,24 @@ components:
         model: { type: string, example: rbac_plus_abac }
         summary: { type: string }
         minor_assignment_required_for_sensitive_minor_documents: { type: boolean }
+        privileged_role_codes:
+          type: array
+          items: { type: string }
+        unknown_classification_policy:
+          type: object
+          properties:
+            read: { type: string, example: deny }
+            download: { type: string, example: deny }
+            explanation: { type: string }
+          required: [read, download, explanation]
         document_rbac_permissions:
           type: object
           properties:
             read: { type: string, example: attachments.read }
+            download: { type: string, example: attachments.download }
             upload: { type: string, example: attachments.upload }
-          required: [read, upload]
-      required: [model, summary, minor_assignment_required_for_sensitive_minor_documents, document_rbac_permissions]
+          required: [read, download, upload]
+      required: [model, summary, minor_assignment_required_for_sensitive_minor_documents, privileged_role_codes, unknown_classification_policy, document_rbac_permissions]
     DocumentAccessMatrixClassification:
       type: object
       properties:
@@ -6985,8 +7056,13 @@ components:
         allowed_role_codes:
           type: array
           items: { type: string }
+        allowed_download_role_codes:
+          type: array
+          items: { type: string }
         assignment_required_for_minor_documents: { type: boolean }
-      required: [id, code, name, is_active, allowed_role_codes, assignment_required_for_minor_documents]
+        allowed_role_count: { type: integer }
+        allowed_download_role_count: { type: integer }
+      required: [id, code, name, is_active, allowed_role_codes, allowed_download_role_codes, assignment_required_for_minor_documents, allowed_role_count, allowed_download_role_count]
     DocumentAccessMatrixRole:
       type: object
       properties:
@@ -6995,17 +7071,26 @@ components:
         name: { type: string }
         description: { type: string, nullable: true }
         is_system: { type: boolean }
+        role_has_minor_assignment_bypass: { type: boolean }
         rbac:
           type: object
           properties:
             attachments_read: { type: boolean }
+            attachments_download: { type: boolean }
             attachments_upload: { type: boolean }
-          required: [attachments_read, attachments_upload]
+          required: [attachments_read, attachments_download, attachments_upload]
+        summary:
+          type: object
+          properties:
+            readable_classifications_count: { type: integer }
+            downloadable_classifications_count: { type: integer }
+            minor_assignment_rule: { type: string, example: bypass_for_privileged_role }
+          required: [readable_classifications_count, downloadable_classifications_count, minor_assignment_rule]
         document_access:
           type: array
           items:
             $ref: '#/components/schemas/DocumentAccessMatrixRoleRule'
-      required: [id, code, name, is_system, rbac, document_access]
+      required: [id, code, name, is_system, role_has_minor_assignment_bypass, rbac, summary, document_access]
     DocumentAccessMatrixRoleRule:
       type: object
       properties:
@@ -7013,11 +7098,16 @@ components:
         classification_name: { type: string }
         classification_active: { type: boolean }
         allowed_by_classification: { type: boolean }
+        allowed_by_download_classification: { type: boolean }
+        role_has_minor_assignment_bypass: { type: boolean }
         requires_minor_assignment: { type: boolean }
+        assignment_rule: { type: string, example: active_minor_assignment_required }
         effective_read_access: { type: boolean }
+        effective_download_access: { type: boolean }
         effective_read_rule: { type: string, example: allowed_if_minor_assignment_active }
+        effective_download_rule: { type: string, example: allowed_if_minor_assignment_active }
         notes: { type: string }
-      required: [classification_code, classification_name, classification_active, allowed_by_classification, requires_minor_assignment, effective_read_access, effective_read_rule, notes]
+      required: [classification_code, classification_name, classification_active, allowed_by_classification, allowed_by_download_classification, role_has_minor_assignment_bypass, requires_minor_assignment, assignment_rule, effective_read_access, effective_download_access, effective_read_rule, effective_download_rule, notes]
     DocumentIssuer:
       type: object
       properties:
@@ -8325,19 +8415,38 @@ components:
             attachments_download: { type: boolean }
             attachments_upload: { type: boolean }
           required: [attachments_read, attachments_download, attachments_upload]
+        meta:
+          type: object
+          properties:
+            privileged_role_codes:
+              type: array
+              items: { type: string }
+            role_has_minor_assignment_bypass: { type: boolean }
+            unknown_classification_policy:
+              type: object
+              properties:
+                read: { type: string, example: deny }
+                download: { type: string, example: deny }
+                explanation: { type: string }
+              required: [read, download, explanation]
+          required: [privileged_role_codes, role_has_minor_assignment_bypass, unknown_classification_policy]
         summary:
           type: object
           properties:
             can_read_any_documents: { type: boolean }
             can_download_any_documents: { type: boolean }
             can_upload_documents: { type: boolean }
+            readable_classifications_count: { type: integer }
+            downloadable_classifications_count: { type: integer }
+            role_has_minor_assignment_bypass: { type: boolean }
+            minor_assignment_rule: { type: string, example: active_minor_assignment_required }
             explanation: { type: string }
-          required: [can_read_any_documents, can_download_any_documents, can_upload_documents, explanation]
+          required: [can_read_any_documents, can_download_any_documents, can_upload_documents, readable_classifications_count, downloadable_classifications_count, role_has_minor_assignment_bypass, minor_assignment_rule, explanation]
         classifications:
           type: array
           items:
             $ref: '#/components/schemas/RoleDocumentPolicyClassification'
-      required: [role, rbac, summary, classifications]
+      required: [role, rbac, meta, summary, classifications]
     RoleDocumentPolicyClassification:
       type: object
       properties:
@@ -8348,11 +8457,13 @@ components:
         is_active: { type: boolean }
         assigned_to_role: { type: boolean }
         download_assigned_to_role: { type: boolean }
+        role_has_minor_assignment_bypass: { type: boolean }
         effective_read_access: { type: boolean }
         effective_download_access: { type: boolean }
         requires_minor_assignment: { type: boolean }
+        assignment_rule: { type: string, example: active_minor_assignment_required }
         notes: { type: string }
-      required: [id, code, name, is_active, assigned_to_role, download_assigned_to_role, effective_read_access, effective_download_access, requires_minor_assignment, notes]
+      required: [id, code, name, is_active, assigned_to_role, download_assigned_to_role, role_has_minor_assignment_bypass, effective_read_access, effective_download_access, requires_minor_assignment, assignment_rule, notes]
     DocumentType:
       type: object
       properties:

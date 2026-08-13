@@ -59,10 +59,16 @@ class CoordinatorDocumentPolicyAdminApiTest extends TestCase
 
     public function test_coordinator_can_read_document_access_matrix(): void
     {
-        $this->withToken($this->token)
+        $response = $this->withToken($this->token)
             ->getJson('/api/admin/document-access-matrix')
             ->assertOk()
             ->assertJsonPath('meta.model', 'rbac_plus_abac');
+
+        $coordinator = collect($response->json('roles'))->firstWhere('code', 'COORDINATORE');
+
+        $this->assertNotNull($coordinator);
+        $this->assertTrue((bool) $coordinator['role_has_minor_assignment_bypass']);
+        $this->assertSame('bypass_for_privileged_role', $coordinator['summary']['minor_assignment_rule']);
     }
 
     public function test_coordinator_can_update_role_document_policy(): void
@@ -85,6 +91,9 @@ class CoordinatorDocumentPolicyAdminApiTest extends TestCase
 
         $this->assertContains('clinical', $assigned);
         $clinical = collect($response->json('classifications'))->firstWhere('code', 'clinical');
+        $this->assertTrue((bool) $response->json('meta.role_has_minor_assignment_bypass'));
+        $this->assertFalse((bool) ($clinical['requires_minor_assignment'] ?? true));
+        $this->assertSame('assignment_not_required_for_privileged_role', $clinical['assignment_rule']);
         $this->assertFalse((bool) ($clinical['download_assigned_to_role'] ?? true));
     }
 

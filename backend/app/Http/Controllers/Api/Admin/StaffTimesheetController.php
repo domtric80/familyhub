@@ -258,6 +258,61 @@ class StaffTimesheetController extends Controller
             ->where('status', StaffTimesheetAdjustment::STATUS_PENDING)
             ->values();
 
+        $staffTotals = $entries
+            ->groupBy('staff_member_id')
+            ->map(function ($rows, $staffMemberId) use ($pendingAdjustments) {
+                /** @var \Illuminate\Support\Collection<int, StaffTimesheetEntry> $rows */
+                $first = $rows->first();
+                $staffPendingAdjustments = $pendingAdjustments
+                    ->filter(fn (StaffTimesheetAdjustment $adjustment) => (int) ($adjustment->timesheetEntry?->staff_member_id ?? 0) === (int) $staffMemberId)
+                    ->count();
+
+                return [
+                    'staff_member' => $first?->staffMember ? [
+                        'id' => $first->staffMember->id,
+                        'first_name' => $first->staffMember->first_name,
+                        'last_name' => $first->staffMember->last_name,
+                        'display_name' => $first->staffMember->display_name,
+                        'employee_code' => $first->staffMember->employee_code,
+                    ] : null,
+                    'entries_total' => $rows->count(),
+                    'worked_minutes_total' => (int) $rows->sum('worked_minutes'),
+                    'ordinary_minutes_total' => (int) $rows->sum('ordinary_minutes'),
+                    'overtime_minutes_total' => (int) $rows->sum('overtime_minutes'),
+                    'night_minutes_total' => (int) $rows->sum('night_minutes'),
+                    'absence_minutes_total' => (int) $rows->sum('absence_minutes'),
+                    'anomaly_entries_count' => $rows->filter(fn (StaffTimesheetEntry $entry) => ! empty($entry->anomaly_flags_json))->count(),
+                    'minimum_rest_violations_count' => $rows->filter(fn (StaffTimesheetEntry $entry) => in_array('minimum_rest_violation', $entry->anomaly_flags_json ?? [], true))->count(),
+                    'maximum_daily_hours_violations_count' => $rows->filter(fn (StaffTimesheetEntry $entry) => in_array('maximum_daily_hours_exceeded', $entry->anomaly_flags_json ?? [], true))->count(),
+                    'pending_adjustments_count' => $staffPendingAdjustments,
+                ];
+            })
+            ->sortByDesc('worked_minutes_total')
+            ->values();
+
+        $facilityTotals = $entries
+            ->groupBy('facility_id')
+            ->map(function ($rows) {
+                /** @var \Illuminate\Support\Collection<int, StaffTimesheetEntry> $rows */
+                $first = $rows->first();
+
+                return [
+                    'facility' => $first?->facility ? [
+                        'id' => $first->facility->id,
+                        'name' => $first->facility->name,
+                    ] : null,
+                    'entries_total' => $rows->count(),
+                    'worked_minutes_total' => (int) $rows->sum('worked_minutes'),
+                    'ordinary_minutes_total' => (int) $rows->sum('ordinary_minutes'),
+                    'overtime_minutes_total' => (int) $rows->sum('overtime_minutes'),
+                    'night_minutes_total' => (int) $rows->sum('night_minutes'),
+                    'absence_minutes_total' => (int) $rows->sum('absence_minutes'),
+                    'anomaly_entries_count' => $rows->filter(fn (StaffTimesheetEntry $entry) => ! empty($entry->anomaly_flags_json))->count(),
+                ];
+            })
+            ->sortByDesc('worked_minutes_total')
+            ->values();
+
         return response()->json([
             'summary' => [
                 'entries_total' => $entries->count(),
@@ -270,16 +325,24 @@ class StaffTimesheetController extends Controller
                 )->count(),
                 'open_anomalies_count' => $openAnomalies->count(),
                 'overtime_minutes_total' => (int) $entries->sum('overtime_minutes'),
+                'night_minutes_total' => (int) $entries->sum('night_minutes'),
                 'absence_reconciliations_count' => $absenceReconciliations->count(),
                 'absence_reconciled_minutes_total' => (int) $absenceReconciliations->sum('delta_minutes'),
                 'pending_adjustments_count' => $pendingAdjustments->count(),
+                'minimum_rest_violations_count' => $entries->filter(fn (StaffTimesheetEntry $entry) => in_array('minimum_rest_violation', $entry->anomaly_flags_json ?? [], true))->count(),
+                'maximum_daily_hours_violations_count' => $entries->filter(fn (StaffTimesheetEntry $entry) => in_array('maximum_daily_hours_exceeded', $entry->anomaly_flags_json ?? [], true))->count(),
+                'weekly_hours_threshold_exceeded_count' => $entries->filter(fn (StaffTimesheetEntry $entry) => in_array('weekly_hours_threshold_exceeded', $entry->anomaly_flags_json ?? [], true))->count(),
+                'staff_with_open_anomalies_count' => $openAnomalies->pluck('staff_member_id')->filter()->unique()->count(),
             ],
             'open_anomalies' => $openAnomalies->take(8)->map(fn (StaffTimesheetEntry $entry) => [
                 'id' => $entry->id,
                 'work_date' => $entry->work_date?->toDateString(),
                 'status' => $entry->status,
+                'actual_start' => $entry->actual_starts_at?->toIso8601String(),
+                'actual_end' => $entry->actual_ends_at?->toIso8601String(),
                 'variance_minutes' => $entry->variance_minutes,
                 'overtime_minutes' => $entry->overtime_minutes,
+                'night_minutes' => $entry->night_minutes,
                 'absence_minutes' => $entry->absence_minutes,
                 'anomaly_flags' => array_values($entry->anomaly_flags_json ?? []),
                 'facility' => $entry->facility ? [
@@ -340,6 +403,8 @@ class StaffTimesheetController extends Controller
                     ] : null,
                 ] : null,
             ])->values(),
+            'staff_totals' => $staffTotals,
+            'facility_totals' => $facilityTotals,
             'pending_adjustments' => $pendingAdjustments->take(8)->map(fn (StaffTimesheetAdjustment $adjustment) => [
                 'id' => $adjustment->id,
                 'timesheet_entry_id' => $adjustment->timesheet_entry_id,
