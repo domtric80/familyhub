@@ -19,17 +19,22 @@ class AuditLogController extends Controller
 
         $perPage = max(1, min(200, $request->integer('per_page', 50)));
 
-        return response()->json($query->paginate($perPage));
+        $paginator = $query->paginate($perPage);
+        $paginator->setCollection(
+            $paginator->getCollection()->map(fn (AuditLog $log): array => $this->serializeAuditLog($log))
+        );
+
+        return response()->json($paginator);
     }
 
     public function show(AuditLog $auditLog): JsonResponse
     {
         return response()->json(
-            $auditLog->load([
+            $this->serializeAuditLog($auditLog->load([
                 'actorUser:id,first_name,last_name,email',
                 'facility:id,name',
-                'minor:id,internal_code,first_name,last_name',
-            ])
+                'minor:id,internal_code,preferred_name,first_name,last_name',
+            ]))
         );
     }
 
@@ -55,7 +60,7 @@ class AuditLogController extends Controller
                 'resource_label',
                 'struttura',
                 'minore_codice',
-                'minore_nome',
+                'minore_pseudonimo',
             ], ';');
 
             $query->chunk(500, function ($logs) use ($handle): void {
@@ -72,7 +77,7 @@ class AuditLogController extends Controller
                         $log->resource_label,
                         $log->facility?->name,
                         $log->minor?->internal_code,
-                        $log->minor ? trim($log->minor->first_name.' '.$log->minor->last_name) : null,
+                        $log->minor?->publicDisplayName(),
                     ], ';');
                 }
             });
@@ -216,10 +221,39 @@ class AuditLogController extends Controller
             ->with([
                 'actorUser:id,first_name,last_name,email',
                 'facility:id,name',
-                'minor:id,internal_code,first_name,last_name',
+                'minor:id,internal_code,preferred_name,first_name,last_name',
             ])
             ->orderByDesc('occurred_at_utc')
             ->orderByDesc('id');
+    }
+
+    private function serializeAuditLog(AuditLog $log): array
+    {
+        return [
+            'id' => $log->id,
+            'facility_id' => $log->facility_id,
+            'minor_id' => $log->minor_id,
+            'actor_user_id' => $log->actor_user_id,
+            'actor_display_name' => $log->actor_display_name,
+            'actor_role_name' => $log->actor_role_name,
+            'action' => $log->action,
+            'resource_type' => $log->resource_type,
+            'resource_id' => $log->resource_id,
+            'resource_label' => $log->resource_label,
+            'operation_summary' => $log->operation_summary,
+            'ip_address' => $log->ip_address,
+            'user_agent' => $log->user_agent,
+            'old_values_json' => $log->old_values_json,
+            'new_values_json' => $log->new_values_json,
+            'occurred_at_utc' => optional($log->occurred_at_utc)?->toISOString(),
+            'actor_user' => $log->actorUser,
+            'facility' => $log->facility,
+            'minor' => $log->minor ? [
+                'id' => $log->minor->id,
+                'internal_code' => $log->minor->internal_code,
+                'public_display_name' => $log->minor->publicDisplayName(),
+            ] : null,
+        ];
     }
 
     private function applyFilters(Builder $query, Request $request): void

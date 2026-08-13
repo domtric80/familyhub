@@ -62,6 +62,7 @@ import PianificazionePage from './pages/turni/PianificazionePage'
 import TimesheetPage from './pages/turni/TimesheetPage'
 import ModelliTurnoPage from './pages/turni/ModelliTurnoPage'
 import MiaSettimanaPage from './pages/turni/MiaSettimanaPage'
+import CalendarioMensileStrutturePage from './pages/turni/CalendarioMensileStrutturePage'
 import MiePresentePage from './pages/turni/MiePresentePage'
 import VerificaTimesheetPage from './pages/turni/VerificaTimesheetPage'
 import TimesheetLockPage from './pages/turni/TimesheetLockPage'
@@ -102,6 +103,7 @@ function AppRoutes() {
         <Route path='/turni/timesheet' element={<TimesheetPage />} />
         <Route path='/turni/modelli' element={<ModelliTurnoPage />} />
         <Route path='/turni/mia-settimana' element={<MiaSettimanaPage />} />
+        <Route path='/turni/calendario-mensile' element={<CalendarioMensileStrutturePage />} />
         <Route path='/turni/presenze' element={<MiePresentePage />} />
         <Route path='/turni/verifica' element={<VerificaTimesheetPage />} />
         <Route path='/turni/dashboard' element={<TimesheetCoordDashboardPage />} />

@@ -4,16 +4,44 @@ Tutte le modifiche rilevanti di FamilyHub vengono tracciate in questo file.
 
 Formato ispirato a Keep a Changelog e Semantic Versioning.
 
+## [1.3.0] - 2026-08-13
+
+### Added
+- completato il blocco operativo `Turni / Timesheet` con calendario mensile struttura, sostituzioni turno, chiusura e firma operatore, gestione scostamenti e anomalie
+- introdotto il modello relazionale `staff_shift_substitutions` con endpoint amministrativi dedicati per attivare e chiudere sostituzioni sui turni pianificati
+- aggiunte nuove guide operative per `Timesheet` e `Policy documentale ABAC`
+- aggiunti handoff UX/API consolidati per timesheet, ABAC e chiusura del modulo Minori
+
+### Changed
+- chiuso funzionalmente il modulo `Minori` lato backend con dashboard riepilogativa, trend PEI, storico, audit pseudonimizzato e narrativa protetta
+- aggiornati i contratti OpenAPI per modulo Minori, audit, turni, sostituzioni e policy documentale
+- riallineate le pagine frontend di audit, dettaglio minore, pianificazione turni e mia settimana al comportamento reale del backend
+- estesa la documentazione operativa e di rilascio per il nuovo assetto `Minori + Turni + ABAC`
+
+### Security
+- cifrati a riposo i campi sensibili del profilo minore e delle diagnosi cliniche
+- oscurati nell'audit payload i campi narrativi e clinici sensibili
+- introdotto l'uso del pseudonimo pubblico del minore nei log e negli export audit non strettamente clinici
+- resi più robusti preview e download documentali tramite streaming controllato e audit separato
+
+### Fixed
+- stabilizzata la timeline progressiva PEI e il riepilogo dashboard del minore
+- corretti i flussi di preview/download documenti nei test e nei casi con metadata storage non affidabili
+- riallineate le viste timesheet/frontend ai nuovi campi di sostituzione, anomalie e stato operativo
+
+### Notes
+- nessun reset dati eseguito durante questa release
+- verifiche eseguite: `MinorApiTest`, `MinorPermissionAlignmentApiTest`, `MinorNoteApiTest`, `AuditApiTest`, `StaffShiftApiTest`
 ## [1.2.2] - 2026-08-10
 
 ### Changed
-- riallineata la UX amministrativa di geografia con breadcrumb navigabili e ripristino dello stato di navigazione tra nazioni, regioni, province e città
+- riallineata la UX amministrativa di geografia con breadcrumb navigabili e ripristino dello stato di navigazione tra nazioni, regioni, province e cittÃ 
 - completato il CRUD frontend della pagina `Organizzazioni` con modale coerente al comportamento reale del backend
 - documentati i fix UX/backend del blocco geografia con handoff dedicati e note tecniche di supporto
 
 ### Fixed
-- risolto il crash di memoria nella pagina `Educatori`: il campo `Città nascita` non carica più l'intero archivio città ma usa ricerca asincrona con risultati limitati
-- corretto il contratto lookup città: `GET /api/lookups/cities` ora restituisce `[]` senza filtri e supporta ricerca controllata con `q`, `id`, `limit` e filtri geografici
+- risolto il crash di memoria nella pagina `Educatori`: il campo `CittÃ  nascita` non carica piÃ¹ l'intero archivio cittÃ  ma usa ricerca asincrona con risultati limitati
+- corretto il contratto lookup cittÃ : `GET /api/lookups/cities` ora restituisce `[]` senza filtri e supporta ricerca controllata con `q`, `id`, `limit` e filtri geografici
 - corretto l'endpoint amministrativo nazioni e le liste gerarchiche regioni/province per restituire viste flat coerenti con il frontend
 - risolto il problema di encoding caratteri speciali in `MessaggioDetailPage`
 - corretta la validazione frontend nella pagina `Organizzazioni` che poteva mostrare errori di campo obbligatorio anche con input compilato
@@ -29,18 +57,18 @@ Formato ispirato a Keep a Changelog e Semantic Versioning.
 
 ### Changed
 - allineata la configurazione seed di default dei provider geografia per nuove installazioni
-- il provider `ISTAT` ora nasce preconfigurato in modalità `remote_file` con URL CSV ufficiale, senza richiedere setup manuale iniziale
+- il provider `ISTAT` ora nasce preconfigurato in modalitÃ  `remote_file` con URL CSV ufficiale, senza richiedere setup manuale iniziale
 - confermata come configurazione standard la coppia di provider predefiniti `GEONAMES` + `ISTAT`
 
 ### Fixed
-- evitato il caso in cui una nuova installazione trovasse `ISTAT` attivo ma non realmente utilizzabile perché inizializzato come `local_file` senza `source_path`
+- evitato il caso in cui una nuova installazione trovasse `ISTAT` attivo ma non realmente utilizzabile perchÃ© inizializzato come `local_file` senza `source_path`
 - resa coerente la prima esperienza di import geografico per Italia e nazioni estere subito dopo il bootstrap
 
 ## [1.2.0] - 2026-08-09
 
 ### Added
 - export presenze `PDF` per il modulo `Turni / Timesheet` con gli stessi preset amministrativi del CSV (`payroll`, `review`, `labor_consultant`)
-- generazione server-side del report PDF timesheet con audit dedicato sull’export
+- generazione server-side del report PDF timesheet con audit dedicato sullâ€™export
 - classificazione ABAC dei thread di `Messaggistica interna` con supporto ai codici `internal`, `restricted`, `clinical`, `judicial`
 - filtro backend/frontend per `classification_code` su lista conversazioni e opzioni partecipanti
 - handoff UX/API dedicati per export PDF timesheet e messaggistica classificata
@@ -53,16 +81,16 @@ Formato ispirato a Keep a Changelog e Semantic Versioning.
 
 ### Security
 - la messaggistica interna ora riusa la stessa matrice ABAC dei documenti sensibili per impedire apertura e creazione thread non coerenti con ruolo, struttura e minore
-- filtro partecipanti lato backend irrigidito: un utente non autorizzato alla classificazione del thread non può essere selezionato né incluso nel payload finale
+- filtro partecipanti lato backend irrigidito: un utente non autorizzato alla classificazione del thread non puÃ² essere selezionato nÃ© incluso nel payload finale
 
 ### Fixed
 - ripristinato il percorso PDF presenze precedentemente lasciato sospeso lato UX con backend ora disponibile
-- mantenuta retrocompatibilità sulla creazione thread: in assenza di `classification_code` il backend applica automaticamente `internal`
+- mantenuta retrocompatibilitÃ  sulla creazione thread: in assenza di `classification_code` il backend applica automaticamente `internal`
 
 ## [1.1.1] - 2026-08-08
 
 ### Security
-- bonifica completa delle dipendenze frontend e backend con audit `npm` e `composer` riportati a zero vulnerabilità note
+- bonifica completa delle dipendenze frontend e backend con audit `npm` e `composer` riportati a zero vulnerabilitÃ  note
 - rimozione della dipendenza `xlsx` dal frontend per eliminare una superficie di attacco non necessaria nella preview browser
 - introduzione di overrides frontend su dipendenze transitive vulnerabili (`brace-expansion`, `nanoid`, `postcss`)
 - separazione esplicita tra permesso RBAC di preview (`attachments.read`) e permesso RBAC di download (`attachments.download`)
@@ -70,7 +98,7 @@ Formato ispirato a Keep a Changelog e Semantic Versioning.
 ### Changed
 - aggiornati pacchetti frontend critici (`react-router-dom`, `axios`, `react-hook-form`, `eslint`, `typescript-eslint` e correlati)
 - aggiornati pacchetti backend/transitivi Laravel con riallineamento di `guzzlehttp/guzzle`, `guzzlehttp/psr7`, `league/commonmark` e dipendenze correlate
-- anteprima documenti browser limitata a formati sicuri/gestibili inline; i fogli Excel restano scaricabili ma non più renderizzati lato client
+- anteprima documenti browser limitata a formati sicuri/gestibili inline; i fogli Excel restano scaricabili ma non piÃ¹ renderizzati lato client
 
 ### Fixed
 - eliminato il percorso di preview XLS/XLSX che dipendeva da librerie con advisory aperti
@@ -104,7 +132,7 @@ Formato ispirato a Keep a Changelog e Semantic Versioning.
 - piattaforma gestionale FamilyHub con backend Laravel e frontend React/Vite
 - autenticazione con MFA, session timeout e auditing di sicurezza
 - RBAC applicativo e ABAC documentale per i dati sensibili
-- moduli operativi per minori, uscite, attività, avvicinamenti, diario educativo, messaggistica interna e turni/timesheet
+- moduli operativi per minori, uscite, attivitÃ , avvicinamenti, diario educativo, messaggistica interna e turni/timesheet
 - anagrafiche amministrative e geografiche con provider configurabili
 - storage documentale compatibile S3 con supporto MinIO
 - stack Docker locale e stack Docker production con immagini immutabili
@@ -119,3 +147,4 @@ Formato ispirato a Keep a Changelog e Semantic Versioning.
 - questa release definisce la baseline stabile `v1.0.0`
 - da questa versione in avanti il progetto segue versionamento `major.minor.patch`
 - le future release devono avere release notes dedicate in `docs/releases/`
+

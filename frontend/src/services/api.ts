@@ -38,8 +38,8 @@ import type {
   DocumentPolicy,
   DocumentPolicyWrite,
   StaffShiftTemplate, StaffShiftTemplateWrite,
-  StaffShiftAssignment, StaffShiftAssignmentWrite,
-  StaffShiftWeekView, StaffShiftMyWeek,
+  StaffShiftAssignment, StaffShiftAssignmentWrite, StaffShiftSubstitution, StaffShiftSubstitutionWrite, ShiftExceptionsResponse, ShiftSubmitResponse,
+  StaffShiftWeekView, StaffShiftMonthView, StaffShiftMyWeek, StaffShiftMyMonth,
   AttendanceEvent, AttendanceEventType,
   TimesheetEntry, TimesheetEntryFilters, TimesheetAdjustmentWrite, TimesheetAdjustment, TimesheetAdjustmentQueueFilters, TimesheetAdjustmentQueueKpis,
   TimesheetCoordinatorDashboardResponse,
@@ -1163,8 +1163,22 @@ export const shiftAssignmentsApi = {
   delete: (id: number) => http.delete(`/admin/staff-shifts/${id}`),
   weekView: (params: { facility_id: number; week_start: string }) =>
     http.get<StaffShiftWeekView>('/admin/staff-shifts/week', { params }).then((r) => r.data),
+  monthView: (params: { facility_id: number; year: number; month: number; staff_member_id?: number }) =>
+    http.get<StaffShiftMonthView>('/admin/staff-shifts/month', { params }).then((r) => r.data),
+  exceptions: (params: { facility_id: number; date_from?: string; date_to?: string; types?: string[] }) =>
+    http.get<ShiftExceptionsResponse>('/admin/staff-shifts/exceptions', { params }).then((r) => r.data),
   myWeek: (params?: { week_start?: string }) =>
     http.get<StaffShiftMyWeek>('/staff-shifts/my-week', { params }).then((r) => r.data),
+  myMonth: (params: { year: number; month: number }) =>
+    http.get<StaffShiftMyMonth>('/staff-shifts/my-month', { params }).then((r) => r.data),
+  submitMyShift: (shiftAssignmentId: number, data?: { notes?: string }) =>
+    http.post<ShiftSubmitResponse>(`/staff-shifts/${shiftAssignmentId}/submit`, data ?? {}).then((r) => r.data),
+  substitutions: (shiftAssignmentId: number) =>
+    http.get<StaffShiftSubstitution[]>(`/admin/staff-shifts/${shiftAssignmentId}/substitutions`).then((r) => r.data),
+  createSubstitution: (shiftAssignmentId: number, data: StaffShiftSubstitutionWrite) =>
+    http.post<StaffShiftSubstitution>(`/admin/staff-shifts/${shiftAssignmentId}/substitutions`, data).then((r) => r.data),
+  cancelSubstitution: (shiftAssignmentId: number, substitutionId: number) =>
+    http.post<StaffShiftSubstitution>(`/admin/staff-shifts/${shiftAssignmentId}/substitutions/${substitutionId}/cancel`).then((r) => r.data),
 }
 
 function normalizeAttendanceEvent(event: any): AttendanceEvent {

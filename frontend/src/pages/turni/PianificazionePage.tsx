@@ -3,9 +3,9 @@ import {
   Card, CardBody, Button, Badge,
   Modal, ModalHeader, ModalBody, ModalFooter,
   Form, FormGroup, Label, Input, Alert,
-  Row, Col,
+  Row, Col, Nav, NavItem, NavLink, TabContent, TabPane,
 } from 'reactstrap'
-import { ChevronLeft, ChevronRight, Plus, Trash2, Info, AlertTriangle } from 'react-feather'
+import { ChevronLeft, ChevronRight, Plus, Trash2, Info, AlertTriangle, RefreshCw } from 'react-feather'
 import { toast } from 'react-toastify'
 import {
   shiftAssignmentsApi, shiftTemplatesApi, staffMemberApi, facilityApi, apiError,
@@ -13,6 +13,7 @@ import {
 import type {
   StaffShiftWeekView, ShiftWeekBlock, StaffShiftTemplate,
   StaffShiftAssignmentWrite, ShiftAssignmentStatus, Facility,
+  ShiftExceptionsResponse, ShiftExceptionItem, ShiftExceptionSeverity,
 } from '../../types'
 import InfoDrawer from '../../components/common/InfoDrawer'
 
@@ -66,7 +67,199 @@ const EMPTY_FORM: StaffShiftAssignmentWrite = {
   notes: '',
 }
 
+const SEVERITY_CLS: Record<ShiftExceptionSeverity, string> = {
+  info:     'badge-light-info',
+  warning:  'badge-light-warning',
+  critical: 'badge-light-danger',
+}
+const SEVERITY_ORDER: Record<ShiftExceptionSeverity, number> = { critical: 0, warning: 1, info: 2 }
+const EXCEPTION_TYPE_LABELS: Record<string, string> = {
+  planned_gap:        'Gap pianificato',
+  actual_gap:         'Gap effettivo',
+  timesheet_anomaly:  'Anomalia timesheet',
+  active_substitution:'Sostituzione attiva',
+}
+
+function ScostamentiPanel({ facilityId }: { facilityId: number }) {
+  const [exceptions, setExceptions] = useState<ShiftExceptionsResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [dateFrom, setDateFrom] = useState(() => new Date().toISOString().slice(0, 10))
+  const [dateTo, setDateTo] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0, 10)
+  })
+  const [filterSeverity, setFilterSeverity] = useState<string>('')
+  const [filterType, setFilterType] = useState<string>('')
+
+  const load = () => {
+    if (!facilityId) return
+    setLoading(true); setError(null)
+    shiftAssignmentsApi.exceptions({ facility_id: facilityId, date_from: dateFrom, date_to: dateTo })
+      .then(setExceptions)
+      .catch((e) => setError(apiError(e).message ?? 'Errore caricamento eccezioni'))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { load() }, [facilityId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const s = exceptions?.summary
+  const items = (exceptions?.items ?? [])
+    .filter((i: ShiftExceptionItem) => !filterSeverity || i.severity === filterSeverity)
+    .filter((i: ShiftExceptionItem) => !filterType || i.type === filterType)
+    .sort((a: ShiftExceptionItem, b: ShiftExceptionItem) =>
+      SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] ||
+      (a.shift_date ?? '').localeCompare(b.shift_date ?? '')
+    )
+
+  return (
+    <div>
+      {/* KPI riepilogo */}
+      {s && (
+        <Row className='g-2 mb-3'>
+          <Col sm='6' md='2'>
+            <div className='card mb-0'><div className='card-body py-2 text-center'>
+              <div className='small text-muted'>Totale</div>
+              <div className='fw-bold h5 mb-0'>{s.items_total}</div>
+            </div></div>
+          </Col>
+          <Col sm='6' md='2'>
+            <div className='card mb-0'><div className='card-body py-2 text-center'>
+              <div className='small text-muted'>Gap pianif.</div>
+              <div className='fw-bold h5 mb-0' style={{ color: s.planned_gap_count > 0 ? '#ff9f43' : '#333' }}>{s.planned_gap_count}</div>
+            </div></div>
+          </Col>
+          <Col sm='6' md='2'>
+            <div className='card mb-0'><div className='card-body py-2 text-center'>
+              <div className='small text-muted'>Gap effett.</div>
+              <div className='fw-bold h5 mb-0' style={{ color: s.actual_gap_count > 0 ? '#e74c3c' : '#333' }}>{s.actual_gap_count}</div>
+            </div></div>
+          </Col>
+          <Col sm='6' md='2'>
+            <div className='card mb-0'><div className='card-body py-2 text-center'>
+              <div className='small text-muted'>Anomalie</div>
+              <div className='fw-bold h5 mb-0' style={{ color: s.timesheet_anomaly_count > 0 ? '#e74c3c' : '#333' }}>{s.timesheet_anomaly_count}</div>
+            </div></div>
+          </Col>
+          <Col sm='6' md='2'>
+            <div className='card mb-0'><div className='card-body py-2 text-center'>
+              <div className='small text-muted'>Sostituzioni</div>
+              <div className='fw-bold h5 mb-0'>{s.active_substitution_count}</div>
+            </div></div>
+          </Col>
+        </Row>
+      )}
+
+      {/* Filtri */}
+      <Row className='g-2 mb-3 align-items-end'>
+        <Col md='3'>
+          <label className='small fw-semibold'>Da</label>
+          <Input type='date' bsSize='sm' value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+        </Col>
+        <Col md='3'>
+          <label className='small fw-semibold'>A</label>
+          <Input type='date' bsSize='sm' value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+        </Col>
+        <Col md='2'>
+          <label className='small fw-semibold'>Severità</label>
+          <Input type='select' bsSize='sm' value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value)}>
+            <option value=''>Tutte</option>
+            <option value='critical'>Critica</option>
+            <option value='warning'>Warning</option>
+            <option value='info'>Info</option>
+          </Input>
+        </Col>
+        <Col md='2'>
+          <label className='small fw-semibold'>Tipo</label>
+          <Input type='select' bsSize='sm' value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+            <option value=''>Tutti</option>
+            <option value='planned_gap'>Gap pianificato</option>
+            <option value='actual_gap'>Gap effettivo</option>
+            <option value='timesheet_anomaly'>Anomalia</option>
+            <option value='active_substitution'>Sostituzione</option>
+          </Input>
+        </Col>
+        <Col md='2'>
+          <Button size='sm' color='primary' className='d-flex align-items-center gap-1' onClick={load} disabled={loading}>
+            <RefreshCw size={13} /> Aggiorna
+          </Button>
+        </Col>
+      </Row>
+
+      {error && <div className='alert alert-danger'>{error}</div>}
+      {loading && <div className='text-center py-5'><div className='loader' /></div>}
+
+      {!loading && items.length === 0 && (
+        <div className='text-center py-5 text-muted'>
+          <AlertTriangle size={32} className='mb-2' />
+          <p>Nessuna eccezione trovata per il periodo selezionato.</p>
+        </div>
+      )}
+
+      {!loading && items.length > 0 && (
+        <div className='table-responsive'>
+          <table className='table table-hover mb-0'>
+            <thead className='table-light'>
+              <tr>
+                <th style={{ width: 90 }}>Severità</th>
+                <th>Data</th>
+                <th>Turno</th>
+                <th>Tipo</th>
+                <th>Messaggio</th>
+                <th>Copertura</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item: ShiftExceptionItem, i: number) => (
+                <tr key={i}>
+                  <td>
+                    <span className={`badge ${SEVERITY_CLS[item.severity]}`}>
+                      {item.severity === 'critical' ? '🔴' : item.severity === 'warning' ? '🟡' : '🔵'} {item.severity}
+                    </span>
+                  </td>
+                  <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                    {item.shift_date ? new Date(item.shift_date + 'T12:00:00').toLocaleDateString('it-IT') : '—'}
+                  </td>
+                  <td style={{ fontSize: 12 }}>{item.shift_template?.name ?? '—'}</td>
+                  <td>
+                    <span className='badge badge-light-secondary' style={{ fontSize: 11 }}>
+                      {EXCEPTION_TYPE_LABELS[item.type] ?? item.type}
+                    </span>
+                  </td>
+                  <td style={{ fontSize: 12 }}>{item.message}</td>
+                  <td style={{ fontSize: 11 }}>
+                    {item.coverage ? (
+                      <div>
+                        <div>Pianif.: {item.coverage.assigned_count}/{item.coverage.minimum_staff_required}</div>
+                        {item.coverage.planned_gap > 0 && (
+                          <div className='text-warning'>Gap pian.: −{item.coverage.planned_gap}</div>
+                        )}
+                        {item.coverage.actual_gap > 0 && (
+                          <div className='text-danger'>Gap eff.: −{item.coverage.actual_gap}</div>
+                        )}
+                      </div>
+                    ) : item.active_substitution ? (
+                      <span className='badge badge-light-warning'>Sostituzione</span>
+                    ) : '—'}
+                    {item.anomaly_flags?.length > 0 && (
+                      <div className='mt-1'>
+                        {item.anomaly_flags.map((f) => (
+                          <span key={f} className='badge badge-light-danger me-1' style={{ fontSize: 9 }}>{f}</span>
+                        ))}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function PianificazionePage() {
+  const [activeTab, setActiveTab] = useState<'week' | 'exceptions'>('week')
   const [weekStart, setWeekStart] = useState<Date>(() => getMonday(new Date()))
   const [facilityId, setFacilityId] = useState<number>(0)
   const [facilities, setFacilities] = useState<Facility[]>([])
@@ -162,7 +355,7 @@ export default function PianificazionePage() {
     <div className='container-fluid py-3'>
       {/* Intestazione */}
       <div className='d-flex justify-content-between align-items-center mb-3'>
-        <h5 className='fw-bold mb-0' style={{ color: '#7366ff' }}>Pianificazione settimanale</h5>
+        <h5 className='fw-bold mb-0' style={{ color: '#7366ff' }}>Pianificazione</h5>
         <div className='d-flex gap-2'>
           <Button size='sm' color='outline-secondary' className='d-flex align-items-center gap-1'
             onClick={() => setInfoOpen(true)}>
@@ -170,6 +363,24 @@ export default function PianificazionePage() {
           </Button>
         </div>
       </div>
+
+      {/* Tab navigazione */}
+      <Nav tabs className='mb-3'>
+        <NavItem>
+          <NavLink active={activeTab === 'week'} onClick={() => setActiveTab('week')} style={{ cursor: 'pointer' }}>
+            Vista settimanale
+          </NavLink>
+        </NavItem>
+        <NavItem>
+          <NavLink active={activeTab === 'exceptions'} onClick={() => setActiveTab('exceptions')} style={{ cursor: 'pointer' }}>
+            Scostamenti e anomalie
+          </NavLink>
+        </NavItem>
+      </Nav>
+
+      <TabContent activeTab={activeTab}>
+      {/* ── Tab: Vista settimanale ── */}
+      <TabPane tabId='week'>
 
       {/* Controlli */}
       <Card className='mb-3'>
@@ -265,18 +476,38 @@ export default function PianificazionePage() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                         {block.assignments.map((a) => (
                           <div key={a.id} style={{
-                            background: 'rgba(255,255,255,0.7)', borderRadius: 4,
-                            padding: '3px 6px', fontSize: 11,
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            background: a.has_active_substitution ? '#fff8e1' : 'rgba(255,255,255,0.7)',
+                            borderRadius: 4, padding: '3px 6px', fontSize: 11,
+                            border: a.has_active_substitution ? '1px solid #ff9f43' : 'none',
                           }}>
-                            <span>{staffName(a.staff_member)}</span>
-                            <button
-                              onClick={() => handleDelete(a.id)}
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#e74c3c' }}
-                              title='Rimuovi assegnazione'
-                            >
-                              <Trash2 size={10} />
-                            </button>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div>
+                                {/* Operatore pianificato */}
+                                <span style={{ color: a.has_active_substitution ? '#888' : 'inherit' }}>
+                                  {staffName(a.staff_member)}
+                                </span>
+                                {/* Operatore effettivo (sostituto) */}
+                                {a.has_active_substitution && a.effective_staff_member && (
+                                  <div style={{ color: '#b76e00', fontWeight: 600 }}>
+                                    ↳ {staffName(a.effective_staff_member)}
+                                    <span className='badge badge-light-warning ms-1' style={{ fontSize: 9 }}>Sostituito</span>
+                                  </div>
+                                )}
+                                {/* Anomalia */}
+                                {a.actual?.has_anomaly && (
+                                  <span className='badge badge-light-danger ms-1' style={{ fontSize: 9 }}>
+                                    <AlertTriangle size={8} /> Anomalia
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => handleDelete(a.id)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#e74c3c' }}
+                                title='Rimuovi assegnazione'
+                              >
+                                <Trash2 size={10} />
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -314,6 +545,30 @@ export default function PianificazionePage() {
           </div>
         </div>
       )}
+
+      </TabPane>
+
+      {/* ── Tab: Scostamenti e anomalie ── */}
+      <TabPane tabId='exceptions'>
+        <Card className='mb-3'>
+          <CardBody className='py-2'>
+            <Row className='g-2 align-items-center'>
+              <Col md='3'>
+                <Input type='select' bsSize='sm' value={facilityId}
+                  onChange={(e) => setFacilityId(Number(e.target.value))}>
+                  <option value='0'>Seleziona struttura…</option>
+                  {facilities.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                </Input>
+              </Col>
+            </Row>
+          </CardBody>
+        </Card>
+        {!facilityId
+          ? <div className='alert alert-light text-center'>Seleziona una struttura per visualizzare gli scostamenti.</div>
+          : <ScostamentiPanel facilityId={facilityId} />
+        }
+      </TabPane>
+      </TabContent>
 
       {/* Modal nuova assegnazione */}
       <Modal isOpen={modal} toggle={() => setModal(false)}>

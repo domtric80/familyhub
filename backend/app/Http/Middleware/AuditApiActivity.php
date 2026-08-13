@@ -51,7 +51,10 @@ class AuditApiActivity
             'password_confirmation',
             'token',
             'access_token',
+            'family_background',
+            'life_history',
             'clinical_notes_encrypted',
+            'diagnosis_notes_encrypted',
         ];
 
         return $this->sanitizeValue($payload, $hiddenKeys);

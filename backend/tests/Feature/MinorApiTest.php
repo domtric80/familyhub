@@ -13,6 +13,8 @@ use App\Models\DocumentType;
 use App\Models\DocumentIssuer;
 use App\Models\Attachment;
 use App\Models\AuditLog;
+use App\Models\MinorDiagnosis;
+use App\Models\MinorProfile;
 use App\Models\MinorDocument;
 use App\Models\StaffMember;
 use App\Models\Role;
@@ -106,12 +108,16 @@ class MinorApiTest extends TestCase
         $this->withToken($this->token)
             ->putJson("/api/minors/{$minorId}/profile", [
                 'family_background' => 'Nucleo familiare fragile',
-                'life_history' => 'Percorso con più collocamenti',
+                'life_history' => 'Percorso con piÃƒÆ’Ã‚Â¹ collocamenti',
                 'risk_factors' => 'Dispersione scolastica',
                 'crisis_indicators' => 'Episodi di agitazione',
             ])
             ->assertOk()
             ->assertJsonPath('family_background', 'Nucleo familiare fragile');
+
+        $storedProfile = MinorProfile::query()->where('minor_id', $minorId)->firstOrFail();
+        $this->assertNotSame('Nucleo familiare fragile', $storedProfile->getRawOriginal('family_background'));
+        $this->assertNotSame('Percorso con piÃƒÆ’Ã‚Â¹ collocamenti', $storedProfile->getRawOriginal('life_history'));
 
         $contactId = $this->withToken($this->token)
             ->postJson("/api/minors/{$minorId}/contacts", [
@@ -137,7 +143,7 @@ class MinorApiTest extends TestCase
         $this->withToken($this->token)
             ->getJson("/api/minors/{$minorId}")
             ->assertOk()
-            ->assertJsonPath('profile.life_history', 'Percorso con più collocamenti')
+            ->assertJsonPath('profile.life_history', 'Percorso con piÃƒÆ’Ã‚Â¹ collocamenti')
             ->assertJsonPath('contacts.0.contact_type.code', 'TUTOR')
             ->assertJsonPath('contacts.0.notes', 'Contatto principale aggiornato');
     }
@@ -579,10 +585,15 @@ class MinorApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('learning_styles', 'Apprendimento visuale e pratico');
 
+        $storedProfile = MinorProfile::query()->where('minor_id', $minorId)->firstOrFail();
+        $this->assertNotSame('Contesto familiare complesso', $storedProfile->getRawOriginal('family_background'));
+        $this->assertNotSame('Percorso con affidamenti multipli', $storedProfile->getRawOriginal('life_history'));
+        $this->assertNotSame('Nota clinica riservata', $storedProfile->getRawOriginal('clinical_notes_encrypted'));
+
         $diagnosisId = $this->withToken($this->token)
             ->postJson("/api/minors/{$minorId}/diagnoses", [
                 'diagnosis_code' => 'DX-001',
-                'diagnosis_label' => 'Disturbo d’ansia in osservazione',
+                'diagnosis_label' => 'Disturbo dÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ansia in osservazione',
                 'dsm_code' => 'DSM-5-300.02',
                 'diagnosis_notes_encrypted' => 'Annotazione clinica protetta',
                 'diagnosed_at' => '2026-06-01',
@@ -591,8 +602,11 @@ class MinorApiTest extends TestCase
                 'is_active' => true,
             ])
             ->assertCreated()
-            ->assertJsonPath('diagnosis_label', 'Disturbo d’ansia in osservazione')
+            ->assertJsonPath('diagnosis_label', 'Disturbo dÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ansia in osservazione')
             ->json('id');
+
+        $storedDiagnosis = MinorDiagnosis::query()->findOrFail($diagnosisId);
+        $this->assertNotSame('Annotazione clinica protetta', $storedDiagnosis->getRawOriginal('diagnosis_notes_encrypted'));
 
         $peiId = $this->withToken($this->token)
             ->postJson("/api/minors/{$minorId}/peis", [
@@ -627,7 +641,7 @@ class MinorApiTest extends TestCase
             ->postJson("/api/minors/{$minorId}/needs", [
                 'category_code' => 'relational',
                 'title' => 'Stabilizzare relazione con figura educativa',
-                'description' => 'Incrementare fiducia e continuità educativa',
+                'description' => 'Incrementare fiducia e continuitÃƒÆ’Ã‚Â  educativa',
                 'priority' => 'high',
                 'status' => 'open',
                 'responsible_staff_member_id' => $responsible->id,
@@ -669,7 +683,12 @@ class MinorApiTest extends TestCase
             ->assertJsonPath('diagnoses.0.dsm_code', 'DSM-5-300.02')
             ->assertJsonPath('peis.0.objectives.0.progress_percent', 70)
             ->assertJsonPath('needs.0.category_code', 'relational')
-            ->assertJsonPath('needs.0.attachment_document.id', $minorDocument->id);
+            ->assertJsonPath('needs.0.attachment_document.id', $minorDocument->id)
+            ->assertJsonPath('dashboard_summary.summary.active_diagnoses_count', 1)
+            ->assertJsonPath('dashboard_summary.summary.open_needs_count', 1)
+            ->assertJsonPath('dashboard_summary.summary.high_priority_open_needs_count', 1)
+            ->assertJsonPath('dashboard_summary.summary.active_peis_count', 1)
+            ->assertJson(fn ($json) => $json->where('dashboard_summary.summary.primary_diagnosis_label', fn ($value) => str_contains((string) $value, 'Disturbo'))->etc());
 
         $this->assertDatabaseHas('minor_history_entries', [
             'minor_id' => $minorId,
@@ -731,8 +750,8 @@ class MinorApiTest extends TestCase
         $objectiveId = $this->withToken($this->token)
             ->postJson("/api/minors/{$minorId}/peis/{$peiId}/objectives", [
                 'code' => 'PEI-REL-01',
-                'title' => 'Incrementare capacità relazionale',
-                'description' => 'Più iniziativa nel gruppo',
+                'title' => 'Incrementare capacitÃƒÆ’Ã‚Â  relazionale',
+                'description' => 'PiÃƒÆ’Ã‚Â¹ iniziativa nel gruppo',
                 'due_date' => '2026-08-20',
                 'status' => 'open',
                 'progress_percent' => 10,
@@ -956,7 +975,13 @@ class MinorApiTest extends TestCase
             ->assertOk()
             ->json();
 
-        $this->assertTrue(collect($history)->contains(fn (array $entry) => $entry['event_type'] === 'minor_document_viewed'));
+        $documentViewedEntry = collect($history)->firstWhere('event_type', 'minor_document_viewed');
+        $this->assertNotNull($documentViewedEntry);
+        $this->assertSame('Marta Viola', data_get($documentViewedEntry, 'snapshot.minor.first_name').' '.data_get($documentViewedEntry, 'snapshot.minor.last_name'));
+        $this->assertSame('Minore MIN-0006', data_get($documentViewedEntry, 'snapshot.minor.public_display_name'));
+        $this->assertStringContainsString('Minore MIN-0006', (string) data_get($documentViewedEntry, 'description'));
+        $this->assertStringNotContainsString('Marta', (string) data_get($documentViewedEntry, 'description'));
+        $this->assertStringNotContainsString('Viola', (string) data_get($documentViewedEntry, 'description'));
         $this->assertTrue(AuditLog::query()->where('resource_type', 'minor_document_preview')->exists());
     }
 
@@ -1632,7 +1657,7 @@ class MinorApiTest extends TestCase
             ->postJson('/api/activities', [
                 'minor_id' => $minorId,
                 'activity_type_id' => $activityType->id,
-                'title' => 'Attività trend',
+                'title' => 'AttivitÃƒÆ’Ã‚Â  trend',
                 'planned_start_at' => '2026-07-03 10:00:00',
                 'status' => 'completed',
                 'pei_objective_id' => $objectiveId,

@@ -4423,6 +4423,124 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StaffShiftWeekResponse'
+  /admin/staff-shifts/month:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: getStaffShiftMonth
+      parameters:
+        - in: query
+          name: facility_id
+          required: true
+          schema: { type: integer }
+        - in: query
+          name: year
+          required: true
+          schema: { type: integer, minimum: 2020, maximum: 2100 }
+        - in: query
+          name: month
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 12 }
+        - in: query
+          name: staff_member_id
+          schema: { type: integer }
+          description: Filtro opzionale per operatore, utile per calendario mensile focalizzato su una singola persona.
+      responses:
+        '200':
+          description: Vista mensile coperture turno per struttura
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffShiftMonthResponse'
+  /admin/staff-shifts/exceptions:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: getStaffShiftExceptions
+      parameters:
+        - in: query
+          name: facility_id
+          required: true
+          schema: { type: integer }
+        - in: query
+          name: date_from
+          schema: { type: string, format: date }
+          description: Data inizio finestra di analisi. Se omessa, il backend usa l'inizio del mese corrente.
+        - in: query
+          name: date_to
+          schema: { type: string, format: date }
+          description: Data fine finestra di analisi. Se omessa, il backend usa la fine del mese corrente.
+        - in: query
+          name: types[]
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [planned_gap, actual_gap, timesheet_anomaly, active_substitution]
+          style: form
+          explode: true
+          description: Filtro opzionale per tipo scostamento o anomalia.
+      responses:
+        '200':
+          description: Cruscotto operativo anomalie e scostamenti turni
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShiftExceptionsResponse'
+  /admin/staff-shifts/{shift_assignment}/substitutions:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: listStaffShiftSubstitutions
+      parameters:
+        - $ref: '#/components/parameters/ShiftAssignmentId'
+      responses:
+        '200':
+          description: Storico sostituzioni del turno selezionato
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StaffShiftSubstitution'
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: createStaffShiftSubstitution
+      parameters:
+        - $ref: '#/components/parameters/ShiftAssignmentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffShiftSubstitutionWrite'
+      responses:
+        '201':
+          description: Sostituzione turno registrata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffShiftSubstitution'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /admin/staff-shifts/{shift_assignment}/substitutions/{substitution}/cancel:
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: cancelStaffShiftSubstitution
+      parameters:
+        - $ref: '#/components/parameters/ShiftAssignmentId'
+        - $ref: '#/components/parameters/ShiftSubstitutionId'
+      responses:
+        '200':
+          description: Sostituzione turno annullata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffShiftSubstitution'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /admin/staff-shifts/{shift_assignment}:
     get:
       tags: [Admin]
@@ -5811,6 +5929,58 @@ paths:
                 $ref: '#/components/schemas/MyStaffShiftWeekResponse'
         '404':
           description: Nessun operatore collegato all'utente autenticato
+  /staff-shifts/my-month:
+    get:
+      tags: [Staff]
+      security: [{ bearerAuth: [] }]
+      operationId: getMyStaffShiftMonth
+      parameters:
+        - in: query
+          name: year
+          required: true
+          schema: { type: integer, minimum: 2020, maximum: 2100 }
+        - in: query
+          name: month
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 12 }
+      responses:
+        '200':
+          description: Vista mensile turni del solo operatore autenticato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyStaffShiftMonthResponse'
+        '404':
+          description: Nessun operatore collegato all'utente autenticato
+  /staff-shifts/{shift_assignment}/submit:
+    post:
+      tags: [Staff]
+      security: [{ bearerAuth: [] }]
+      operationId: submitMyStaffShift
+      parameters:
+        - $ref: '#/components/parameters/ShiftAssignmentId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes:
+                  type: string
+                  nullable: true
+                  maxLength: 4000
+      responses:
+        '200':
+          description: Turno chiuso e firmato operativamente dall'operatore
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShiftSubmitResponse'
+        '404':
+          description: Nessun operatore collegato all'utente autenticato o consuntivo non disponibile
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /staff/attendance-events:
     post:
       tags: [Staff]
@@ -6139,6 +6309,11 @@ components:
     ShiftAssignmentId:
       in: path
       name: shift_assignment
+      required: true
+      schema: { type: integer }
+    ShiftSubstitutionId:
+      in: path
+      name: substitution
       required: true
       schema: { type: integer }
     StaffMemberId:
@@ -7338,11 +7513,135 @@ components:
           allOf:
             - $ref: '#/components/schemas/StaffMember'
           nullable: true
+        effective_staff_member:
+          allOf:
+            - $ref: '#/components/schemas/StaffMember'
+          nullable: true
+        has_active_substitution: { type: boolean }
+        active_substitution:
+          allOf:
+            - $ref: '#/components/schemas/StaffShiftSubstitutionEmbedded'
+          nullable: true
         assigned_by:
           allOf:
             - $ref: '#/components/schemas/HistoryActor'
           nullable: true
-      required: [id, facility_id, shift_template_id, staff_member_id, shift_date, starts_at, ends_at, status]
+        actual:
+          $ref: '#/components/schemas/StaffShiftAssignmentActual'
+        operational:
+          $ref: '#/components/schemas/StaffShiftAssignmentOperational'
+      required: [id, facility_id, shift_template_id, staff_member_id, shift_date, starts_at, ends_at, status, has_active_substitution, actual, operational]
+    StaffShiftAssignmentOperational:
+      type: object
+      properties:
+        state:
+          type: string
+          enum: [open, in_progress, closed, signed, approved, locked, cancelled]
+        label: { type: string }
+        timesheet_status:
+          type: string
+          nullable: true
+          enum: [draft, computed, submitted, approved, rejected, locked]
+        submitted_at: { type: string, format: date-time, nullable: true }
+        approved_at: { type: string, format: date-time, nullable: true }
+        locked_at: { type: string, format: date-time, nullable: true }
+        can_submit: { type: boolean }
+        has_open_anomalies: { type: boolean }
+      required: [state, label, can_submit, has_open_anomalies]
+    StaffShiftSubstitutionEmbedded:
+      type: object
+      properties:
+        id: { type: integer }
+        reason_code:
+          type: string
+          enum: [illness, vacation, leave, emergency, coverage]
+        reason_notes: { type: string, nullable: true }
+        status:
+          type: string
+          enum: [active, cancelled]
+        effective_starts_at: { type: string, format: date-time, nullable: true }
+        effective_ends_at: { type: string, format: date-time, nullable: true }
+        original_staff_member:
+          allOf:
+            - $ref: '#/components/schemas/StaffMember'
+          nullable: true
+        replacement_staff_member:
+          allOf:
+            - $ref: '#/components/schemas/StaffMember'
+          nullable: true
+        created_by:
+          allOf:
+            - $ref: '#/components/schemas/HistoryActor'
+          nullable: true
+      required: [id, reason_code, status]
+    StaffShiftSubstitutionShiftAssignment:
+      type: object
+      properties:
+        id: { type: integer }
+        shift_date: { type: string, format: date, nullable: true }
+        status: { type: string, nullable: true }
+        shift_template:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            code: { type: string }
+            name: { type: string }
+    StaffShiftSubstitution:
+      allOf:
+        - $ref: '#/components/schemas/StaffShiftSubstitutionEmbedded'
+        - type: object
+          properties:
+            facility_id: { type: integer }
+            shift_assignment_id: { type: integer }
+            original_staff_member_id: { type: integer }
+            replacement_staff_member_id: { type: integer }
+            cancelled_at: { type: string, format: date-time, nullable: true }
+            shift_assignment:
+              allOf:
+                - $ref: '#/components/schemas/StaffShiftSubstitutionShiftAssignment'
+              nullable: true
+            cancelled_by:
+              allOf:
+                - $ref: '#/components/schemas/HistoryActor'
+              nullable: true
+            created_at: { type: string, format: date-time, nullable: true }
+            updated_at: { type: string, format: date-time, nullable: true }
+          required: [facility_id, shift_assignment_id, original_staff_member_id, replacement_staff_member_id]
+    StaffShiftSubstitutionWrite:
+      type: object
+      properties:
+        replacement_staff_member_id: { type: integer }
+        reason_code:
+          type: string
+          enum: [illness, vacation, leave, emergency, coverage]
+        reason_notes: { type: string, nullable: true }
+        effective_starts_at: { type: string, format: date-time, nullable: true }
+        effective_ends_at: { type: string, format: date-time, nullable: true }
+      required: [replacement_staff_member_id, reason_code]
+    StaffShiftAssignmentActual:
+      type: object
+      properties:
+        timesheet_entry_id: { type: integer, nullable: true }
+        status: { type: string, nullable: true }
+        started: { type: boolean }
+        completed: { type: boolean }
+        planned_start: { type: string, format: date-time, nullable: true }
+        planned_end: { type: string, format: date-time, nullable: true }
+        actual_start: { type: string, format: date-time, nullable: true }
+        actual_end: { type: string, format: date-time, nullable: true }
+        planned_minutes: { type: integer, nullable: true }
+        worked_minutes: { type: integer, nullable: true }
+        break_minutes: { type: integer, nullable: true }
+        ordinary_minutes: { type: integer, nullable: true }
+        overtime_minutes: { type: integer, nullable: true }
+        absence_minutes: { type: integer, nullable: true }
+        variance_minutes: { type: integer, nullable: true }
+        has_anomaly: { type: boolean }
+        anomaly_flags:
+          type: array
+          items: { type: string }
+      required: [started, completed, has_anomaly, anomaly_flags]
     StaffShiftAssignmentWrite:
       type: object
       properties:
@@ -7364,11 +7663,15 @@ components:
         minimum_staff_required: { type: integer }
         assigned_count: { type: integer }
         coverage_gap: { type: integer }
+        actual_started_count: { type: integer }
+        actual_completed_count: { type: integer }
+        actual_coverage_gap: { type: integer }
+        anomaly_count: { type: integer }
         assignments:
           type: array
           items:
             $ref: '#/components/schemas/StaffShiftAssignment'
-      required: [shift_template, minimum_staff_required, assigned_count, coverage_gap, assignments]
+      required: [shift_template, minimum_staff_required, assigned_count, coverage_gap, actual_started_count, actual_completed_count, actual_coverage_gap, anomaly_count, assignments]
     StaffShiftWeekDay:
       type: object
       properties:
@@ -7378,6 +7681,30 @@ components:
           items:
             $ref: '#/components/schemas/StaffShiftWeekShiftBlock'
       required: [date, shifts]
+    StaffShiftMonthDaySummary:
+      type: object
+      properties:
+        minimum_staff_required_total: { type: integer }
+        assigned_count_total: { type: integer }
+        coverage_gap_total: { type: integer }
+        actual_started_count_total: { type: integer }
+        actual_completed_count_total: { type: integer }
+        actual_coverage_gap_total: { type: integer }
+        anomaly_count: { type: integer }
+      required: [minimum_staff_required_total, assigned_count_total, coverage_gap_total, actual_started_count_total, actual_completed_count_total, actual_coverage_gap_total, anomaly_count]
+    StaffShiftMonthDay:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        day_of_week_iso: { type: integer, minimum: 1, maximum: 7 }
+        is_weekend: { type: boolean }
+        shifts:
+          type: array
+          items:
+            $ref: '#/components/schemas/StaffShiftWeekShiftBlock'
+        summary:
+          $ref: '#/components/schemas/StaffShiftMonthDaySummary'
+      required: [date, day_of_week_iso, is_weekend, shifts, summary]
     StaffShiftWeekResponse:
       type: object
       properties:
@@ -7389,6 +7716,38 @@ components:
           items:
             $ref: '#/components/schemas/StaffShiftWeekDay'
       required: [facility_id, week_start, week_end, days]
+    StaffShiftMonthSummary:
+      type: object
+      properties:
+        days_in_month: { type: integer }
+        total_assignments: { type: integer }
+        planned_assignments_count: { type: integer }
+        confirmed_assignments_count: { type: integer }
+        completed_assignments_count: { type: integer }
+        cancelled_assignments_count: { type: integer }
+        days_with_coverage_gap_count: { type: integer }
+        days_with_actual_gap_count: { type: integer }
+        days_with_anomalies_count: { type: integer }
+        minimum_staff_required_total: { type: integer }
+        assigned_count_total: { type: integer }
+        actual_completed_count_total: { type: integer }
+      required: [days_in_month, total_assignments, planned_assignments_count, confirmed_assignments_count, completed_assignments_count, cancelled_assignments_count, days_with_coverage_gap_count, days_with_actual_gap_count, days_with_anomalies_count, minimum_staff_required_total, assigned_count_total, actual_completed_count_total]
+    StaffShiftMonthResponse:
+      type: object
+      properties:
+        facility_id: { type: integer }
+        staff_member_id: { type: integer, nullable: true }
+        year: { type: integer }
+        month: { type: integer }
+        month_start: { type: string, format: date }
+        month_end: { type: string, format: date }
+        summary:
+          $ref: '#/components/schemas/StaffShiftMonthSummary'
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/StaffShiftMonthDay'
+      required: [facility_id, year, month, month_start, month_end, summary, days]
     MyStaffShiftWeekResponse:
       type: object
       properties:
@@ -7401,6 +7760,135 @@ components:
           items:
             $ref: '#/components/schemas/StaffShiftAssignment'
       required: [staff_member, week_start, week_end, assignments]
+    MyStaffShiftMonthDaySummary:
+      type: object
+      properties:
+        assigned_count: { type: integer }
+        completed_count: { type: integer }
+        anomaly_count: { type: integer }
+        planned_minutes_total: { type: integer }
+        worked_minutes_total: { type: integer }
+      required: [assigned_count, completed_count, anomaly_count, planned_minutes_total, worked_minutes_total]
+    MyStaffShiftMonthDay:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        is_weekend: { type: boolean }
+        assignments:
+          type: array
+          items:
+            $ref: '#/components/schemas/StaffShiftAssignment'
+        summary:
+          $ref: '#/components/schemas/MyStaffShiftMonthDaySummary'
+      required: [date, is_weekend, assignments, summary]
+    MyStaffShiftMonthSummary:
+      type: object
+      properties:
+        days_in_month: { type: integer }
+        total_assignments: { type: integer }
+        completed_assignments_count: { type: integer }
+        days_with_assignments_count: { type: integer }
+        days_with_anomalies_count: { type: integer }
+        planned_minutes_total: { type: integer }
+        worked_minutes_total: { type: integer }
+      required: [days_in_month, total_assignments, completed_assignments_count, days_with_assignments_count, days_with_anomalies_count, planned_minutes_total, worked_minutes_total]
+    MyStaffShiftMonthResponse:
+      type: object
+      properties:
+        staff_member:
+          $ref: '#/components/schemas/StaffMember'
+        year: { type: integer }
+        month: { type: integer }
+        month_start: { type: string, format: date }
+        month_end: { type: string, format: date }
+        summary:
+          $ref: '#/components/schemas/MyStaffShiftMonthSummary'
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/MyStaffShiftMonthDay'
+      required: [staff_member, year, month, month_start, month_end, summary, days]
+    ShiftExceptionCoverage:
+      type: object
+      nullable: true
+      properties:
+        minimum_staff_required: { type: integer }
+        assigned_count: { type: integer }
+        actual_completed_count: { type: integer }
+        planned_gap: { type: integer }
+        actual_gap: { type: integer }
+      required: [minimum_staff_required, assigned_count, actual_completed_count, planned_gap, actual_gap]
+    ShiftExceptionShiftTemplate:
+      type: object
+      nullable: true
+      properties:
+        id: { type: integer }
+        code: { type: string, nullable: true }
+        name: { type: string, nullable: true }
+    ShiftExceptionFacility:
+      type: object
+      nullable: true
+      properties:
+        id: { type: integer }
+        name: { type: string, nullable: true }
+    ShiftExceptionItem:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [planned_gap, actual_gap, timesheet_anomaly, active_substitution]
+        severity:
+          type: string
+          enum: [info, warning, critical]
+        shift_date: { type: string, format: date, nullable: true }
+        message: { type: string }
+        facility:
+          $ref: '#/components/schemas/ShiftExceptionFacility'
+        shift_template:
+          $ref: '#/components/schemas/ShiftExceptionShiftTemplate'
+        shift_assignment_id: { type: integer, nullable: true }
+        coverage:
+          $ref: '#/components/schemas/ShiftExceptionCoverage'
+        anomaly_flags:
+          type: array
+          items: { type: string }
+        active_substitution: { type: boolean }
+        assignment:
+          allOf:
+            - $ref: '#/components/schemas/StaffShiftAssignment'
+          nullable: true
+      required: [type, severity, message, anomaly_flags, active_substitution]
+    ShiftExceptionsSummary:
+      type: object
+      properties:
+        items_total: { type: integer }
+        planned_gap_count: { type: integer }
+        actual_gap_count: { type: integer }
+        timesheet_anomaly_count: { type: integer }
+        active_substitution_count: { type: integer }
+      required: [items_total, planned_gap_count, actual_gap_count, timesheet_anomaly_count, active_substitution_count]
+    ShiftExceptionsResponse:
+      type: object
+      properties:
+        facility_id: { type: integer }
+        date_from: { type: string, format: date }
+        date_to: { type: string, format: date }
+        summary:
+          $ref: '#/components/schemas/ShiftExceptionsSummary'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShiftExceptionItem'
+      required: [facility_id, date_from, date_to, summary, items]
+    ShiftSubmitResponse:
+      type: object
+      properties:
+        message: { type: string }
+        assignment:
+          $ref: '#/components/schemas/StaffShiftAssignment'
+        timesheet_entry:
+          $ref: '#/components/schemas/StaffTimesheetEntry'
+      required: [message, assignment, timesheet_entry]
     StaffAttendanceEvent:
       type: object
       properties:
@@ -8529,6 +9017,8 @@ components:
             $ref: '#/components/schemas/MinorPei'
         pei_trends:
           $ref: '#/components/schemas/MinorPeiTrendDashboard'
+        dashboard_summary:
+          $ref: '#/components/schemas/MinorDashboardSummary'
         needs:
           type: array
           items:
@@ -8569,15 +9059,15 @@ components:
     MinorProfile:
       type: object
       properties:
-        family_background: { type: string, nullable: true }
-        life_history: { type: string, nullable: true }
+        family_background: { type: string, nullable: true, description: Campo narrativo protetto, cifrato a riposo nel database. }
+        life_history: { type: string, nullable: true, description: Campo narrativo protetto, cifrato a riposo nel database. }
         learning_styles: { type: string, nullable: true }
         interests: { type: string, nullable: true }
         hobbies: { type: string, nullable: true }
         strengths: { type: string, nullable: true }
         risk_factors: { type: string, nullable: true }
         crisis_indicators: { type: string, nullable: true }
-        clinical_notes_encrypted: { type: string, nullable: true, description: Campo sensibile riservato al backend e a ruoli autorizzati. }
+        clinical_notes_encrypted: { type: string, nullable: true, description: Campo clinico riservato, cifrato a riposo nel database e visibile solo ai ruoli autorizzati. }
     MinorProfileWrite:
       $ref: '#/components/schemas/MinorProfile'
     MinorCaseOptionsResponse:
@@ -8618,7 +9108,7 @@ components:
         diagnosis_code: { type: string, nullable: true }
         diagnosis_label: { type: string }
         dsm_code: { type: string, nullable: true }
-        diagnosis_notes_encrypted: { type: string, nullable: true }
+        diagnosis_notes_encrypted: { type: string, nullable: true, description: Nota clinica diagnosi, cifrata a riposo nel database e visibile solo ai ruoli autorizzati. }
         diagnosed_at: { type: string, format: date, nullable: true }
         review_due_at: { type: string, format: date, nullable: true }
         is_primary: { type: boolean }
@@ -8629,7 +9119,7 @@ components:
         diagnosis_code: { type: string, nullable: true }
         diagnosis_label: { type: string }
         dsm_code: { type: string, nullable: true }
-        diagnosis_notes_encrypted: { type: string, nullable: true }
+        diagnosis_notes_encrypted: { type: string, nullable: true, description: Nota clinica diagnosi, cifrata a riposo nel database. }
         diagnosed_at: { type: string, format: date, nullable: true }
         review_due_at: { type: string, format: date, nullable: true }
         is_primary: { type: boolean, nullable: true }
@@ -8781,6 +9271,44 @@ components:
       allOf:
         - $ref: '#/components/schemas/MinorNeedWrite'
       required: []
+    MinorDashboardSummary:
+      type: object
+      properties:
+        summary:
+          type: object
+          properties:
+            active_diagnoses_count: { type: integer }
+            primary_diagnosis_label: { type: string, nullable: true }
+            open_needs_count: { type: integer }
+            high_priority_open_needs_count: { type: integer }
+            active_peis_count: { type: integer }
+            upcoming_deadlines_count: { type: integer }
+            overdue_deadlines_count: { type: integer }
+          required: [active_diagnoses_count, open_needs_count, high_priority_open_needs_count, active_peis_count, upcoming_deadlines_count, overdue_deadlines_count]
+        high_priority_needs:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              category_code: { type: string }
+              title: { type: string, nullable: true }
+              status: { type: string, nullable: true }
+              priority: { type: string, nullable: true }
+        upcoming_deadlines:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string }
+              label: { type: string, nullable: true }
+              date: { type: string, nullable: true }
+              is_overdue: { type: boolean }
+        recent_relevant_events:
+          type: array
+          items:
+            $ref: '#/components/schemas/MinorHistoryEntry'
+      required: [summary, high_priority_needs, upcoming_deadlines, recent_relevant_events]
     MinorNote:
       type: object
       properties:
@@ -9073,9 +9601,16 @@ components:
           nullable: true
         minor:
           allOf:
-            - $ref: '#/components/schemas/Minor'
+            - $ref: '#/components/schemas/AuditLogMinorReference'
           nullable: true
       required: [id, actor_display_name, action, resource_type, occurred_at_utc]
+    AuditLogMinorReference:
+      type: object
+      properties:
+        id: { type: integer }
+        internal_code: { type: string, nullable: true }
+        public_display_name: { type: string, nullable: true }
+      required: [id]
     AuditLogPagination:
       type: object
       properties:
@@ -9179,6 +9714,7 @@ components:
         minor_id: { type: integer }
         facility_id: { type: integer }
         event_type: { type: string }
+        description: { type: string }
         actor_user_id: { type: integer, nullable: true }
         actor:
           allOf:
@@ -9192,12 +9728,14 @@ components:
           nullable: true
           additionalProperties: true
         created_at: { type: string, format: date-time }
+      required: [id, event_type, description, created_at]
     HistoryActor:
       type: object
       properties:
         id: { type: integer }
         first_name: { type: string }
         last_name: { type: string }
+        display_name: { type: string, nullable: true }
         email: { type: string, format: email }
     InternalMessageThreadCreateRequest:
       type: object

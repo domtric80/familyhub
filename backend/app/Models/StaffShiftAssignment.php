@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class StaffShiftAssignment extends Model
@@ -62,5 +63,17 @@ class StaffShiftAssignment extends Model
     public function timesheetEntries(): HasMany
     {
         return $this->hasMany(StaffTimesheetEntry::class, 'shift_assignment_id');
+    }
+
+    public function substitutions(): HasMany
+    {
+        return $this->hasMany(StaffShiftSubstitution::class, 'shift_assignment_id');
+    }
+
+    public function activeSubstitution(): HasOne
+    {
+        return $this->hasOne(StaffShiftSubstitution::class, 'shift_assignment_id')
+            ->where('status', StaffShiftSubstitution::STATUS_ACTIVE)
+            ->latestOfMany();
     }
 }

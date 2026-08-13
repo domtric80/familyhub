@@ -5,6 +5,7 @@ namespace App\Http\Requests\Shifts;
 use App\Models\StaffAttendanceEvent;
 use App\Models\StaffMember;
 use App\Models\StaffShiftAssignment;
+use App\Models\StaffShiftSubstitution;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -62,8 +63,16 @@ class StoreStaffAttendanceEventRequest extends FormRequest
                     $validator->errors()->add('shift_assignment_id', 'Il turno selezionato appartiene a una struttura diversa.');
                 }
 
-                if ($assignment && (int) $assignment->staff_member_id !== (int) $staffMember->id) {
-                    $validator->errors()->add('shift_assignment_id', 'Il turno selezionato non appartiene all operatore autenticato.');
+                if ($assignment) {
+                    $activeSubstitution = $assignment->activeSubstitution()->first();
+                    $matchesOriginalAssignment = (int) $assignment->staff_member_id === (int) $staffMember->id && ! $activeSubstitution;
+                    $matchesReplacementAssignment = $activeSubstitution
+                        && $activeSubstitution->status === StaffShiftSubstitution::STATUS_ACTIVE
+                        && (int) $activeSubstitution->replacement_staff_member_id === (int) $staffMember->id;
+
+                    if (! $matchesOriginalAssignment && ! $matchesReplacementAssignment) {
+                        $validator->errors()->add('shift_assignment_id', 'Il turno selezionato non appartiene all operatore autenticato o è già assegnato a un sostituto diverso.');
+                    }
                 }
             }
         });

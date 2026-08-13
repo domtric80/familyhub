@@ -24,6 +24,15 @@ class MinorProfile extends Model
         'updated_by_user_id',
     ];
 
+    protected function casts(): array
+    {
+        return [
+            'family_background' => 'encrypted',
+            'life_history' => 'encrypted',
+            'clinical_notes_encrypted' => 'encrypted',
+        ];
+    }
+
     public function minor(): BelongsTo
     {
         return $this->belongsTo(Minor::class);

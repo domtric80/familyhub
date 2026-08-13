@@ -53,7 +53,8 @@ export const MENUITEMS: MenuSection[] = [
         type: 'sub',
         active: false,
         children: [
-          { title: 'Pianificazione settimanale', icon: 'calendar', type: 'link', path: '/turni' },
+          { title: 'Pianificazione',             icon: 'calendar', type: 'link', path: '/turni' },
+          { title: 'Calendario mensile',         icon: 'monthly',  type: 'link', path: '/turni/calendario-mensile' },
           { title: 'Dashboard timesheet',        icon: 'charts',   type: 'link', path: '/turni/timesheet' },
           { title: 'Modelli turno',              icon: 'table',    type: 'link', path: '/turni/modelli' },
           { title: 'La mia settimana',           icon: 'board',    type: 'link', path: '/turni/mia-settimana' },

@@ -68,6 +68,7 @@ class MinorHistoryService
                 'facility_name' => $minor->facility?->name,
                 'organization_name' => $minor->facility?->organization?->name,
                 'internal_code' => $minor->internal_code,
+                'public_display_name' => $minor->publicDisplayName(),
                 'first_name' => $minor->first_name,
                 'last_name' => $minor->last_name,
                 'preferred_name' => $minor->preferred_name,

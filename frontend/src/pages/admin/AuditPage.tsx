@@ -351,7 +351,7 @@ export default function AuditPage() {
                       </td>
                       <td style={{ fontSize: 12 }}>
                         {log.minor
-                          ? `${log.minor.last_name} ${log.minor.first_name} (${log.minor.internal_code})`
+                          ? (log.minor.public_display_name ?? log.minor.internal_code ?? 'â€”')
                           : '—'}
                       </td>
                       <td style={{ fontSize: 12 }}>{log.facility?.name ?? '—'}</td>
@@ -450,7 +450,7 @@ export default function AuditPage() {
                 <Row className='mb-2'>
                   <Col sm={4} style={{ color: '#8d8d8d' }}>Minore</Col>
                   <Col sm={8}>
-                    {displayLog.minor.last_name} {displayLog.minor.first_name} ({displayLog.minor.internal_code})
+                    {displayLog.minor.public_display_name ?? displayLog.minor.internal_code ?? 'â€”'}
                   </Col>
                 </Row>
               )}

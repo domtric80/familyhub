@@ -5,7 +5,7 @@ import { Edit2, ArrowLeft, User, Phone, FileText, Clock, Shield, AlertTriangle, 
 import { Badge } from 'reactstrap'
 import { minorApi, lookupsApi, minorAssignmentApi, apiError } from '../../services/api'
 import { toast } from 'react-toastify'
-import type { Minor, MinorProfile, MinorCaseDetail, MinorHistoryEntry, MinorDocument, MinorContact, MinorContactWrite, LookupItem, DocumentClassification, DocumentIssuer, AttachmentSecurityStatus, MinorAssignment, MinorPeiObjectiveTrend, MinorPeiTrendEvent } from '../../types'
+import type { Minor, MinorProfile, MinorCaseDetail, MinorHistoryEntry, MinorDocument, MinorContact, MinorContactWrite, LookupItem, DocumentClassification, DocumentIssuer, AttachmentSecurityStatus, MinorAssignment, MinorPeiObjectiveTrend, MinorPeiTrendEvent, MinorDashboardDeadline, MinorDashboardHighPriorityNeed, MinorDashboardRelevantEvent } from '../../types'
 import { useAuth } from '../../contexts/AuthContext'
 import type { AxiosError } from 'axios'
 import InfoDrawer from '../../components/common/InfoDrawer'
@@ -106,14 +106,28 @@ function statusBadgeColor(status?: string | null) {
 }
 
 
+const DEADLINE_TYPE_LABELS: Record<string, string> = {
+  diagnosis_review:   'Revisione diagnosi',
+  pei_review:         'Revisione PEI',
+  pei_objective_due:  'Obiettivo PEI',
+}
+
+const DEADLINE_TYPE_BADGE: Record<string, string> = {
+  diagnosis_review:   'badge-light-info',
+  pei_review:         'badge-light-primary',
+  pei_objective_due:  'badge-light-warning',
+}
+
 function MinorGlobalSummaryCard({ minor }: { minor: Minor }) {
   const pei = minor.pei_trends
-  const summary = pei?.summary
+  const peiSummary = pei?.summary
+  const ds = minor.dashboard_summary
 
   return (
     <div className='card mb-3'>
       <div className='card-body py-3'>
-        <div className='d-flex flex-wrap align-items-start justify-content-between gap-3'>
+        {/* ── Header info row ── */}
+        <div className='d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3'>
           <div>
             <div className='d-flex align-items-center gap-2 flex-wrap mb-1'>
               <h6 className='mb-0'>Dashboard minore</h6>
@@ -123,7 +137,6 @@ function MinorGlobalSummaryCard({ minor }: { minor: Minor }) {
               Stato scheda, contesto operativo e avanzamento PEI sintetico visibile da tutte le tab.
             </small>
           </div>
-
           <div className='d-flex flex-wrap gap-2'>
             <span className='badge badge-light-secondary'>Struttura: {minor.facility?.name ?? '?'}</span>
             <span className='badge badge-light-secondary'>Stato: {minor.minor_status?.name ?? '?'}</span>
@@ -132,14 +145,109 @@ function MinorGlobalSummaryCard({ minor }: { minor: Minor }) {
           </div>
         </div>
 
-        <Row className='g-2 mt-2'>
-          <Col md='3' xl='2'><KpiCard label='PEI attivi' value={summary?.active_peis ?? 0} /></Col>
-          <Col md='3' xl='2'><KpiCard label='Obiettivi' value={summary?.total_objectives ?? 0} /></Col>
-          <Col md='3' xl='2'><KpiCard label='Completati' value={summary?.completed_objectives ?? 0} /></Col>
-          <Col md='3' xl='2'><KpiCard label='Avanzamento medio' value={`${summary?.average_progress_percent ?? 0}%`} /></Col>
-          <Col md='6' xl='2'><KpiCard label='Eventi attivit?' value={summary?.linked_activity_events ?? 0} /></Col>
-          <Col md='6' xl='2'><KpiCard label='Eventi diario' value={summary?.linked_journal_events ?? 0} /></Col>
-        </Row>
+        {/* ── KPI da dashboard_summary ── */}
+        {ds && (
+          <Row className='g-2 mb-3'>
+            <Col md='2' sm='4'><KpiCard label='Diagnosi attive' value={ds.summary.active_diagnoses_count} subtitle={ds.summary.primary_diagnosis_label ?? undefined} /></Col>
+            <Col md='2' sm='4'><KpiCard label='Bisogni aperti' value={ds.summary.open_needs_count} /></Col>
+            <Col md='2' sm='4'><KpiCard label='Bisogni urgenti' value={ds.summary.high_priority_open_needs_count} /></Col>
+            <Col md='2' sm='4'><KpiCard label='PEI attivi' value={ds.summary.active_peis_count} /></Col>
+            <Col md='2' sm='4'>
+              <KpiCard
+                label='Scadenze prossime'
+                value={ds.summary.upcoming_deadlines_count}
+                subtitle={ds.summary.overdue_deadlines_count > 0 ? `⚠ ${ds.summary.overdue_deadlines_count} scadute` : undefined}
+              />
+            </Col>
+          </Row>
+        )}
+
+        {/* ── KPI PEI trend (fallback se no dashboard_summary) ── */}
+        {!ds && (
+          <Row className='g-2 mb-3'>
+            <Col md='2' sm='4'><KpiCard label='PEI attivi' value={peiSummary?.active_peis ?? 0} /></Col>
+            <Col md='2' sm='4'><KpiCard label='Obiettivi' value={peiSummary?.total_objectives ?? 0} /></Col>
+            <Col md='2' sm='4'><KpiCard label='Completati' value={peiSummary?.completed_objectives ?? 0} /></Col>
+            <Col md='2' sm='4'><KpiCard label='Avanzamento medio' value={`${peiSummary?.average_progress_percent ?? 0}%`} /></Col>
+          </Row>
+        )}
+
+        {/* ── Widget Scadenze + Bisogni urgenti + Eventi rilevanti ── */}
+        {ds && (
+          <Row className='g-3'>
+            {/* Scadenze */}
+            {ds.upcoming_deadlines.length > 0 && (
+              <Col md='4'>
+                <div className='border rounded p-3 h-100' style={{ background: '#fafafa' }}>
+                  <div className='d-flex align-items-center gap-2 mb-2'>
+                    <strong style={{ fontSize: 13 }}>Scadenze</strong>
+                    <span className='badge badge-light-warning'>{ds.upcoming_deadlines.length}</span>
+                  </div>
+                  <div className='d-flex flex-column gap-2'>
+                    {[...ds.upcoming_deadlines]
+                      .sort((a: MinorDashboardDeadline, b: MinorDashboardDeadline) => a.date.localeCompare(b.date))
+                      .map((d: MinorDashboardDeadline, i: number) => (
+                        <div key={i} className='d-flex align-items-start gap-2'>
+                          <span className={`badge ${DEADLINE_TYPE_BADGE[d.type] ?? 'badge-light-secondary'}`} style={{ fontSize: 10, whiteSpace: 'nowrap' }}>
+                            {DEADLINE_TYPE_LABELS[d.type] ?? d.type}
+                          </span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={d.label}>{d.label}</div>
+                            <div style={{ fontSize: 11, color: d.is_overdue ? '#e74c3c' : '#8d8d8d' }}>
+                              {d.is_overdue ? '⚠ ' : ''}{fmtDate(d.date)}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    }
+                  </div>
+                </div>
+              </Col>
+            )}
+
+            {/* Bisogni urgenti */}
+            {ds.high_priority_needs.length > 0 && (
+              <Col md='4'>
+                <div className='border rounded p-3 h-100' style={{ background: '#fafafa' }}>
+                  <div className='d-flex align-items-center gap-2 mb-2'>
+                    <strong style={{ fontSize: 13 }}>Bisogni urgenti</strong>
+                    <span className='badge badge-light-danger'>{ds.high_priority_needs.length}</span>
+                  </div>
+                  <div className='d-flex flex-column gap-2'>
+                    {ds.high_priority_needs.map((n: MinorDashboardHighPriorityNeed) => (
+                      <div key={n.id} className='border-start border-3 ps-2' style={{ borderColor: '#e74c3c' }}>
+                        <div style={{ fontSize: 12, fontWeight: 500 }}>{n.title}</div>
+                        <div className='d-flex gap-1 mt-1'>
+                          {n.category_code && <span className='badge badge-light-secondary' style={{ fontSize: 10 }}>{n.category_code}</span>}
+                          <span className={`badge ${statusBadgeColor(n.status)}`} style={{ fontSize: 10 }}>{n.status}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Col>
+            )}
+
+            {/* Eventi rilevanti */}
+            {ds.recent_relevant_events.length > 0 && (
+              <Col md='4'>
+                <div className='border rounded p-3 h-100' style={{ background: '#fafafa' }}>
+                  <div className='d-flex align-items-center gap-2 mb-2'>
+                    <strong style={{ fontSize: 13 }}>Eventi rilevanti</strong>
+                  </div>
+                  <div className='d-flex flex-column gap-2'>
+                    {ds.recent_relevant_events.map((ev: MinorDashboardRelevantEvent) => (
+                      <div key={ev.id} className='border-start border-3 ps-2' style={{ borderColor: '#7366ff' }}>
+                        <div style={{ fontSize: 12 }}>{ev.description}</div>
+                        <div style={{ fontSize: 11, color: '#8d8d8d' }}>{fmtDateTime(ev.created_at)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Col>
+            )}
+          </Row>
+        )}
       </div>
     </div>
   )
@@ -357,15 +465,18 @@ function StoricoTab({ minorId }: StoricoTabProps) {
           }} />
 
           {filtered.map((h, idx) => {
+            // actor: prefer display_name, never concatenate minor real name
             const actorLabel = h.actor
-              ? `${h.actor.first_name} ${h.actor.last_name} (${h.actor.email})`
+              ? (h.actor.display_name ?? `${h.actor.first_name} ${h.actor.last_name}`) + ` (${h.actor.email})`
               : h.actor_user_id
                 ? `Utente #${h.actor_user_id}`
                 : 'Sistema'
 
             const badgeClass = EVENT_BADGE[h.event_type] ?? 'badge-light-primary'
             const eventLabel = EVENT_LABEL[h.event_type] ?? h.event_type
-            const opSummary = h.metadata?.operation_summary as string | undefined
+            // description è il testo primario serializzato dal backend (già pseudonimizzato)
+            // operation_summary usato solo come fallback se description assente
+            const primaryText = h.description || (h.metadata?.operation_summary as string | undefined)
             const ipAddress = h.metadata?.ip_address as string | undefined
             const remainingMeta = h.metadata
               ? Object.fromEntries(
@@ -391,12 +502,13 @@ function StoricoTab({ minorId }: StoricoTabProps) {
                       {new Date(h.created_at).toLocaleString('it-IT')}
                     </span>
                   </div>
-                  <p style={{ margin: '4px 0 0', fontSize: 13, color: '#555' }}>
+                  {/* Testo principale evento (backend-serializzato, pseudonimizzato) */}
+                  {primaryText && (
+                    <p style={{ margin: '4px 0 0', fontSize: 13, color: '#444' }}>{primaryText}</p>
+                  )}
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#8d8d8d' }}>
                     Attore: <span style={{ fontWeight: 500 }}>{actorLabel}</span>
                   </p>
-                  {opSummary && (
-                    <p style={{ margin: '2px 0 0', fontSize: 13, color: '#555' }}>{opSummary}</p>
-                  )}
                   {ipAddress && (
                     <p style={{ margin: '2px 0 0', fontSize: 11, color: '#aaa' }}>IP: {ipAddress}</p>
                   )}
@@ -856,12 +968,30 @@ function DocumentiTab({ minorId, initialDocuments }: DocumentiTabProps) {
 
 interface ProfiloTabProps { minorId: number; initialProfile?: MinorProfile | null }
 
+// Banner per campi sensibili
+function SensitiveBadge() {
+  return (
+    <span
+      className='badge badge-light-warning ms-2'
+      style={{ fontSize: 11, verticalAlign: 'middle' }}
+      title='Contenuto sensibile — visibile solo nella scheda minore ai ruoli autorizzati'
+    >
+      🔒 Contenuto sensibile
+    </span>
+  )
+}
+
 function ProfiloTab({ minorId, initialProfile }: ProfiloTabProps) {
   const [form, setForm] = useState<MinorProfile>({
-    family_background: initialProfile?.family_background ?? '',
-    life_history: initialProfile?.life_history ?? '',
-    risk_factors: initialProfile?.risk_factors ?? '',
-    crisis_indicators: initialProfile?.crisis_indicators ?? '',
+    family_background:        initialProfile?.family_background ?? '',
+    life_history:             initialProfile?.life_history ?? '',
+    learning_styles:          initialProfile?.learning_styles ?? '',
+    interests:                initialProfile?.interests ?? '',
+    hobbies:                  initialProfile?.hobbies ?? '',
+    strengths:                initialProfile?.strengths ?? '',
+    risk_factors:             initialProfile?.risk_factors ?? '',
+    crisis_indicators:        initialProfile?.crisis_indicators ?? '',
+    clinical_notes_encrypted: initialProfile?.clinical_notes_encrypted ?? '',
   })
   const [loading, setLoading] = useState(!initialProfile)
   const [saving, setSaving] = useState(false)
@@ -873,10 +1003,15 @@ function ProfiloTab({ minorId, initialProfile }: ProfiloTabProps) {
     setLoading(true)
     minorApi.getProfile(minorId)
       .then((p) => setForm({
-        family_background: p.family_background ?? '',
-        life_history: p.life_history ?? '',
-        risk_factors: p.risk_factors ?? '',
-        crisis_indicators: p.crisis_indicators ?? '',
+        family_background:        p.family_background ?? '',
+        life_history:             p.life_history ?? '',
+        learning_styles:          p.learning_styles ?? '',
+        interests:                p.interests ?? '',
+        hobbies:                  p.hobbies ?? '',
+        strengths:                p.strengths ?? '',
+        risk_factors:             p.risk_factors ?? '',
+        crisis_indicators:        p.crisis_indicators ?? '',
+        clinical_notes_encrypted: p.clinical_notes_encrypted ?? '',
       }))
       .catch((e) => setError(apiError(e).message ?? 'Errore'))
       .finally(() => setLoading(false))
@@ -908,10 +1043,16 @@ function ProfiloTab({ minorId, initialProfile }: ProfiloTabProps) {
       {error && <div className='alert alert-danger'><AlertTriangle size={14} style={{ marginRight: 6 }} />{error}</div>}
       {success && <div className='alert alert-success'><Save size={14} style={{ marginRight: 6 }} />Profilo salvato con successo.</div>}
       <form onSubmit={handleSave} className='form theme-form'>
-        <div className='row'>
-          <div className='col-md-6'>
-            <div className='form-group'>
-              <label className='col-form-label f-w-600'>Contesto familiare</label>
+
+        {/* ── 1. Contesto familiare ─────────────────────────────────────── */}
+        <div className='card mb-3' style={{ border: '1px solid #ffe0a0', background: '#fffdf5' }}>
+          <div className='card-header py-2 px-3' style={{ background: '#fff9eb', borderBottom: '1px solid #ffe0a0' }}>
+            <span className='f-w-600' style={{ fontSize: 14 }}>Contesto familiare</span>
+            <SensitiveBadge />
+          </div>
+          <div className='card-body px-3 py-3'>
+            <div className='form-group mb-0'>
+              <label className='col-form-label f-w-600'>Background familiare</label>
               <textarea
                 className='form-control'
                 rows={5}
@@ -921,9 +1062,17 @@ function ProfiloTab({ minorId, initialProfile }: ProfiloTabProps) {
               />
             </div>
           </div>
-          <div className='col-md-6'>
-            <div className='form-group'>
-              <label className='col-form-label f-w-600'>Storia di vita</label>
+        </div>
+
+        {/* ── 2. Storia di vita ─────────────────────────────────────────── */}
+        <div className='card mb-3' style={{ border: '1px solid #ffe0a0', background: '#fffdf5' }}>
+          <div className='card-header py-2 px-3' style={{ background: '#fff9eb', borderBottom: '1px solid #ffe0a0' }}>
+            <span className='f-w-600' style={{ fontSize: 14 }}>Storia di vita</span>
+            <SensitiveBadge />
+          </div>
+          <div className='card-body px-3 py-3'>
+            <div className='form-group mb-0'>
+              <label className='col-form-label f-w-600'>Storia personale</label>
               <textarea
                 className='form-control'
                 rows={5}
@@ -933,31 +1082,123 @@ function ProfiloTab({ minorId, initialProfile }: ProfiloTabProps) {
               />
             </div>
           </div>
-          <div className='col-md-6'>
-            <div className='form-group'>
-              <label className='col-form-label f-w-600'>Fattori di rischio</label>
-              <textarea
-                className='form-control'
-                rows={5}
-                value={form.risk_factors ?? ''}
-                onChange={(e) => setForm((f) => ({ ...f, risk_factors: e.target.value }))}
-                placeholder='Fattori di rischio identificati…'
-              />
-            </div>
+        </div>
+
+        {/* ── 3. Profilo educativo ──────────────────────────────────────── */}
+        <div className='card mb-3' style={{ border: '1px solid #e8e6ff' }}>
+          <div className='card-header py-2 px-3' style={{ background: '#f8f7ff', borderBottom: '1px solid #e8e6ff' }}>
+            <span className='f-w-600' style={{ fontSize: 14 }}>Profilo educativo</span>
           </div>
-          <div className='col-md-6'>
-            <div className='form-group'>
-              <label className='col-form-label f-w-600'>Indicatori di crisi</label>
-              <textarea
-                className='form-control'
-                rows={5}
-                value={form.crisis_indicators ?? ''}
-                onChange={(e) => setForm((f) => ({ ...f, crisis_indicators: e.target.value }))}
-                placeholder='Segnali precoci e comportamenti di crisi…'
-              />
+          <div className='card-body px-3 py-3'>
+            <div className='row'>
+              <div className='col-md-6'>
+                <div className='form-group'>
+                  <label className='col-form-label f-w-600'>Stili di apprendimento</label>
+                  <textarea
+                    className='form-control'
+                    rows={4}
+                    value={form.learning_styles ?? ''}
+                    onChange={(e) => setForm((f) => ({ ...f, learning_styles: e.target.value }))}
+                    placeholder='Come apprende meglio…'
+                  />
+                </div>
+              </div>
+              <div className='col-md-6'>
+                <div className='form-group'>
+                  <label className='col-form-label f-w-600'>Interessi</label>
+                  <textarea
+                    className='form-control'
+                    rows={4}
+                    value={form.interests ?? ''}
+                    onChange={(e) => setForm((f) => ({ ...f, interests: e.target.value }))}
+                    placeholder='Aree di interesse…'
+                  />
+                </div>
+              </div>
+              <div className='col-md-6'>
+                <div className='form-group'>
+                  <label className='col-form-label f-w-600'>Hobbies e attività preferite</label>
+                  <textarea
+                    className='form-control'
+                    rows={4}
+                    value={form.hobbies ?? ''}
+                    onChange={(e) => setForm((f) => ({ ...f, hobbies: e.target.value }))}
+                    placeholder='Passatempi e attività…'
+                  />
+                </div>
+              </div>
+              <div className='col-md-6'>
+                <div className='form-group'>
+                  <label className='col-form-label f-w-600'>Punti di forza</label>
+                  <textarea
+                    className='form-control'
+                    rows={4}
+                    value={form.strengths ?? ''}
+                    onChange={(e) => setForm((f) => ({ ...f, strengths: e.target.value }))}
+                    placeholder='Competenze e risorse personali…'
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
+
+        {/* ── 4. Rischi e crisi ─────────────────────────────────────────── */}
+        <div className='card mb-3' style={{ border: '1px solid #fad4d4' }}>
+          <div className='card-header py-2 px-3' style={{ background: '#fff5f5', borderBottom: '1px solid #fad4d4' }}>
+            <span className='f-w-600' style={{ fontSize: 14 }}>Rischi e crisi</span>
+          </div>
+          <div className='card-body px-3 py-3'>
+            <div className='row'>
+              <div className='col-md-6'>
+                <div className='form-group'>
+                  <label className='col-form-label f-w-600'>Fattori di rischio</label>
+                  <textarea
+                    className='form-control'
+                    rows={5}
+                    value={form.risk_factors ?? ''}
+                    onChange={(e) => setForm((f) => ({ ...f, risk_factors: e.target.value }))}
+                    placeholder='Fattori di rischio identificati…'
+                  />
+                </div>
+              </div>
+              <div className='col-md-6'>
+                <div className='form-group'>
+                  <label className='col-form-label f-w-600'>Indicatori di crisi</label>
+                  <textarea
+                    className='form-control'
+                    rows={5}
+                    value={form.crisis_indicators ?? ''}
+                    onChange={(e) => setForm((f) => ({ ...f, crisis_indicators: e.target.value }))}
+                    placeholder='Segnali precoci e comportamenti di crisi…'
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── 5. Note cliniche riservate ────────────────────────────────── */}
+        <div className='card mb-3' style={{ border: '1px solid #ffe0a0', background: '#fffdf5' }}>
+          <div className='card-header py-2 px-3' style={{ background: '#fff9eb', borderBottom: '1px solid #ffe0a0' }}>
+            <span className='f-w-600' style={{ fontSize: 14 }}>Note cliniche riservate</span>
+            <SensitiveBadge />
+          </div>
+          <div className='card-body px-3 py-3'>
+            <div className='form-group mb-0'>
+              <label className='col-form-label f-w-600'>Note cliniche</label>
+              <textarea
+                className='form-control'
+                rows={5}
+                value={form.clinical_notes_encrypted ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, clinical_notes_encrypted: e.target.value }))}
+                placeholder='Note cliniche riservate — visibili solo ai ruoli autorizzati…'
+              />
+              <small className='text-muted'>Questo contenuto è cifrato a riposo e non viene incluso nei log di audit.</small>
+            </div>
+          </div>
+        </div>
+
         <button type='submit' className='btn btn-primary' disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <Save size={14} />
           {saving ? 'Salvataggio…' : 'Salva profilo'}

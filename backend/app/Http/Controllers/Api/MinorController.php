@@ -44,6 +44,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class MinorController extends Controller
@@ -146,15 +147,14 @@ class MinorController extends Controller
         ))->values();
         $minor->setRelation('notes', $visibleNotes);
         $minor->setAttribute('pei_trends', $this->buildPeiTrends($minor));
+        $minor->setAttribute('dashboard_summary', $this->buildMinorDashboardSummary($minor));
 
         $this->minorHistoryService->recordAccess($minor, 'minor_viewed', request()->user(), [
             'ip_address' => request()->ip(),
             'operation_summary' => sprintf(
-                '%s ha avuto accesso in lettura ai dati del minore %s %s (%s).',
+                '%s ha avuto accesso in lettura ai dati del minore %s.',
                 $this->auditLogService->resolveActorDisplayName(request()->user()),
-                $minor->first_name,
-                $minor->last_name,
-                $minor->internal_code
+                $this->minorPublicLabel($minor)
             ),
         ]);
 
@@ -166,11 +166,9 @@ class MinorController extends Controller
             'resource_id' => (string) $minor->id,
             'resource_label' => $minor->internal_code,
             'operation_summary' => sprintf(
-                '%s ha avuto accesso in lettura ai dati del minore %s %s (%s).',
+                '%s ha avuto accesso in lettura ai dati del minore %s.',
                 $this->auditLogService->resolveActorDisplayName(request()->user()),
-                $minor->first_name,
-                $minor->last_name,
-                $minor->internal_code
+                $this->minorPublicLabel($minor)
             ),
         ]);
         $this->auditLogService->markHandled(request());
@@ -184,7 +182,11 @@ class MinorController extends Controller
         $objectives = $peis->flatMap(fn (MinorPei $pei) => $pei->objectives ?? collect())->values();
         $progressLogs = $objectives
             ->flatMap(fn (MinorPeiObjective $objective) => $objective->progressLogs ?? collect())
-            ->sortBy('created_at')
+            ->sortBy(fn ($log) => sprintf(
+                '%s-%010d',
+                optional($log->created_at)?->format('Y-m-d H:i:s.u') ?? '',
+                (int) ($log->id ?? 0)
+            ))
             ->values();
 
         return [
@@ -201,7 +203,11 @@ class MinorController extends Controller
             ],
             'objective_trends' => $objectives->map(function (MinorPeiObjective $objective): array {
                 $logs = collect($objective->progressLogs ?? [])
-                    ->sortBy('created_at')
+                    ->sortBy(fn ($log) => sprintf(
+                        '%s-%010d',
+                        optional($log->created_at)?->format('Y-m-d H:i:s.u') ?? '',
+                        (int) ($log->id ?? 0)
+                    ))
                     ->values();
 
                 return [
@@ -243,6 +249,89 @@ class MinorController extends Controller
                 ])
                 ->values()
                 ->all(),
+        ];
+    }
+
+    private function buildMinorDashboardSummary(Minor $minor): array
+    {
+        $diagnoses = collect($minor->diagnoses ?? []);
+        $needs = collect($minor->needs ?? []);
+        $peis = collect($minor->peis ?? []);
+        $activePeis = $peis->where('status', 'active')->values();
+        $today = now()->startOfDay();
+        $deadlineThreshold = now()->addDays(30)->format('Y-m-d');
+
+        $diagnosisReviews = $diagnoses
+            ->filter(fn ($diagnosis) => $diagnosis->is_active && $diagnosis->review_due_at)
+            ->sortBy('review_due_at')
+            ->values();
+
+        $peiReviews = $activePeis
+            ->filter(fn ($pei) => $pei->review_date)
+            ->sortBy('review_date')
+            ->values();
+
+        $objectiveDeadlines = $activePeis
+            ->flatMap(fn (MinorPei $pei) => $pei->objectives ?? collect())
+            ->filter(fn (MinorPeiObjective $objective) => $objective->due_date && $objective->status !== 'completed')
+            ->sortBy('due_date')
+            ->values();
+
+        $upcomingDeadlines = collect()
+            ->merge($diagnosisReviews->map(fn ($diagnosis) => [
+                'type' => 'diagnosis_review',
+                'label' => $diagnosis->diagnosis_label,
+                'date' => optional($diagnosis->review_due_at)?->format('Y-m-d'),
+                'is_overdue' => optional($diagnosis->review_due_at)?->lt($today) ?? false,
+            ]))
+            ->merge($peiReviews->map(fn ($pei) => [
+                'type' => 'pei_review',
+                'label' => $pei->title,
+                'date' => optional($pei->review_date)?->format('Y-m-d'),
+                'is_overdue' => optional($pei->review_date)?->lt($today) ?? false,
+            ]))
+            ->merge($objectiveDeadlines->map(fn (MinorPeiObjective $objective) => [
+                'type' => 'pei_objective_due',
+                'label' => $objective->title,
+                'date' => optional($objective->due_date)?->format('Y-m-d'),
+                'is_overdue' => optional($objective->due_date)?->lt($today) ?? false,
+            ]))
+            ->filter(fn (array $item) => ! empty($item['date']))
+            ->sortBy('date')
+            ->values();
+
+        $highPriorityNeeds = $needs
+            ->where('priority', 'high')
+            ->whereIn('status', ['open', 'in_progress'])
+            ->values();
+
+        $recentRelevantEvents = $minor->historyEntries()
+            ->with('actor:id,first_name,last_name,email')
+            ->get()
+            ->take(8)
+            ->map(fn ($entry): array => $this->serializeMinorHistoryEntry($entry))
+            ->values()
+            ->all();
+
+        return [
+            'summary' => [
+                'active_diagnoses_count' => $diagnoses->where('is_active', true)->count(),
+                'primary_diagnosis_label' => $diagnoses->firstWhere('is_primary', true)?->diagnosis_label,
+                'open_needs_count' => $needs->whereIn('status', ['open', 'in_progress'])->count(),
+                'high_priority_open_needs_count' => $highPriorityNeeds->count(),
+                'active_peis_count' => $activePeis->count(),
+                'upcoming_deadlines_count' => $upcomingDeadlines->filter(fn (array $item) => ($item['date'] ?? null) !== null && $item['date'] <= $deadlineThreshold)->count(),
+                'overdue_deadlines_count' => $upcomingDeadlines->where('is_overdue', true)->count(),
+            ],
+            'high_priority_needs' => $highPriorityNeeds->take(5)->map(fn ($need) => [
+                'id' => $need->id,
+                'category_code' => $need->category_code,
+                'title' => $need->title,
+                'status' => $need->status,
+                'priority' => $need->priority,
+            ])->values()->all(),
+            'upcoming_deadlines' => $upcomingDeadlines->take(10)->values()->all(),
+            'recent_relevant_events' => $recentRelevantEvents,
         ];
     }
 
@@ -305,11 +394,9 @@ class MinorController extends Controller
 
         $this->minorHistoryService->record($minor, 'minor_case_detail_upserted', $request->user(), [
             'operation_summary' => sprintf(
-                '%s ha aggiornato la scheda legale/sanitaria del minore %s %s (%s).',
+                '%s ha aggiornato la scheda legale/sanitaria del minore %s.',
                 $this->auditLogService->resolveActorDisplayName($request->user()),
-                $minor->first_name,
-                $minor->last_name,
-                $minor->internal_code
+                $this->minorPublicLabel($minor)
             ),
         ]);
         $this->recordMinorAudit($request, $minor, 'update', 'minor_case_detail', (string) $caseDetail->id, 'Scheda caso', [
@@ -334,16 +421,40 @@ class MinorController extends Controller
     {
         $this->authorizeMinorSensitiveWrite($request->user(), $minor);
 
+        $payload = $request->validated();
+        $changedSections = collect(array_keys($payload))
+            ->filter(fn (string $field) => array_key_exists($field, $payload))
+            ->values()
+            ->all();
+        $protectedSections = collect($changedSections)
+            ->filter(fn (string $field) => in_array($field, ['family_background', 'life_history', 'clinical_notes_encrypted'], true))
+            ->values()
+            ->all();
+
         $profile = $minor->profile()->updateOrCreate(
             [],
             [
-                ...$request->validated(),
+                ...$payload,
                 'updated_by_user_id' => $request->user()?->id,
             ]
         );
-        $this->minorHistoryService->record($minor, 'minor_profile_upserted', $request->user());
+
+        $summary = sprintf(
+            '%s ha aggiornato il profilo del minore %s. Sezioni modificate: %s.',
+            $this->auditLogService->resolveActorDisplayName($request->user()),
+            $this->minorPublicLabel($minor),
+            $this->formatChangedSectionsForSummary($changedSections)
+        );
+
+        $this->minorHistoryService->record($minor, 'minor_profile_upserted', $request->user(), [
+            'operation_summary' => $summary,
+            'changed_sections' => $changedSections,
+            'protected_sections_updated' => $protectedSections,
+        ]);
         $this->recordMinorAudit($request, $minor, 'update', 'minor_profile', (string) $profile->id, 'Profilo minore', [
             'profile_id' => $profile->id,
+            'changed_sections' => $changedSections,
+            'protected_sections_updated_count' => count($protectedSections),
         ]);
 
         return response()->json($profile->fresh());
@@ -367,12 +478,10 @@ class MinorController extends Controller
         $this->minorHistoryService->record($minor, 'minor_diagnosis_created', $request->user(), [
             'diagnosis_id' => $diagnosis->id,
             'operation_summary' => sprintf(
-                '%s ha inserito la diagnosi %s per il minore %s %s (%s).',
+                '%s ha inserito la diagnosi %s per il minore %s.',
                 $this->auditLogService->resolveActorDisplayName($request->user()),
                 $diagnosis->diagnosis_label,
-                $minor->first_name,
-                $minor->last_name,
-                $minor->internal_code
+                $this->minorPublicLabel($minor)
             ),
         ]);
         $this->recordMinorAudit($request, $minor, 'create', 'minor_diagnosis', (string) $diagnosis->id, $diagnosis->diagnosis_label, [
@@ -402,12 +511,10 @@ class MinorController extends Controller
         $this->minorHistoryService->record($minor, 'minor_diagnosis_updated', $request->user(), [
             'diagnosis_id' => $diagnosis->id,
             'operation_summary' => sprintf(
-                '%s ha aggiornato la diagnosi %s del minore %s %s (%s).',
+                '%s ha aggiornato la diagnosi %s del minore %s.',
                 $this->auditLogService->resolveActorDisplayName($request->user()),
                 $diagnosis->diagnosis_label,
-                $minor->first_name,
-                $minor->last_name,
-                $minor->internal_code
+                $this->minorPublicLabel($minor)
             ),
         ]);
         $this->recordMinorAudit($request, $minor, 'update', 'minor_diagnosis', (string) $diagnosis->id, $diagnosis->diagnosis_label, [
@@ -430,12 +537,10 @@ class MinorController extends Controller
         $this->minorHistoryService->record($minor, 'minor_diagnosis_deleted', $request->user(), [
             'diagnosis_id' => $id,
             'operation_summary' => sprintf(
-                '%s ha eliminato la diagnosi %s del minore %s %s (%s).',
+                '%s ha eliminato la diagnosi %s del minore %s.',
                 $this->auditLogService->resolveActorDisplayName($request->user()),
                 $label,
-                $minor->first_name,
-                $minor->last_name,
-                $minor->internal_code
+                $this->minorPublicLabel($minor)
             ),
         ]);
         $this->recordMinorAudit($request, $minor, 'delete', 'minor_diagnosis', (string) $id, $label, [
@@ -458,12 +563,10 @@ class MinorController extends Controller
         $this->minorHistoryService->record($minor, 'minor_pei_created', $request->user(), [
             'pei_id' => $pei->id,
             'operation_summary' => sprintf(
-                '%s ha creato il PEI %s per il minore %s %s (%s).',
+                '%s ha creato il PEI %s per il minore %s.',
                 $this->auditLogService->resolveActorDisplayName($request->user()),
                 $pei->title,
-                $minor->first_name,
-                $minor->last_name,
-                $minor->internal_code
+                $this->minorPublicLabel($minor)
             ),
         ]);
         $this->recordMinorAudit($request, $minor, 'create', 'minor_pei', (string) $pei->id, $pei->title, [
@@ -496,12 +599,10 @@ class MinorController extends Controller
         $this->minorHistoryService->record($minor, 'minor_pei_updated', $request->user(), [
             'pei_id' => $pei->id,
             'operation_summary' => sprintf(
-                '%s ha aggiornato il PEI %s del minore %s %s (%s).',
+                '%s ha aggiornato il PEI %s del minore %s.',
                 $this->auditLogService->resolveActorDisplayName($request->user()),
                 $pei->title,
-                $minor->first_name,
-                $minor->last_name,
-                $minor->internal_code
+                $this->minorPublicLabel($minor)
             ),
         ]);
         $this->recordMinorAudit($request, $minor, 'update', 'minor_pei', (string) $pei->id, $pei->title, [
@@ -530,12 +631,10 @@ class MinorController extends Controller
             'pei_id' => $pei->id,
             'objective_id' => $objective->id,
             'operation_summary' => sprintf(
-                '%s ha aggiunto l\'obiettivo PEI %s al minore %s %s (%s).',
+                '%s ha aggiunto l\'obiettivo PEI %s al minore %s.',
                 $this->auditLogService->resolveActorDisplayName($request->user()),
                 $objective->title,
-                $minor->first_name,
-                $minor->last_name,
-                $minor->internal_code
+                $this->minorPublicLabel($minor)
             ),
         ]);
         $this->recordMinorAudit($request, $minor, 'create', 'minor_pei_objective', (string) $objective->id, $objective->title, [
@@ -568,12 +667,10 @@ class MinorController extends Controller
             'pei_id' => $pei->id,
             'objective_id' => $objective->id,
             'operation_summary' => sprintf(
-                '%s ha aggiornato l\'obiettivo PEI %s del minore %s %s (%s).',
+                '%s ha aggiornato l\'obiettivo PEI %s del minore %s.',
                 $this->auditLogService->resolveActorDisplayName($request->user()),
                 $objective->title,
-                $minor->first_name,
-                $minor->last_name,
-                $minor->internal_code
+                $this->minorPublicLabel($minor)
             ),
         ]);
         $this->recordMinorAudit($request, $minor, 'update', 'minor_pei_objective', (string) $objective->id, $objective->title, [
@@ -606,12 +703,10 @@ class MinorController extends Controller
             'pei_id' => $pei->id,
             'objective_id' => $objectiveId,
             'operation_summary' => sprintf(
-                '%s ha eliminato l\'obiettivo PEI %s del minore %s %s (%s).',
+                '%s ha eliminato l\'obiettivo PEI %s del minore %s.',
                 $this->auditLogService->resolveActorDisplayName($request->user()),
                 $title,
-                $minor->first_name,
-                $minor->last_name,
-                $minor->internal_code
+                $this->minorPublicLabel($minor)
             ),
         ]);
         $this->recordMinorAudit($request, $minor, 'delete', 'minor_pei_objective', (string) $objectiveId, $title, [
@@ -663,12 +758,10 @@ class MinorController extends Controller
         $this->minorHistoryService->record($minor, 'minor_need_created', $request->user(), [
             'need_id' => $need->id,
             'operation_summary' => sprintf(
-                '%s ha inserito il bisogno %s per il minore %s %s (%s).',
+                '%s ha inserito il bisogno %s per il minore %s.',
                 $this->auditLogService->resolveActorDisplayName($request->user()),
                 $need->title,
-                $minor->first_name,
-                $minor->last_name,
-                $minor->internal_code
+                $this->minorPublicLabel($minor)
             ),
         ]);
         $this->recordMinorAudit($request, $minor, 'create', 'minor_need', (string) $need->id, $need->title, [
@@ -724,12 +817,10 @@ class MinorController extends Controller
             'minor_note_id' => $note->id,
             'classification' => $classificationCode,
             'operation_summary' => sprintf(
-                '%s ha creato una nota %s per il minore %s %s (%s).',
+                '%s ha creato una nota %s per il minore %s.',
                 $this->auditLogService->resolveActorDisplayName($request->user()),
                 $classificationCode,
-                $minor->first_name,
-                $minor->last_name,
-                $minor->internal_code
+                $this->minorPublicLabel($minor)
             ),
         ]);
         $this->recordMinorAudit($request, $minor, 'create', 'minor_note', (string) $note->id, $note->title ?: 'Nota classificata', [
@@ -765,12 +856,10 @@ class MinorController extends Controller
             'minor_note_id' => $note->id,
             'classification' => $classificationCode,
             'operation_summary' => sprintf(
-                '%s ha aggiornato una nota %s del minore %s %s (%s).',
+                '%s ha aggiornato una nota %s del minore %s.',
                 $this->auditLogService->resolveActorDisplayName($request->user()),
                 $classificationCode,
-                $minor->first_name,
-                $minor->last_name,
-                $minor->internal_code
+                $this->minorPublicLabel($minor)
             ),
         ]);
         $this->recordMinorAudit($request, $minor, 'update', 'minor_note', (string) $note->id, $note->title ?: 'Nota classificata', [
@@ -795,12 +884,10 @@ class MinorController extends Controller
             'minor_note_id' => $id,
             'classification' => $classificationCode,
             'operation_summary' => sprintf(
-                '%s ha eliminato una nota %s del minore %s %s (%s).',
+                '%s ha eliminato una nota %s del minore %s.',
                 $this->auditLogService->resolveActorDisplayName($request->user()),
                 $classificationCode,
-                $minor->first_name,
-                $minor->last_name,
-                $minor->internal_code
+                $this->minorPublicLabel($minor)
             ),
         ]);
         $this->recordMinorAudit($request, $minor, 'delete', 'minor_note', (string) $id, $title, [
@@ -824,12 +911,10 @@ class MinorController extends Controller
         $this->minorHistoryService->record($minor, 'minor_need_updated', $request->user(), [
             'need_id' => $need->id,
             'operation_summary' => sprintf(
-                '%s ha aggiornato il bisogno %s del minore %s %s (%s).',
+                '%s ha aggiornato il bisogno %s del minore %s.',
                 $this->auditLogService->resolveActorDisplayName($request->user()),
                 $need->title,
-                $minor->first_name,
-                $minor->last_name,
-                $minor->internal_code
+                $this->minorPublicLabel($minor)
             ),
         ]);
         $this->recordMinorAudit($request, $minor, 'update', 'minor_need', (string) $need->id, $need->title, [
@@ -854,12 +939,10 @@ class MinorController extends Controller
         $this->minorHistoryService->record($minor, 'minor_need_deleted', $request->user(), [
             'need_id' => $id,
             'operation_summary' => sprintf(
-                '%s ha eliminato il bisogno %s del minore %s %s (%s).',
+                '%s ha eliminato il bisogno %s del minore %s.',
                 $this->auditLogService->resolveActorDisplayName($request->user()),
                 $title,
-                $minor->first_name,
-                $minor->last_name,
-                $minor->internal_code
+                $this->minorPublicLabel($minor)
             ),
         ]);
         $this->recordMinorAudit($request, $minor, 'delete', 'minor_need', (string) $id, $title, [
@@ -903,11 +986,9 @@ class MinorController extends Controller
         $this->minorHistoryService->recordAccess($minor, 'minor_history_viewed', request()->user(), [
             'ip_address' => request()->ip(),
             'operation_summary' => sprintf(
-                '%s ha visualizzato lo storico del minore %s %s (%s).',
+                '%s ha visualizzato lo storico del minore %s.',
                 $this->auditLogService->resolveActorDisplayName(request()->user()),
-                $minor->first_name,
-                $minor->last_name,
-                $minor->internal_code
+                $this->minorPublicLabel($minor)
             ),
         ]);
 
@@ -919,17 +1000,18 @@ class MinorController extends Controller
             'resource_id' => (string) $minor->id,
             'resource_label' => $minor->internal_code,
             'operation_summary' => sprintf(
-                '%s ha visualizzato lo storico del minore %s %s (%s).',
+                '%s ha visualizzato lo storico del minore %s.',
                 $this->auditLogService->resolveActorDisplayName(request()->user()),
-                $minor->first_name,
-                $minor->last_name,
-                $minor->internal_code
+                $this->minorPublicLabel($minor)
             ),
         ]);
         $this->auditLogService->markHandled(request());
 
         return response()->json(
-            $minor->historyEntries()->with('actor:id,first_name,last_name,email')->get()
+            $minor->historyEntries()
+                ->with('actor:id,first_name,last_name,email')
+                ->get()
+                ->map(fn ($entry): array => $this->serializeMinorHistoryEntry($entry))
         );
     }
 
@@ -1105,12 +1187,10 @@ class MinorController extends Controller
         }
 
         $summary = sprintf(
-            '%s ha scaricato il documento %s del minore %s %s (%s).',
+            '%s ha scaricato il documento %s del minore %s.',
             $this->auditLogService->resolveActorDisplayName(request()->user()),
             $attachment->original_name,
-            $minor->first_name,
-            $minor->last_name,
-            $minor->internal_code
+            $this->minorPublicLabel($minor)
         );
 
         $this->minorHistoryService->recordAccess($minor, 'minor_document_downloaded', request()->user(), [
@@ -1138,7 +1218,7 @@ class MinorController extends Controller
         ]);
         $this->auditLogService->markHandled(request());
 
-        return Storage::disk($attachment->disk)->download($attachment->path, $attachment->original_name);
+        return $this->streamAttachmentDownload($attachment);
     }
 
     public function previewDocument(Minor $minor, MinorDocument $document)
@@ -1154,12 +1234,10 @@ class MinorController extends Controller
         }
 
         $summary = sprintf(
-            '%s ha visualizzato il documento %s del minore %s %s (%s).',
+            '%s ha visualizzato il documento %s del minore %s.',
             $this->auditLogService->resolveActorDisplayName(request()->user()),
             $attachment->original_name,
-            $minor->first_name,
-            $minor->last_name,
-            $minor->internal_code
+            $this->minorPublicLabel($minor)
         );
 
         $this->minorHistoryService->recordAccess($minor, 'minor_document_viewed', request()->user(), [
@@ -1188,14 +1266,7 @@ class MinorController extends Controller
         ]);
         $this->auditLogService->markHandled(request());
 
-        return Storage::disk($attachment->disk)->response(
-            $attachment->path,
-            $attachment->original_name,
-            [
-                'Content-Type' => $attachment->mime_type ?: 'application/octet-stream',
-                'Content-Disposition' => 'inline; filename="'.$attachment->original_name.'"',
-            ]
-        );
+        return $this->streamAttachmentInline($attachment);
     }
 
     public function previewDocumentStructured(Minor $minor, MinorDocument $document): JsonResponse
@@ -1215,12 +1286,10 @@ class MinorController extends Controller
         }
 
         $summary = sprintf(
-            '%s ha visualizzato la preview strutturata del documento %s del minore %s %s (%s).',
+            '%s ha visualizzato la preview strutturata del documento %s del minore %s.',
             $this->auditLogService->resolveActorDisplayName(request()->user()),
             $attachment->original_name,
-            $minor->first_name,
-            $minor->last_name,
-            $minor->internal_code
+            $this->minorPublicLabel($minor)
         );
 
         $this->minorHistoryService->recordAccess($minor, 'minor_document_structured_preview_viewed', request()->user(), [
@@ -1337,17 +1406,69 @@ class MinorController extends Controller
             'resource_id' => $resourceId,
             'resource_label' => $resourceLabel,
             'operation_summary' => sprintf(
-                '%s ha eseguito %s su %s per il minore %s %s (%s).',
+                '%s ha eseguito %s su %s per il minore %s.',
                 $this->auditLogService->resolveActorDisplayName($request->user()),
                 $action,
                 $resourceLabel,
-                $minor->first_name,
-                $minor->last_name,
-                $minor->internal_code
+                $this->minorPublicLabel($minor)
             ),
             'new_values_json' => $newValues ?: null,
         ]);
         $this->auditLogService->markHandled($request);
+    }
+
+    private function minorPublicLabel(Minor $minor): string
+    {
+        return $this->normalizeUtf8($minor->publicDisplayName()) ?? $minor->publicDisplayName();
+    }
+
+    private function formatChangedSectionsForSummary(array $changedSections): string
+    {
+        if ($changedSections === []) {
+            return 'profilo generale';
+        }
+
+        $labels = collect($changedSections)
+            ->map(fn (string $field) => match ($field) {
+                'family_background' => 'background familiare',
+                'life_history' => 'storia di vita',
+                'learning_styles' => 'stili di apprendimento',
+                'interests' => 'interessi',
+                'hobbies' => 'hobby',
+                'strengths' => 'punti di forza',
+                'risk_factors' => 'fattori di rischio',
+                'crisis_indicators' => 'indicatori di crisi',
+                'clinical_notes_encrypted' => 'note cliniche riservate',
+                default => $field,
+            })
+            ->values()
+            ->all();
+
+        return implode(', ', $labels);
+    }
+
+    private function serializeMinorHistoryEntry($entry): array
+    {
+        $operationSummary = data_get($entry->metadata, 'operation_summary');
+
+        return [
+            'id' => $entry->id,
+            'minor_id' => $entry->minor_id,
+            'facility_id' => $entry->facility_id,
+            'event_type' => $entry->event_type,
+            'description' => $this->normalizeUtf8(is_string($operationSummary) && $operationSummary !== '' ? $operationSummary : $entry->event_type),
+            'actor_user_id' => $entry->actor_user_id,
+            'actor' => $entry->actor ? [
+                'id' => $entry->actor->id,
+                'first_name' => $this->normalizeUtf8($entry->actor->first_name),
+                'last_name' => $this->normalizeUtf8($entry->actor->last_name),
+                'display_name' => $this->normalizeUtf8(trim($entry->actor->first_name.' '.$entry->actor->last_name) ?: $entry->actor->email),
+                'email' => $this->normalizeUtf8($entry->actor->email),
+            ] : null,
+            'snapshot' => $this->normalizeMixed($entry->snapshot),
+            'metadata' => $this->normalizeMixed($entry->metadata),
+            'created_at' => optional($entry->created_at)?->toISOString(),
+        ];
     }
 
     private function serializeMinorNote(MinorNote $note): array
@@ -1374,6 +1495,45 @@ class MinorController extends Controller
                 'display_name' => $this->normalizeUtf8(trim($note->updatedBy->first_name.' '.$note->updatedBy->last_name) ?: $note->updatedBy->email),
                 'email' => $this->normalizeUtf8($note->updatedBy->email),
             ] : null,
+        ];
+    }
+
+    private function streamAttachmentDownload(Attachment $attachment): StreamedResponse
+    {
+        return response()->streamDownload(function () use ($attachment): void {
+            $stream = Storage::disk($attachment->disk)->readStream($attachment->path);
+
+            if ($stream === false) {
+                throw new HttpException(404, 'Allegato non trovato nello storage.');
+            }
+
+            fpassthru($stream);
+            fclose($stream);
+        }, $attachment->original_name, $this->attachmentHeaders($attachment, false));
+    }
+
+    private function streamAttachmentInline(Attachment $attachment): StreamedResponse
+    {
+        return response()->stream(function () use ($attachment): void {
+            $stream = Storage::disk($attachment->disk)->readStream($attachment->path);
+
+            if ($stream === false) {
+                throw new HttpException(404, 'Allegato non trovato nello storage.');
+            }
+
+            fpassthru($stream);
+            fclose($stream);
+        }, 200, $this->attachmentHeaders($attachment, true));
+    }
+
+    private function attachmentHeaders(Attachment $attachment, bool $inline): array
+    {
+        $disposition = $inline ? 'inline' : 'attachment';
+
+        return [
+            'Content-Type' => $attachment->mime_type ?: 'application/octet-stream',
+            'Content-Disposition' => $disposition.'; filename="'.$attachment->original_name.'"',
+            'Content-Length' => (string) ((int) ($attachment->size_bytes ?? 0)),
         ];
     }
 }

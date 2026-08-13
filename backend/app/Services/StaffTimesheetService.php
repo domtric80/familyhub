@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\StaffAttendanceEvent;
 use App\Models\StaffShiftAssignment;
+use App\Models\StaffShiftSubstitution;
 use App\Models\StaffTimesheetAdjustment;
 use App\Models\StaffTimesheetEntry;
 use App\Models\StaffTimesheetMonthLock;
@@ -76,7 +77,19 @@ class StaffTimesheetService
             ? StaffShiftAssignment::query()->find($shiftAssignmentId)
             : StaffShiftAssignment::query()
                 ->where('facility_id', $facilityId)
-                ->where('staff_member_id', $staffMemberId)
+                ->where(function ($query) use ($staffMemberId): void {
+                    $query
+                        ->where(function ($staffQuery) use ($staffMemberId): void {
+                            $staffQuery
+                                ->where('staff_member_id', $staffMemberId)
+                                ->whereDoesntHave('activeSubstitution');
+                        })
+                        ->orWhereHas('substitutions', function ($substitutionQuery) use ($staffMemberId): void {
+                            $substitutionQuery
+                                ->where('status', StaffShiftSubstitution::STATUS_ACTIVE)
+                                ->where('replacement_staff_member_id', $staffMemberId);
+                        });
+                })
                 ->whereDate('shift_date', $workDate)
                 ->orderByDesc('id')
                 ->first();

@@ -26,6 +26,7 @@ class MinorDiagnosis extends Model
     protected function casts(): array
     {
         return [
+            'diagnosis_notes_encrypted' => 'encrypted',
             'diagnosed_at' => 'date',
             'review_due_at' => 'date',
             'is_primary' => 'boolean',

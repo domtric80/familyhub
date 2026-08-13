@@ -769,6 +769,49 @@ export interface MinorCaseOptions {
   vaccination_documents: { id: number; label?: string | null; attachment?: { original_name?: string } | null }[]
 }
 
+// ── Minor dashboard summary ────────────────────────────────────────────────────
+
+export interface MinorDashboardSummarySummary {
+  active_diagnoses_count: number
+  primary_diagnosis_label?: string | null
+  open_needs_count: number
+  high_priority_open_needs_count: number
+  active_peis_count: number
+  upcoming_deadlines_count: number
+  overdue_deadlines_count: number
+}
+
+export interface MinorDashboardHighPriorityNeed {
+  id: number
+  category_code?: string | null
+  title: string
+  status: string
+  priority: string
+}
+
+export interface MinorDashboardDeadline {
+  type: 'diagnosis_review' | 'pei_review' | 'pei_objective_due' | string
+  label: string
+  date: string
+  is_overdue: boolean
+}
+
+export interface MinorDashboardRelevantEvent {
+  id: number
+  event_type: string
+  description: string
+  created_at: string
+}
+
+export interface MinorDashboardSummary {
+  summary: MinorDashboardSummarySummary
+  high_priority_needs: MinorDashboardHighPriorityNeed[]
+  upcoming_deadlines: MinorDashboardDeadline[]
+  recent_relevant_events: MinorDashboardRelevantEvent[]
+}
+
+// ── Minor ──────────────────────────────────────────────────────────────────────
+
 export interface Minor {
   id: number
   facility_id: number
@@ -776,6 +819,7 @@ export interface Minor {
   first_name: string
   last_name: string
   preferred_name?: string | null
+  public_display_name?: string | null
   birth_date: string
   birth_city_id?: number | null
   biological_sex_id?: number | null
@@ -796,6 +840,7 @@ export interface Minor {
   biological_sex?: LookupItem | null
   gender_identity?: LookupItem | null
   birth_city?: City | null
+  dashboard_summary?: MinorDashboardSummary | null
 }
 
 export interface MinorWrite {
@@ -1026,8 +1071,10 @@ export interface Attachment {
 }
 
 export interface MinorHistoryActor {
+  id?: number | null
   first_name: string
   last_name: string
+  display_name?: string | null
   email: string
 }
 
@@ -1035,6 +1082,9 @@ export interface MinorHistoryEntry {
   id: number
   event_type: string
   description: string
+  minor_id?: number
+  facility_id?: number
+  snapshot?: Record<string, unknown> | null
   metadata?: Record<string, unknown> | null
   actor_user_id?: number | null
   actor?: MinorHistoryActor | null
@@ -1577,7 +1627,7 @@ export interface AuditLog {
   new_values_json?: Record<string, unknown> | null
   actor_user?: AdminUser | null
   facility?: Facility | null
-  minor?: { id: number; first_name: string; last_name: string; internal_code: string } | null
+  minor?: { id: number; internal_code?: string | null; public_display_name?: string | null } | null
 }
 
 export interface AuditPreset {
@@ -1963,6 +2013,19 @@ export interface StaffShiftAssignment {
   facility?: { id: number; name: string } | null
   shift_template?: StaffShiftTemplate | null
   staff_member?: { id: number; first_name: string; last_name: string; display_name?: string | null } | null
+  effective_staff_member?: { id: number; first_name: string; last_name: string; display_name?: string | null } | null
+  has_active_substitution?: boolean
+  active_substitution?: StaffShiftSubstitutionEmbedded | null
+  operational?: {
+    state: 'open' | 'in_progress' | 'closed' | 'signed' | 'approved' | 'locked' | 'cancelled'
+    label: string
+    timesheet_status?: TimesheetEntryStatus | string | null
+    submitted_at?: string | null
+    approved_at?: string | null
+    locked_at?: string | null
+    can_submit: boolean
+    has_open_anomalies: boolean
+  } | null
   actual?: {
     timesheet_entry_id?: number | null
     status?: TimesheetEntryStatus | string | null
@@ -1982,6 +2045,46 @@ export interface StaffShiftAssignment {
     has_anomaly: boolean
     anomaly_flags: string[]
   } | null
+}
+
+export type StaffShiftSubstitutionStatus = 'active' | 'cancelled'
+export type StaffShiftSubstitutionReasonCode = 'illness' | 'vacation' | 'leave' | 'emergency' | 'coverage'
+
+export interface StaffShiftSubstitutionEmbedded {
+  id: number
+  reason_code: StaffShiftSubstitutionReasonCode
+  reason_notes?: string | null
+  status: StaffShiftSubstitutionStatus
+  effective_starts_at?: string | null
+  effective_ends_at?: string | null
+  original_staff_member?: { id: number; first_name: string; last_name: string; display_name?: string | null } | null
+  replacement_staff_member?: { id: number; first_name: string; last_name: string; display_name?: string | null } | null
+  created_by?: { id: number; display_name?: string | null; email?: string | null } | null
+}
+
+export interface StaffShiftSubstitution extends StaffShiftSubstitutionEmbedded {
+  facility_id: number
+  shift_assignment_id: number
+  original_staff_member_id: number
+  replacement_staff_member_id: number
+  cancelled_at?: string | null
+  shift_assignment?: {
+    id: number
+    shift_date?: string | null
+    status?: ShiftAssignmentStatus | string | null
+    shift_template?: { id: number; code: string; name: string } | null
+  } | null
+  cancelled_by?: { id: number; display_name?: string | null; email?: string | null } | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export interface StaffShiftSubstitutionWrite {
+  replacement_staff_member_id: number
+  reason_code: StaffShiftSubstitutionReasonCode
+  reason_notes?: string | null
+  effective_starts_at?: string | null
+  effective_ends_at?: string | null
 }
 
 export interface StaffShiftAssignmentWrite {
@@ -2012,11 +2115,51 @@ export interface ShiftWeekDay {
   shifts: ShiftWeekBlock[]
 }
 
+export interface ShiftMonthDay {
+  date: string
+  day_of_week_iso?: number
+  is_weekend?: boolean
+  shifts: ShiftWeekBlock[]
+  summary?: {
+    minimum_staff_required_total: number
+    assigned_count_total: number
+    coverage_gap_total: number
+    actual_started_count_total: number
+    actual_completed_count_total: number
+    actual_coverage_gap_total: number
+    anomaly_count: number
+  }
+}
+
 export interface StaffShiftWeekView {
   facility_id: number
   week_start: string
   week_end: string
   days: ShiftWeekDay[]
+}
+
+export interface StaffShiftMonthView {
+  facility_id: number
+  staff_member_id?: number | null
+  year: number
+  month: number
+  month_start: string
+  month_end: string
+  summary: {
+    days_in_month: number
+    total_assignments: number
+    planned_assignments_count: number
+    confirmed_assignments_count: number
+    completed_assignments_count: number
+    cancelled_assignments_count: number
+    days_with_coverage_gap_count: number
+    days_with_actual_gap_count: number
+    days_with_anomalies_count: number
+    minimum_staff_required_total: number
+    assigned_count_total: number
+    actual_completed_count_total: number
+  }
+  days: ShiftMonthDay[]
 }
 
 export type MyWeekAssignment = StaffShiftAssignment
@@ -2026,6 +2169,80 @@ export interface StaffShiftMyWeek {
   week_start: string
   week_end: string
   assignments: MyWeekAssignment[]
+}
+
+export interface MyShiftMonthDay {
+  date: string
+  is_weekend?: boolean
+  assignments: StaffShiftAssignment[]
+  summary: {
+    assigned_count: number
+    completed_count: number
+    anomaly_count: number
+    planned_minutes_total: number
+    worked_minutes_total: number
+  }
+}
+
+export interface StaffShiftMyMonth {
+  staff_member: { id: number; first_name: string; last_name: string; display_name?: string | null }
+  year: number
+  month: number
+  month_start: string
+  month_end: string
+  summary: {
+    days_in_month: number
+    total_assignments: number
+    completed_assignments_count: number
+    days_with_assignments_count: number
+    days_with_anomalies_count: number
+    planned_minutes_total: number
+    worked_minutes_total: number
+  }
+  days: MyShiftMonthDay[]
+}
+
+export type ShiftExceptionType = 'planned_gap' | 'actual_gap' | 'timesheet_anomaly' | 'active_substitution'
+export type ShiftExceptionSeverity = 'info' | 'warning' | 'critical'
+
+export interface ShiftExceptionItem {
+  type: ShiftExceptionType
+  severity: ShiftExceptionSeverity
+  shift_date?: string | null
+  message: string
+  facility?: { id: number; name?: string | null } | null
+  shift_template?: { id: number; code: string; name: string } | null
+  shift_assignment_id?: number | null
+  coverage?: {
+    minimum_staff_required: number
+    assigned_count: number
+    actual_completed_count: number
+    planned_gap: number
+    actual_gap: number
+  } | null
+  anomaly_flags: string[]
+  active_substitution: boolean
+  assignment?: StaffShiftAssignment | null
+}
+
+export interface ShiftExceptionsResponse {
+  facility_id: number
+  date_from: string
+  date_to: string
+  summary: {
+    items_total: number
+    planned_gap_count: number
+    actual_gap_count: number
+    timesheet_anomaly_count: number
+    active_substitution_count: number
+  }
+  items: ShiftExceptionItem[]
+}
+
+export interface ShiftSubmitResponse {
+  message: string
+  assignment: StaffShiftAssignment
+  timesheet_entry: TimesheetEntry
 }
 
 // Timesheet

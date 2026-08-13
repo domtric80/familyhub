@@ -147,4 +147,24 @@ class Minor extends Model
     {
         return $this->hasMany(MinorUserAssignment::class);
     }
+
+    public function publicDisplayName(): string
+    {
+        $preferredName = trim((string) $this->preferred_name);
+        $internalCode = trim((string) $this->internal_code);
+
+        if ($preferredName !== '' && $internalCode !== '') {
+            return sprintf('%s (%s)', $preferredName, $internalCode);
+        }
+
+        if ($preferredName !== '') {
+            return $preferredName;
+        }
+
+        if ($internalCode !== '') {
+            return sprintf('Minore %s', $internalCode);
+        }
+
+        return sprintf('Minore #%d', $this->id);
+    }
 }

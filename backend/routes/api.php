@@ -32,6 +32,7 @@ use App\Http\Controllers\Api\Admin\RegionController;
 use App\Http\Controllers\Api\Admin\RoleController;
 use App\Http\Controllers\Api\Admin\StaffMemberController;
 use App\Http\Controllers\Api\Admin\StaffShiftAssignmentController;
+use App\Http\Controllers\Api\Admin\StaffShiftSubstitutionController;
 use App\Http\Controllers\Api\Admin\StaffShiftTemplateController;
 use App\Http\Controllers\Api\Admin\StaffTimesheetController as AdminStaffTimesheetController;
 use App\Http\Controllers\Api\Admin\StaffQualificationController;
@@ -232,6 +233,11 @@ Route::middleware(['auth:sanctum', 'admin.api', 'audit.api'])->prefix('admin')->
     Route::delete('/staff-shift-templates/{shift_template}', [StaffShiftTemplateController::class, 'destroy'])->middleware('permission.api:staff_shift_templates.delete');
     Route::get('/staff-shifts', [StaffShiftAssignmentController::class, 'index'])->middleware('permission.api:staff_shift_assignments.read');
     Route::get('/staff-shifts/week', [StaffShiftAssignmentController::class, 'week'])->middleware('permission.api:staff_shift_assignments.read');
+    Route::get('/staff-shifts/month', [StaffShiftAssignmentController::class, 'month'])->middleware('permission.api:staff_shift_assignments.read');
+    Route::get('/staff-shifts/exceptions', [StaffShiftAssignmentController::class, 'exceptions'])->middleware('permission.api:staff_shift_assignments.read');
+    Route::get('/staff-shifts/{shift_assignment}/substitutions', [StaffShiftSubstitutionController::class, 'index'])->middleware('permission.api:staff_shift_assignments.read');
+    Route::post('/staff-shifts/{shift_assignment}/substitutions', [StaffShiftSubstitutionController::class, 'store'])->middleware('permission.api:staff_shift_assignments.update');
+    Route::post('/staff-shifts/{shift_assignment}/substitutions/{substitution}/cancel', [StaffShiftSubstitutionController::class, 'cancel'])->middleware('permission.api:staff_shift_assignments.update');
     Route::post('/staff-shifts', [StaffShiftAssignmentController::class, 'store'])->middleware('permission.api:staff_shift_assignments.create');
     Route::get('/staff-shifts/{shift_assignment}', [StaffShiftAssignmentController::class, 'show'])->middleware('permission.api:staff_shift_assignments.read');
     Route::put('/staff-shifts/{shift_assignment}', [StaffShiftAssignmentController::class, 'update'])->middleware('permission.api:staff_shift_assignments.update');
@@ -423,6 +429,8 @@ Route::middleware(['auth:sanctum', 'minors.api', 'audit.api'])->prefix('journals
 
 Route::middleware(['auth:sanctum', 'audit.api'])->prefix('staff-shifts')->group(function (): void {
     Route::get('/my-week', [StaffShiftAssignmentController::class, 'myWeek'])->middleware('permission.api:staff_shift_assignments.read');
+    Route::get('/my-month', [StaffShiftAssignmentController::class, 'myMonth'])->middleware('permission.api:staff_shift_assignments.read');
+    Route::post('/{shift_assignment}/submit', [StaffShiftAssignmentController::class, 'submitMyShift'])->middleware('permission.api:staff_timesheet_entries.submit');
 });
 
 Route::middleware(['auth:sanctum', 'audit.api'])->prefix('staff')->group(function (): void {
