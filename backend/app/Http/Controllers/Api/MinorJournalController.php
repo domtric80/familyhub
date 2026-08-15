@@ -4,7 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Journals\StoreMinorJournalEntryRequest;
+use App\Http\Requests\Journals\StoreMinorJournalShiftRequest;
+use App\Http\Requests\Journals\CloseMinorJournalShiftRequest;
 use App\Http\Requests\Journals\UpdateMinorJournalEntryRequest;
+use App\Models\MinorJournalShift;
 use App\Models\Minor;
 use App\Models\MinorJournalEntry;
 use App\Services\AuditLogService;
@@ -14,6 +17,7 @@ use App\Services\MinorPeiHistoryService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class MinorJournalController extends Controller
 {
@@ -58,6 +62,26 @@ class MinorJournalController extends Controller
 
         if ($request->filled('pei_objective_id')) {
             $query->where('pei_objective_id', $request->integer('pei_objective_id'));
+        }
+
+        if ($request->filled('minor_journal_shift_id')) {
+            $query->where('minor_journal_shift_id', $request->integer('minor_journal_shift_id'));
+        }
+
+        if ($request->filled('date_from')) {
+            $query->whereDate('observed_at', '>=', $request->input('date_from'));
+        }
+
+        if ($request->filled('date_to')) {
+            $query->whereDate('observed_at', '<=', $request->input('date_to'));
+        }
+
+        if ($request->boolean('handover_pending')) {
+            $query->where('handover_required', true)->whereNull('handover_read_at');
+        }
+
+        if ($request->filled('search')) {
+            $this->applySearch($query, (string) $request->input('search'));
         }
 
         if ($request->user()) {
@@ -193,6 +217,126 @@ class MinorJournalController extends Controller
         return response()->json($loaded, 201);
     }
 
+    public function shifts(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'facility_id' => ['required', 'integer', 'exists:facilities,id'],
+            'date_from' => ['nullable', 'date'],
+            'date_to' => ['nullable', 'date'],
+            'status' => ['nullable', 'in:open,closed'],
+        ]);
+
+        abort_unless($request->user()->hasPermission('minor_journals.read', (int) $validated['facility_id']), 403, 'Accesso ai turni diario non consentito per questa struttura.');
+
+        $query = MinorJournalShift::query()
+            ->with($this->shiftRelations())
+            ->where('facility_id', $validated['facility_id'])
+            ->withCount('entries')
+            ->orderByDesc('started_at');
+
+        if (! empty($validated['date_from'])) {
+            $query->whereDate('started_at', '>=', $validated['date_from']);
+        }
+
+        if (! empty($validated['date_to'])) {
+            $query->whereDate('started_at', '<=', $validated['date_to']);
+        }
+
+        if (($validated['status'] ?? null) === 'open') {
+            $query->whereNull('closed_at');
+        }
+
+        if (($validated['status'] ?? null) === 'closed') {
+            $query->whereNotNull('closed_at');
+        }
+
+        return response()->json($query->get());
+    }
+
+    public function storeShift(StoreMinorJournalShiftRequest $request): JsonResponse
+    {
+        $facilityId = $request->integer('facility_id');
+        abort_unless($request->user()->hasPermission('minor_journals.create', $facilityId), 403, 'Apertura turno diario non consentita per questa struttura.');
+
+        $shift = MinorJournalShift::query()->create([
+            ...$request->validated(),
+            'opened_by_user_id' => $request->user()->id,
+        ]);
+
+        $loaded = $shift->load($this->shiftRelations())->loadCount('entries');
+        $this->auditLogService->record($request, [
+            'facility_id' => $facilityId,
+            'action' => 'create',
+            'resource_type' => 'minor_journal_shift',
+            'resource_id' => (string) $loaded->id,
+            'resource_label' => $loaded->title ?? 'Turno diario #'.$loaded->id,
+            'operation_summary' => sprintf('%s ha aperto il turno diario #%d.', $this->auditLogService->resolveActorDisplayName($request->user()), $loaded->id),
+        ]);
+        $this->auditLogService->markHandled($request);
+
+        return response()->json($loaded, 201);
+    }
+
+    public function closeShift(CloseMinorJournalShiftRequest $request, MinorJournalShift $shift): JsonResponse
+    {
+        abort_unless($request->user()->hasPermission('minor_journals.update', $shift->facility_id), 403, 'Chiusura turno diario non consentita per questa struttura.');
+        abort_if($shift->closed_at, 422, 'Il turno e gia chiuso e firmato.');
+        abort_if($request->date('ended_at')->lessThan($shift->started_at), 422, 'La fine turno non puo essere precedente all inizio turno.');
+
+        $shift->update([
+            'ended_at' => $request->date('ended_at'),
+            'closing_notes' => $request->input('closing_notes'),
+            'closed_at' => now(),
+            'closed_by_user_id' => $request->user()->id,
+            'closure_signature_type' => 'authenticated_application_signature',
+        ]);
+
+        $loaded = $shift->fresh()->load($this->shiftRelations())->loadCount('entries');
+        $this->auditLogService->record($request, [
+            'facility_id' => $loaded->facility_id,
+            'action' => 'sign',
+            'resource_type' => 'minor_journal_shift',
+            'resource_id' => (string) $loaded->id,
+            'resource_label' => $loaded->title ?? 'Turno diario #'.$loaded->id,
+            'operation_summary' => sprintf('%s ha chiuso e firmato applicativamente il turno diario #%d.', $this->auditLogService->resolveActorDisplayName($request->user()), $loaded->id),
+            'new_values_json' => ['closed_at' => $loaded->closed_at?->toIso8601String(), 'signature_type' => $loaded->closure_signature_type],
+        ]);
+        $this->auditLogService->markHandled($request);
+
+        return response()->json($loaded);
+    }
+
+    public function acknowledgeHandover(Request $request, MinorJournalEntry $journal): JsonResponse
+    {
+        abort_unless($this->minorAccessService->canAccessMinor($request->user(), $journal->minor, 'minor_journals.read'), 403, 'Presa visione diario non consentita per questo minore.');
+        abort_if(! $journal->handover_required, 422, 'Questa voce non richiede una presa visione.');
+        abort_if($journal->handover_read_at, 422, 'La presa visione e gia stata registrata.');
+
+        $journal->update([
+            'handover_read_at' => now(),
+            'handover_read_by_user_id' => $request->user()->id,
+            'updated_by_user_id' => $request->user()->id,
+        ]);
+
+        $loaded = $this->loadEntry($journal->fresh());
+        $this->minorHistoryService->record($loaded->minor, 'minor_journal_handover_acknowledged', $request->user(), [
+            'minor_journal_entry_id' => $loaded->id,
+            'title' => $loaded->title,
+        ]);
+        $this->auditLogService->record($request, [
+            'facility_id' => $loaded->facility_id,
+            'minor_id' => $loaded->minor_id,
+            'action' => 'acknowledge',
+            'resource_type' => 'minor_journal_handover',
+            'resource_id' => (string) $loaded->id,
+            'resource_label' => $loaded->title,
+            'operation_summary' => sprintf('%s ha preso visione della consegna della voce diario #%d del minore %s %s.', $this->auditLogService->resolveActorDisplayName($request->user()), $loaded->id, $loaded->minor->first_name, $loaded->minor->last_name),
+        ]);
+        $this->auditLogService->markHandled($request);
+
+        return response()->json($loaded);
+    }
+
     public function show(MinorJournalEntry $journal): JsonResponse
     {
         abort_unless($this->minorAccessService->canAccessMinor(request()->user(), $journal->minor, 'minor_journals.read'), 403, 'Accesso diario non consentito.');
@@ -203,6 +347,7 @@ class MinorJournalController extends Controller
     public function update(UpdateMinorJournalEntryRequest $request, MinorJournalEntry $journal): JsonResponse
     {
         abort_unless($this->minorAccessService->canAccessMinor($request->user(), $journal->minor, 'minor_journals.update'), 403, 'Aggiornamento diario non consentito.');
+        abort_if($journal->journalShift?->closed_at, 422, 'Non e possibile modificare una voce appartenente a un turno gia chiuso e firmato.');
 
         $before = $this->loadEntry($journal);
 
@@ -270,6 +415,7 @@ class MinorJournalController extends Controller
     public function destroy(MinorJournalEntry $journal): JsonResponse
     {
         abort_unless($this->minorAccessService->canAccessMinor(request()->user(), $journal->minor, 'minor_journals.delete'), 403, 'Eliminazione diario non consentita.');
+        abort_if($journal->journalShift?->closed_at, 422, 'Non e possibile eliminare una voce appartenente a un turno gia chiuso e firmato.');
 
         $minor = $journal->minor;
         $entryId = $journal->id;
@@ -291,6 +437,8 @@ class MinorJournalController extends Controller
     {
         return [
             'facility.organization',
+            'journalShift.openedBy:id,first_name,last_name,email',
+            'journalShift.closedBy:id,first_name,last_name,email',
             'minor.minorStatus',
             'journalEntryType',
             'peiObjective.pei',
@@ -298,5 +446,40 @@ class MinorJournalController extends Controller
             'createdBy:id,first_name,last_name,email',
             'updatedBy:id,first_name,last_name,email',
         ];
+    }
+
+    private function shiftRelations(): array
+    {
+        return [
+            'facility.organization',
+            'openedBy:id,first_name,last_name,email',
+            'closedBy:id,first_name,last_name,email',
+        ];
+    }
+
+    private function applySearch(Builder $query, string $search): void
+    {
+        $search = trim($search);
+        if ($search === '') {
+            return;
+        }
+
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            $query->whereRaw("to_tsvector('italian', coalesce(title, '') || ' ' || coalesce(content, '') || ' ' || coalesce(nutrition_summary, '') || ' ' || coalesce(hygiene_summary, '') || ' ' || coalesce(sleep_summary, '') || ' ' || coalesce(follow_up_notes, '') || ' ' || coalesce(handover_notes, '')) @@ websearch_to_tsquery('italian', ?)", [$search]);
+
+            return;
+        }
+
+        $like = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $search).'%';
+        $query->where(function (Builder $searchQuery) use ($like): void {
+            $searchQuery
+                ->where('title', 'like', $like)
+                ->orWhere('content', 'like', $like)
+                ->orWhere('nutrition_summary', 'like', $like)
+                ->orWhere('hygiene_summary', 'like', $like)
+                ->orWhere('sleep_summary', 'like', $like)
+                ->orWhere('follow_up_notes', 'like', $like)
+                ->orWhere('handover_notes', 'like', $like);
+        });
     }
 }

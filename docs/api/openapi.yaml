@@ -5756,6 +5756,56 @@ paths:
       responses:
         '204':
           description: Avvicinamento eliminato
+  /approaches/{approach}/renew-authorization:
+    post:
+      tags: [Approaches]
+      security: [{ bearerAuth: [] }]
+      operationId: renewMinorApproachAuthorization
+      parameters:
+        - name: approach
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MinorApproachAuthorizationRenewalWrite'
+      responses:
+        '200':
+          description: Provvedimento autorizzativo rinnovato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MinorApproach'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /approaches/{approach}/sign-suspension:
+    post:
+      tags: [Approaches]
+      security: [{ bearerAuth: [] }]
+      operationId: signMinorApproachSuspension
+      parameters:
+        - name: approach
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MinorApproachSuspensionSignatureWrite'
+      responses:
+        '200':
+          description: Sospensione firmata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MinorApproach'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /journals:
     get:
       tags: [Journals]
@@ -5780,6 +5830,22 @@ paths:
         - in: query
           name: handover_required
           schema: { type: boolean }
+        - in: query
+          name: handover_pending
+          schema: { type: boolean }
+        - in: query
+          name: minor_journal_shift_id
+          schema: { type: integer }
+        - in: query
+          name: date_from
+          schema: { type: string, format: date }
+        - in: query
+          name: date_to
+          schema: { type: string, format: date }
+        - in: query
+          name: search
+          schema: { type: string }
+          description: Ricerca full-text su titolo, contenuti e note operative.
       responses:
         '200':
           description: Elenco voci diario minore
@@ -5833,6 +5899,76 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MinorJournalSummary'
+  /journals/shifts:
+    get:
+      tags: [Journals]
+      security: [{ bearerAuth: [] }]
+      operationId: listMinorJournalShifts
+      parameters:
+        - in: query
+          name: facility_id
+          required: true
+          schema: { type: integer }
+        - in: query
+          name: date_from
+          schema: { type: string, format: date }
+        - in: query
+          name: date_to
+          schema: { type: string, format: date }
+        - in: query
+          name: status
+          schema: { type: string, enum: [open, closed] }
+      responses:
+        '200':
+          description: Turni del diario educativo della struttura
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MinorJournalShift'
+    post:
+      tags: [Journals]
+      security: [{ bearerAuth: [] }]
+      operationId: createMinorJournalShift
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MinorJournalShiftWrite'
+      responses:
+        '201':
+          description: Turno diario aperto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MinorJournalShift'
+  /journals/shifts/{shift}/close:
+    post:
+      tags: [Journals]
+      security: [{ bearerAuth: [] }]
+      operationId: closeMinorJournalShift
+      parameters:
+        - in: path
+          name: shift
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MinorJournalShiftCloseWrite'
+      responses:
+        '200':
+          description: Turno chiuso e firmato applicativamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MinorJournalShift'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /journals/{journal}:
     get:
       tags: [Journals]
@@ -5910,6 +6046,25 @@ paths:
       responses:
         '204':
           description: Voce diario eliminata
+  /journals/{journal}/acknowledge-handover:
+    post:
+      tags: [Journals]
+      security: [{ bearerAuth: [] }]
+      operationId: acknowledgeMinorJournalHandover
+      parameters:
+        - in: path
+          name: journal
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Presa visione della consegna registrata con l'utente autenticato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MinorJournalEntry'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /staff-shifts/my-week:
     get:
       tags: [Staff]
@@ -6716,6 +6871,7 @@ components:
       properties:
         id: { type: integer }
         facility_id: { type: integer }
+        minor_journal_shift_id: { type: integer, nullable: true }
         minor_id: { type: integer }
         activity_type_id: { type: integer }
         responsible_staff_member_id: { type: integer, nullable: true }
@@ -6829,6 +6985,9 @@ components:
         authorization_renewal_alert_days: { type: integer, nullable: true }
         authorization_status: { type: string, enum: [active, expiring, expired], nullable: true }
         authorization_needs_renewal: { type: boolean }
+        authorization_days_until_expiry: { type: integer, nullable: true }
+        authorization_is_expired: { type: boolean }
+        can_renew_authorization: { type: boolean }
         planned_start_at: { type: string, format: date-time }
         planned_end_at: { type: string, format: date-time, nullable: true }
         actual_start_at: { type: string, format: date-time, nullable: true }
@@ -6851,6 +7010,8 @@ components:
         suspended_at: { type: string, format: date-time, nullable: true }
         suspended_by_user_id: { type: integer, nullable: true }
         suspension_signed_at: { type: string, format: date-time, nullable: true }
+        suspension_is_signed: { type: boolean }
+        can_sign_suspension: { type: boolean }
         facility: { $ref: '#/components/schemas/Facility' }
         minor: { $ref: '#/components/schemas/Minor' }
         approach_type: { $ref: '#/components/schemas/ApproachType' }
@@ -6923,6 +7084,20 @@ components:
         suspended_by_user_id: { type: integer, nullable: true }
         suspension_signed_at: { type: string, format: date-time, nullable: true }
       required: [minor_id, approach_type_id, title, planned_start_at]
+    MinorApproachAuthorizationRenewalWrite:
+      type: object
+      properties:
+        authorization_reference: { type: string, nullable: true }
+        authorization_minor_document_id: { type: integer, nullable: true }
+        authorization_issued_at: { type: string, format: date, nullable: true }
+        authorization_expires_at: { type: string, format: date }
+        authorization_renewal_alert_days: { type: integer, nullable: true }
+      required: [authorization_expires_at]
+    MinorApproachSuspensionSignatureWrite:
+      type: object
+      properties:
+        suspension_reason: { type: string, nullable: true }
+        suspended_at: { type: string, format: date-time, nullable: true }
     MinorApproachParticipant:
       type: object
       properties:
@@ -7001,6 +7176,27 @@ components:
               phase: { type: string, enum: [pre, during, post] }
               level: { type: string, enum: [very_negative, negative, neutral, positive, very_positive] }
               total: { type: integer }
+        totals_by_approach_type:
+          type: array
+          items:
+            type: object
+            properties:
+              approach_type_code: { type: string }
+              approach_type_name: { type: string, nullable: true }
+              total: { type: integer }
+        upcoming_authorization_renewals:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              minor_id: { type: integer }
+              minor_label: { type: string }
+              title: { type: string }
+              authorization_reference: { type: string, nullable: true }
+              authorization_status: { type: string, enum: [active, expiring, expired], nullable: true }
+              authorization_expires_at: { type: string, format: date, nullable: true }
+              authorization_days_until_expiry: { type: integer, nullable: true }
     MinorJournalEntry:
       type: object
       properties:
@@ -7023,6 +7219,7 @@ components:
         handover_notes: { type: string, nullable: true }
         handover_read_at: { type: string, format: date-time, nullable: true }
         handover_read_by_user_id: { type: integer, nullable: true }
+        journal_shift: { $ref: '#/components/schemas/MinorJournalShift', nullable: true }
         facility: { $ref: '#/components/schemas/Facility' }
         minor: { $ref: '#/components/schemas/Minor' }
         journal_entry_type: { $ref: '#/components/schemas/JournalEntryType' }
@@ -7032,6 +7229,7 @@ components:
       type: object
       properties:
         minor_id: { type: integer }
+        minor_journal_shift_id: { type: integer, nullable: true }
         journal_entry_type_id: { type: integer }
         observed_at: { type: string, format: date-time }
         title: { type: string }
@@ -7046,9 +7244,36 @@ components:
         pei_objective_id: { type: integer, nullable: true }
         handover_required: { type: boolean, nullable: true }
         handover_notes: { type: string, nullable: true }
-        handover_read_at: { type: string, format: date-time, nullable: true }
-        handover_read_by_user_id: { type: integer, nullable: true }
       required: [minor_id, journal_entry_type_id, observed_at, title, content]
+    MinorJournalShift:
+      type: object
+      properties:
+        id: { type: integer }
+        facility_id: { type: integer }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time, nullable: true }
+        title: { type: string, nullable: true }
+        closing_notes: { type: string, nullable: true }
+        opened_by_user_id: { type: integer }
+        closed_at: { type: string, format: date-time, nullable: true }
+        closed_by_user_id: { type: integer, nullable: true }
+        closure_signature_type: { type: string, enum: [authenticated_application_signature], nullable: true }
+        entries_count: { type: integer }
+      required: [id, facility_id, started_at, opened_by_user_id]
+    MinorJournalShiftWrite:
+      type: object
+      properties:
+        facility_id: { type: integer }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time, nullable: true }
+        title: { type: string, nullable: true }
+      required: [facility_id, started_at]
+    MinorJournalShiftCloseWrite:
+      type: object
+      properties:
+        ended_at: { type: string, format: date-time }
+        closing_notes: { type: string, nullable: true }
+      required: [ended_at]
     MinorJournalSummary:
       type: object
       properties:

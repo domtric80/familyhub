@@ -414,14 +414,20 @@ Route::middleware(['auth:sanctum', 'minors.api', 'audit.api'])->prefix('approach
     Route::get('/{approach}', [MinorApproachController::class, 'show'])->middleware('permission.api:minor_approaches.read');
     Route::put('/{approach}', [MinorApproachController::class, 'update'])->middleware('permission.api:minor_approaches.update');
     Route::patch('/{approach}', [MinorApproachController::class, 'update'])->middleware('permission.api:minor_approaches.update');
+    Route::post('/{approach}/renew-authorization', [MinorApproachController::class, 'renewAuthorization'])->middleware('permission.api:minor_approaches.update');
+    Route::post('/{approach}/sign-suspension', [MinorApproachController::class, 'signSuspension'])->middleware('permission.api:minor_approaches.update');
     Route::delete('/{approach}', [MinorApproachController::class, 'destroy'])->middleware('permission.api:minor_approaches.delete');
 });
 
 Route::middleware(['auth:sanctum', 'minors.api', 'audit.api'])->prefix('journals')->group(function (): void {
     Route::get('/', [MinorJournalController::class, 'index'])->middleware('permission.api:minor_journals.read');
     Route::get('/summary', [MinorJournalController::class, 'summary'])->middleware('permission.api:minor_journals.read');
+    Route::get('/shifts', [MinorJournalController::class, 'shifts'])->middleware('permission.api:minor_journals.read');
+    Route::post('/shifts', [MinorJournalController::class, 'storeShift'])->middleware('permission.api:minor_journals.create');
+    Route::post('/shifts/{shift}/close', [MinorJournalController::class, 'closeShift'])->middleware('permission.api:minor_journals.update');
     Route::post('/', [MinorJournalController::class, 'store'])->middleware('permission.api:minor_journals.create');
     Route::get('/{journal}', [MinorJournalController::class, 'show'])->middleware('permission.api:minor_journals.read');
+    Route::post('/{journal}/acknowledge-handover', [MinorJournalController::class, 'acknowledgeHandover'])->middleware('permission.api:minor_journals.read');
     Route::put('/{journal}', [MinorJournalController::class, 'update'])->middleware('permission.api:minor_journals.update');
     Route::patch('/{journal}', [MinorJournalController::class, 'update'])->middleware('permission.api:minor_journals.update');
     Route::delete('/{journal}', [MinorJournalController::class, 'destroy'])->middleware('permission.api:minor_journals.delete');

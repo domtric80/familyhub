@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\ApproachType;
 use App\Models\Attachment;
+use App\Models\AuditLog;
 use App\Models\DocumentType;
 use App\Models\Facility;
 use App\Models\Minor;
@@ -524,8 +525,112 @@ class MinorApproachApiTest extends TestCase
             ->assertJsonValidationErrors(['suspended_at']);
     }
 
-    private function createEducatorTokenForFacility(int $facilityId): array
-    {
+
+public function test_can_renew_approach_authorization_and_expose_due_items_in_trend(): void
+{
+    $facility = Facility::query()->firstOrFail();
+    $minor = Minor::query()->create([
+        'facility_id' => $facility->id,
+        'internal_code' => 'MIN-APP-RENEW-001',
+        'first_name' => 'Nadia',
+        'last_name' => 'Viola',
+        'birth_date' => '2012-06-06',
+        'entry_date' => '2026-01-01',
+        'minor_status_id' => \App\Models\MinorStatus::query()->firstOrFail()->id,
+    ]);
+    $type = ApproachType::query()->where('code', 'FAMILY_VISIT')->firstOrFail();
+    $expiresAt = now()->addDays(7)->toDateString();
+
+    $approach = MinorApproach::query()->create([
+        'facility_id' => $facility->id,
+        'minor_id' => $minor->id,
+        'approach_type_id' => $type->id,
+        'title' => 'Visita con rinnovo imminente',
+        'planned_start_at' => '2026-08-20 10:00:00',
+        'status' => 'planned',
+        'authorization_reference' => 'AUTH-OLD',
+        'authorization_issued_at' => now()->subDays(20)->toDateString(),
+        'authorization_expires_at' => now()->subDay()->toDateString(),
+        'authorization_renewal_alert_days' => 15,
+    ]);
+
+    $this->withToken($this->token)
+        ->postJson('/api/approaches/'.$approach->id.'/renew-authorization', [
+            'authorization_reference' => 'AUTH-NEW-2026',
+            'authorization_issued_at' => now()->toDateString(),
+            'authorization_expires_at' => $expiresAt,
+            'authorization_renewal_alert_days' => 15,
+        ])
+        ->assertOk()
+        ->assertJsonPath('authorization_reference', 'AUTH-NEW-2026')
+        ->assertJsonPath('authorization_status', 'expiring')
+        ->assertJsonPath('authorization_needs_renewal', true)
+        ->assertJsonPath('authorization_days_until_expiry', 7)
+        ->assertJsonPath('can_renew_authorization', true);
+
+    $this->assertDatabaseHas('audit_logs', [
+        'resource_type' => 'minor_approach_authorization',
+        'resource_id' => (string) $approach->id,
+    ]);
+
+    $this->withToken($this->token)
+        ->getJson('/api/approaches/trend?minor_id='.$minor->id)
+        ->assertOk()
+        ->assertJsonPath('summary.authorization_expiring', 1)
+        ->assertJsonPath('totals_by_approach_type.0.approach_type_code', 'FAMILY_VISIT')
+        ->assertJsonPath('upcoming_authorization_renewals.0.id', $approach->id)
+        ->assertJsonPath('upcoming_authorization_renewals.0.authorization_status', 'expiring');
+}
+
+public function test_reserved_notes_read_is_audited_and_suspension_can_be_signed(): void
+{
+    $facility = Facility::query()->firstOrFail();
+    $minor = Minor::query()->create([
+        'facility_id' => $facility->id,
+        'internal_code' => 'MIN-APP-SUSP-001',
+        'first_name' => 'Daria',
+        'last_name' => 'Rossi',
+        'birth_date' => '2012-07-07',
+        'entry_date' => '2026-01-01',
+        'minor_status_id' => \App\Models\MinorStatus::query()->firstOrFail()->id,
+    ]);
+    $type = ApproachType::query()->where('code', 'FAMILY_VISIT')->firstOrFail();
+
+    $approach = MinorApproach::query()->create([
+        'facility_id' => $facility->id,
+        'minor_id' => $minor->id,
+        'approach_type_id' => $type->id,
+        'title' => 'Approach sospeso da firmare',
+        'planned_start_at' => '2026-08-21 10:00:00',
+        'status' => 'suspended',
+        'reserved_psychologist_notes' => 'Nota clinica riservata.',
+        'reserved_coordinator_notes' => 'Nota coordinatore riservata.',
+        'suspension_reason' => 'Evento non compatibile con il benessere attuale del minore.',
+        'suspended_at' => now()->subHour(),
+    ]);
+
+    $this->withToken($this->token)
+        ->getJson('/api/approaches/'.$approach->id)
+        ->assertOk()
+        ->assertJsonPath('has_reserved_notes', true)
+        ->assertJsonPath('can_sign_suspension', true);
+
+    $this->assertTrue(AuditLog::query()->where('resource_type', 'minor_approach_reserved_notes')->where('resource_id', (string) $approach->id)->exists());
+
+    $this->withToken($this->token)
+        ->postJson('/api/approaches/'.$approach->id.'/sign-suspension', [])
+        ->assertOk()
+        ->assertJsonPath('status', 'suspended')
+        ->assertJsonPath('suspension_is_signed', true);
+
+    $approach->refresh();
+    $this->assertNotNull($approach->suspension_signed_at);
+    $this->assertTrue(AuditLog::query()->where('resource_type', 'minor_approach_suspension')->where('resource_id', (string) $approach->id)->exists());
+}
+
+private function createEducatorTokenForFacility(int $facilityId): array
+{
+
         $adminUser = User::query()->where('email', 'admin@familyhub.local')->firstOrFail();
         $educatorRole = Role::query()->where('code', 'EDUCATORE')->firstOrFail();
 

@@ -12,6 +12,7 @@ class MinorJournalEntry extends Model
 
     protected $fillable = [
         'facility_id',
+        'minor_journal_shift_id',
         'minor_id',
         'journal_entry_type_id',
         'observed_at',
@@ -46,6 +47,11 @@ class MinorJournalEntry extends Model
     public function facility(): BelongsTo
     {
         return $this->belongsTo(Facility::class);
+    }
+
+    public function journalShift(): BelongsTo
+    {
+        return $this->belongsTo(MinorJournalShift::class, 'minor_journal_shift_id');
     }
 
     public function minor(): BelongsTo

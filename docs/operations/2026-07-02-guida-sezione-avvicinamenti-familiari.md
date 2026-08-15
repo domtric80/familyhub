@@ -81,3 +81,18 @@ Questa sezione aiuta la struttura a:
 - condividere osservazioni tra figure autorizzate
 - controllare la validità delle autorizzazioni
 - ricostruire l’evoluzione del caso nel tempo
+
+
+## Rinnovo provvedimento e sospensione firmata
+
+Il workflow Avvicinamenti distingue ora due azioni operative esplicite:
+
+- `Rinnova provvedimento`: aggiorna riferimento, documento collegato, emissione, scadenza e soglia alert rinnovo
+- `Firma sospensione`: conferma formalmente una sospensione già motivata
+
+Regole pratiche:
+
+- una sospensione non può essere firmata senza motivazione
+- la firma della sospensione è tracciata in audit
+- l'apertura delle note riservate da parte di un ruolo autorizzato viene auditata
+- il trend avvicinamenti espone anche l'elenco dei rinnovi imminenti/scaduti

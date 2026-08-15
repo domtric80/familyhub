@@ -38,7 +38,6 @@ const EMPTY_FORM: JournalEntryWrite = {
   sleep_summary: null,
   handover_required: false,
   handover_notes: null,
-  handover_read_at: null,
 }
 
 export default function DiarioMinoreTab({ minorId }: { minorId: number }) {
@@ -99,7 +98,6 @@ export default function DiarioMinoreTab({ minorId }: { minorId: number }) {
       sleep_summary: item.sleep_summary ?? null,
       handover_required: item.handover_required ?? false,
       handover_notes: item.handover_notes ?? null,
-      handover_read_at: item.handover_read_at ?? null,
     })
     setFormMsg(null); setEditTarget(item)
   }
@@ -291,7 +289,10 @@ export default function DiarioMinoreTab({ minorId }: { minorId: number }) {
                   <td>
                     <div className='d-flex gap-1'>
                       <Button size='sm' color='outline-secondary' className='d-flex align-items-center gap-1' onClick={() => setDetailTarget(item)}><Eye size={12} /> Dettagli</Button>
-                      <Button size='sm' color='outline-primary' className='d-flex align-items-center gap-1' onClick={() => openEdit(item)}><Edit2 size={12} /> Modifica</Button>
+                      <Button size='sm' color='outline-primary' className='d-flex align-items-center gap-1'
+                        disabled={!!item.journal_shift?.closed_at}
+                        title={item.journal_shift?.closed_at ? 'Turno chiuso — voce non modificabile' : 'Modifica'}
+                        onClick={() => openEdit(item)}><Edit2 size={12} /> Modifica</Button>
                     </div>
                   </td>
                 </tr>

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Approaches\RenewMinorApproachAuthorizationRequest;
+use App\Http\Requests\Approaches\SignMinorApproachSuspensionRequest;
 use App\Http\Requests\Approaches\StoreMinorApproachRequest;
 use App\Http\Requests\Approaches\UpdateMinorApproachRequest;
 use App\Models\ContactType;
@@ -77,7 +79,8 @@ class MinorApproachController extends Controller
 
     public function trend(Request $request): JsonResponse
     {
-        $query = MinorApproach::query();
+        $query = MinorApproach::query()
+            ->with(['approachType:id,code,name', 'minor:id,first_name,last_name']);
 
         if ($request->filled('facility_id')) {
             $query->where('facility_id', $request->integer('facility_id'));
@@ -138,6 +141,34 @@ class MinorApproachController extends Controller
                     ];
                 })
                 ->values(),
+            'totals_by_approach_type' => $items
+                ->groupBy(fn (MinorApproach $approach) => $approach->approachType?->code ?: 'unknown')
+                ->map(function ($group, string $code): array {
+                    $first = $group->first();
+
+                    return [
+                        'approach_type_code' => $code,
+                        'approach_type_name' => $first?->approachType?->name,
+                        'total' => $group->count(),
+                    ];
+                })
+                ->values(),
+            'upcoming_authorization_renewals' => $items
+                ->filter(fn (MinorApproach $approach): bool => in_array($this->resolveAuthorizationStatus($approach), ['expiring', 'expired'], true))
+                ->sortBy(fn (MinorApproach $approach) => $approach->authorization_expires_at?->timestamp ?? PHP_INT_MAX)
+                ->take(10)
+                ->values()
+                ->map(fn (MinorApproach $approach): array => [
+                    'id' => $approach->id,
+                    'minor_id' => $approach->minor_id,
+                    'minor_label' => trim(($approach->minor?->first_name ?? '').' '.($approach->minor?->last_name ?? '')),
+                    'title' => $approach->title,
+                    'authorization_reference' => $approach->authorization_reference,
+                    'authorization_status' => $this->resolveAuthorizationStatus($approach),
+                    'authorization_expires_at' => optional($approach->authorization_expires_at)?->toDateString(),
+                    'authorization_days_until_expiry' => $this->authorizationDaysUntilExpiry($approach),
+                ])
+                ->all(),
             'reaction_distribution' => collect(['pre', 'during', 'post'])
                 ->flatMap(function (string $phase) use ($items): array {
                     $column = "{$phase}_reaction_level";
@@ -231,7 +262,10 @@ class MinorApproachController extends Controller
     {
         abort_unless($this->minorAccessService->canAccessMinor(request()->user(), $approach->minor, 'minor_approaches.read'), 403, 'Accesso avvicinamento non consentito.');
 
-        return response()->json($this->serializeApproach($this->loadApproach($approach), request()));
+        $loaded = $this->loadApproach($approach);
+        $this->auditReservedNotesRead(request(), $loaded);
+
+        return response()->json($this->serializeApproach($loaded, request()));
     }
 
     public function update(UpdateMinorApproachRequest $request, MinorApproach $approach): JsonResponse
@@ -322,8 +356,146 @@ class MinorApproachController extends Controller
         return response()->json($this->serializeApproach($loaded, $request));
     }
 
-    public function destroy(MinorApproach $approach): JsonResponse
-    {
+
+public function renewAuthorization(RenewMinorApproachAuthorizationRequest $request, MinorApproach $approach): JsonResponse
+{
+    abort_unless($this->minorAccessService->canAccessMinor($request->user(), $approach->minor, 'minor_approaches.update'), 403, 'Rinnovo provvedimento non consentito.');
+
+    $before = $this->loadApproach($approach);
+
+    $approach->update([
+        'authorization_reference' => $request->input('authorization_reference'),
+        'authorization_minor_document_id' => $request->input('authorization_minor_document_id'),
+        'authorization_issued_at' => $request->input('authorization_issued_at'),
+        'authorization_expires_at' => $request->input('authorization_expires_at'),
+        'authorization_renewal_alert_days' => $request->integer('authorization_renewal_alert_days') ?: (int) config('approaches.default_authorization_renewal_alert_days', 30),
+        'updated_by_user_id' => $request->user()?->id,
+    ]);
+
+    $loaded = $this->loadApproach($approach->fresh());
+
+    $this->minorHistoryService->record($loaded->minor, 'minor_approach_authorization_renewed', $request->user(), [
+        'minor_approach_id' => $loaded->id,
+        'authorization_reference_before' => $before->authorization_reference,
+        'authorization_reference_after' => $loaded->authorization_reference,
+        'authorization_expires_at_before' => optional($before->authorization_expires_at)?->toDateString(),
+        'authorization_expires_at_after' => optional($loaded->authorization_expires_at)?->toDateString(),
+        'operation_summary' => sprintf(
+            '%s ha rinnovato il provvedimento autorizzativo dell\'avvicinamento #%d del minore %s %s.',
+            $this->auditLogService->resolveActorDisplayName($request->user()),
+            $loaded->id,
+            $loaded->minor->first_name,
+            $loaded->minor->last_name
+        ),
+    ]);
+
+    $this->auditLogService->record($request, [
+        'facility_id' => $loaded->facility_id,
+        'minor_id' => $loaded->minor_id,
+        'action' => 'update',
+        'resource_type' => 'minor_approach_authorization',
+        'resource_id' => (string) $loaded->id,
+        'resource_label' => $loaded->title,
+        'operation_summary' => sprintf(
+            '%s ha rinnovato il provvedimento autorizzativo dell\'avvicinamento #%d del minore %s %s.',
+            $this->auditLogService->resolveActorDisplayName($request->user()),
+            $loaded->id,
+            $loaded->minor->first_name,
+            $loaded->minor->last_name
+        ),
+        'old_values_json' => [
+            'authorization_reference' => $before->authorization_reference,
+            'authorization_minor_document_id' => $before->authorization_minor_document_id,
+            'authorization_issued_at' => optional($before->authorization_issued_at)?->toDateString(),
+            'authorization_expires_at' => optional($before->authorization_expires_at)?->toDateString(),
+            'authorization_renewal_alert_days' => $before->authorization_renewal_alert_days,
+        ],
+        'new_values_json' => [
+            'authorization_reference' => $loaded->authorization_reference,
+            'authorization_minor_document_id' => $loaded->authorization_minor_document_id,
+            'authorization_issued_at' => optional($loaded->authorization_issued_at)?->toDateString(),
+            'authorization_expires_at' => optional($loaded->authorization_expires_at)?->toDateString(),
+            'authorization_renewal_alert_days' => $loaded->authorization_renewal_alert_days,
+            'authorization_status' => $this->resolveAuthorizationStatus($loaded),
+        ],
+    ]);
+    $this->auditLogService->markHandled($request);
+
+    return response()->json($this->serializeApproach($loaded, $request));
+}
+
+public function signSuspension(SignMinorApproachSuspensionRequest $request, MinorApproach $approach): JsonResponse
+{
+    abort_unless($this->minorAccessService->canAccessMinor($request->user(), $approach->minor, 'minor_approaches.update'), 403, 'Firma sospensione non consentita per questo minore.');
+    abort_unless($this->canUserSignSuspension($request->user()), 403, 'Solo i ruoli responsabili possono firmare la sospensione.');
+
+    if ((string) $approach->status !== MinorApproach::STATUS_SUSPENDED) {
+        return response()->json(['message' => 'L\'avvicinamento deve essere in stato sospeso prima della firma.'], 422);
+    }
+
+    if (blank($approach->suspension_reason) && blank($request->input('suspension_reason'))) {
+        return response()->json(['message' => 'La motivazione della sospensione è obbligatoria prima della firma.'], 422);
+    }
+
+    $before = $this->loadApproach($approach);
+
+    $approach->update([
+        'status' => MinorApproach::STATUS_SUSPENDED,
+        'suspension_reason' => $request->input('suspension_reason', $approach->suspension_reason),
+        'suspended_at' => $request->input('suspended_at', optional($approach->suspended_at)->toIso8601String() ?: now()->toIso8601String()),
+        'suspended_by_user_id' => $request->user()?->id,
+        'suspension_signed_at' => now(),
+        'updated_by_user_id' => $request->user()?->id,
+    ]);
+
+    $loaded = $this->loadApproach($approach->fresh());
+
+    $this->minorHistoryService->record($loaded->minor, 'minor_approach_suspension_signed', $request->user(), [
+        'minor_approach_id' => $loaded->id,
+        'operation_summary' => sprintf(
+            '%s ha firmato la sospensione dell\'avvicinamento #%d del minore %s %s.',
+            $this->auditLogService->resolveActorDisplayName($request->user()),
+            $loaded->id,
+            $loaded->minor->first_name,
+            $loaded->minor->last_name
+        ),
+    ]);
+
+    $this->auditLogService->record($request, [
+        'facility_id' => $loaded->facility_id,
+        'minor_id' => $loaded->minor_id,
+        'action' => 'update',
+        'resource_type' => 'minor_approach_suspension',
+        'resource_id' => (string) $loaded->id,
+        'resource_label' => $loaded->title,
+        'operation_summary' => sprintf(
+            '%s ha firmato la sospensione dell\'avvicinamento #%d del minore %s %s.',
+            $this->auditLogService->resolveActorDisplayName($request->user()),
+            $loaded->id,
+            $loaded->minor->first_name,
+            $loaded->minor->last_name
+        ),
+        'old_values_json' => [
+            'status' => $before->status,
+            'suspension_reason' => $before->suspension_reason,
+            'suspended_at' => optional($before->suspended_at)?->toIso8601String(),
+            'suspension_signed_at' => optional($before->suspension_signed_at)?->toIso8601String(),
+        ],
+        'new_values_json' => [
+            'status' => $loaded->status,
+            'suspension_reason' => $loaded->suspension_reason,
+            'suspended_at' => optional($loaded->suspended_at)?->toIso8601String(),
+            'suspension_signed_at' => optional($loaded->suspension_signed_at)?->toIso8601String(),
+        ],
+    ]);
+    $this->auditLogService->markHandled($request);
+
+    return response()->json($this->serializeApproach($loaded, $request));
+}
+
+public function destroy(MinorApproach $approach): JsonResponse
+{
+
         abort_unless($this->minorAccessService->canAccessMinor(request()->user(), $approach->minor, 'minor_approaches.delete'), 403, 'Eliminazione avvicinamento non consentita.');
 
         $loaded = $this->loadApproach($approach);
@@ -376,9 +548,18 @@ class MinorApproachController extends Controller
 
         $data['authorization_status'] = $this->resolveAuthorizationStatus($approach);
         $data['authorization_needs_renewal'] = $data['authorization_status'] === 'expiring';
+        $data['authorization_days_until_expiry'] = $this->authorizationDaysUntilExpiry($approach);
+        $data['authorization_is_expired'] = $data['authorization_status'] === 'expired';
+        $data['can_renew_authorization'] = $request->user()
+            ? $this->minorAccessService->canAccessMinor($request->user(), $approach->minor, 'minor_approaches.update')
+            : false;
         $data['can_view_reserved_psychologist_notes'] = $canViewPsychologistNotes;
         $data['can_view_reserved_coordinator_notes'] = $canViewCoordinatorNotes;
         $data['has_reserved_notes'] = $this->hasReservedNotes($approach);
+        $data['suspension_is_signed'] = filled($approach->suspension_signed_at);
+        $data['can_sign_suspension'] = $request->user()
+            ? ($this->minorAccessService->canAccessMinor($request->user(), $approach->minor, 'minor_approaches.update') && $this->canUserSignSuspension($request->user()))
+            : false;
         $data['minor_contact_ids'] = $approach->minorContacts->pluck('id')->values()->all();
         $data['minor_contacts_count'] = $approach->minorContacts->count();
         $participantRoleIds = $approach->minorContacts
@@ -440,6 +621,56 @@ class MinorApproachController extends Controller
     private function hasReservedNotes(MinorApproach $approach): bool
     {
         return filled($approach->reserved_psychologist_notes) || filled($approach->reserved_coordinator_notes);
+    }
+
+    private function authorizationDaysUntilExpiry(MinorApproach $approach): ?int
+    {
+        if (! $approach->authorization_expires_at) {
+            return null;
+        }
+
+        return now()->startOfDay()->diffInDays($approach->authorization_expires_at->copy()->startOfDay(), false);
+    }
+
+    private function canUserSignSuspension($user): bool
+    {
+        return $user?->hasRoleIn(config('approaches.reserved_coordinator_roles', [])) ?? false;
+    }
+
+    private function auditReservedNotesRead(Request $request, MinorApproach $approach): void
+    {
+        if (! $this->hasReservedNotes($approach)) {
+            return;
+        }
+
+        $canViewPsychologistNotes = $request->user()?->hasRoleIn(config('approaches.reserved_psychologist_roles', [])) ?? false;
+        $canViewCoordinatorNotes = $request->user()?->hasRoleIn(config('approaches.reserved_coordinator_roles', [])) ?? false;
+
+        if (! $canViewPsychologistNotes && ! $canViewCoordinatorNotes) {
+            return;
+        }
+
+        $this->auditLogService->record($request, [
+            'facility_id' => $approach->facility_id,
+            'minor_id' => $approach->minor_id,
+            'action' => 'read',
+            'resource_type' => 'minor_approach_reserved_notes',
+            'resource_id' => (string) $approach->id,
+            'resource_label' => $approach->title,
+            'operation_summary' => sprintf(
+                '%s ha consultato le note riservate dell\'avvicinamento #%d del minore %s %s.',
+                $this->auditLogService->resolveActorDisplayName($request->user()),
+                $approach->id,
+                $approach->minor->first_name,
+                $approach->minor->last_name
+            ),
+            'new_values_json' => [
+                'can_view_reserved_psychologist_notes' => $canViewPsychologistNotes,
+                'can_view_reserved_coordinator_notes' => $canViewCoordinatorNotes,
+                'has_reserved_notes' => true,
+            ],
+        ]);
+        $this->auditLogService->markHandled($request);
     }
 
     private function resolveAuthorizationStatus(MinorApproach $approach): ?string
