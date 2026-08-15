@@ -4,6 +4,30 @@ Tutte le modifiche rilevanti di FamilyHub vengono tracciate in questo file.
 
 Formato ispirato a Keep a Changelog e Semantic Versioning.
 
+## [1.4.0] - 2026-08-15
+
+### Added
+- completato il workflow Avvicinamenti con rinnovo del provvedimento, trend per tipologia, elenco rinnovi imminenti e firma applicativa della sospensione
+- introdotti i turni del Diario educativo: apertura, chiusura firmata applicativamente, collegamento delle voci e blocco delle registrazioni chiuse
+- aggiunta ricerca full-text del Diario educativo su PostgreSQL, con filtri per periodo, turno e consegne ancora da leggere
+- resa disponibile la presa visione delle consegne tramite endpoint autenticato e auditato
+- aggiunti contratti UX/API e guide operative per Avvicinamenti e Diario educativo
+
+### Changed
+- il form del Diario non può più indicare manualmente utente e data della presa visione: questi dati sono derivati dall'account autenticato
+- le pagine React Avvicinamenti e Diario sono riallineate ai nuovi endpoint e ai flag restituiti dal backend
+- allineati `VERSION`, badge README e metadata del package frontend alla versione corrente
+
+### Security
+- audit della lettura delle note riservate degli avvicinamenti, del rinnovo autorizzativo, della firma sospensione, della firma turno e della presa visione consegne
+- le voci appartenenti a turni firmati non possono essere modificate o eliminate
+- il motore di ricerca è eseguito lato backend e applica gli stessi vincoli di accesso al minore della lista ordinaria
+
+### Notes
+- introdotta la migrazione additiva `2026_08_14_120000_create_minor_journal_shifts_table`
+- prima dell'applicazione locale è stato creato un dump di backup; nessun reset dati eseguito
+- verifiche eseguite: `MinorApproachApiTest`, `MinorJournalApiTest`, build React/Vite
+
 ## [1.3.0] - 2026-08-13
 
 ### Added

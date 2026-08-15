@@ -3,13 +3,13 @@ import { Link } from 'react-router-dom'
 import {
   Container, Row, Col, Card, CardBody, CardHeader,
   Modal, ModalHeader, ModalBody, ModalFooter,
-  FormGroup, Label, Input, Alert, Button, Badge,
+  FormGroup, Label, Input, Alert, Button,
 } from 'reactstrap'
-import { Home, Plus, Edit2, Trash2, Info } from 'react-feather'
+import { Home, Plus, Edit2, Trash2, Info, Clock, CheckSquare } from 'react-feather'
 import InfoDrawer from '../../components/common/InfoDrawer'
 import { toast } from 'react-toastify'
 import { journalApi, facilityApi, minorApi, lookupsApi, apiError } from '../../services/api'
-import type { JournalEntry, JournalEntryType, JournalEntryWrite, Facility, Minor, PriorityLevel, MoodLevel, JournalSummary } from '../../types'
+import type { JournalEntry, JournalEntryType, JournalEntryWrite, Facility, Minor, PriorityLevel, MoodLevel, JournalSummary, JournalShift, JournalShiftWrite, JournalShiftClosePayload } from '../../types'
 
 // ─── Costanti ────────────────────────────────────────────────────────────────
 
@@ -33,8 +33,12 @@ const EMPTY_FORM: JournalEntryWrite = {
   follow_up_required: false, follow_up_notes: null,
   priority_level: null, mood_level: null,
   nutrition_summary: null, hygiene_summary: null, sleep_summary: null,
-  handover_required: false, handover_notes: null, handover_read_at: null,
+  handover_required: false, handover_notes: null,
+  minor_journal_shift_id: null,
 }
+
+const EMPTY_SHIFT_FORM: JournalShiftWrite = { facility_id: 0, started_at: '', title: null }
+const EMPTY_CLOSE_FORM = { ended_at: '', closing_notes: '' }
 
 function toInputDt(s?: string | null) { return s ? s.slice(0, 16) : '' }
 function fmtDt(s?: string | null) {
@@ -62,6 +66,8 @@ export default function DiarioPage() {
   const [filterPriority, setFilterPriority]       = useState('')
   const [filterMood, setFilterMood]               = useState('')
   const [filterHandover, setFilterHandover]       = useState('')
+  const [filterSearch, setFilterSearch]           = useState('')
+  const [filterHandoverPending, setFilterHandoverPending] = useState(false)
   const [filterDateFrom, setFilterDateFrom]       = useState('')
   const [filterDateTo, setFilterDateTo]           = useState('')
   const [limit, setLimit]                         = useState(50)
@@ -79,6 +85,21 @@ export default function DiarioPage() {
   const [deleting, setDeleting]         = useState(false)
   const [summary, setSummary]           = useState<JournalSummary | null>(null)
 
+  // Turni diario
+  const [shiftsVisible, setShiftsVisible]         = useState(false)
+  const [journalShifts, setJournalShifts]         = useState<JournalShift[]>([])
+  const [shiftsLoading, setShiftsLoading]         = useState(false)
+  const [openShiftModal, setOpenShiftModal]       = useState(false)
+  const [shiftForm, setShiftForm]                 = useState<JournalShiftWrite>(EMPTY_SHIFT_FORM)
+  const [shiftSaving, setShiftSaving]             = useState(false)
+  const [shiftMsg, setShiftMsg]                   = useState<string | null>(null)
+  const [closeShiftTarget, setCloseShiftTarget]   = useState<JournalShift | null>(null)
+  const [closeShiftForm, setCloseShiftForm]       = useState(EMPTY_CLOSE_FORM)
+  const [closeShiftSaving, setCloseShiftSaving]   = useState(false)
+  const [closeShiftMsg, setCloseShiftMsg]         = useState<string | null>(null)
+  const [formShifts, setFormShifts]               = useState<JournalShift[]>([])
+  const [acknowledgingId, setAcknowledgingId]     = useState<number | null>(null)
+
   // ── Caricamento ────────────────────────────────────────────────
   const load = async () => {
     setLoading(true); setError(null)
@@ -90,6 +111,8 @@ export default function DiarioPage() {
       if (filterPriority) params.priority_level = filterPriority
       if (filterMood) params.mood_level = filterMood
       if (filterHandover) params.handover_required = filterHandover
+      if (filterSearch) params.search = filterSearch
+      if (filterHandoverPending) params.handover_pending = 'true'
       const loadedItems = await journalApi.list(params as Parameters<typeof journalApi.list>[0])
       setItems(loadedItems)
       setApiMissing(false)
@@ -123,7 +146,7 @@ export default function DiarioPage() {
       .then(([facs, mins, types]) => { setFacilities(facs); setMinors(mins); setEntryTypes(types) })
       .catch(() => {})
   }, [])
-  useEffect(() => { load() }, [filterFacilityId, filterMinorId, filterTypeId, filterPriority, filterMood, filterHandover]) // eslint-disable-line
+  useEffect(() => { load() }, [filterFacilityId, filterMinorId, filterTypeId, filterPriority, filterMood, filterHandover, filterSearch, filterHandoverPending]) // eslint-disable-line
 
   const filteredMinors = filterFacilityId ? minors.filter((m) => m.facility_id === filterFacilityId) : minors
 
@@ -151,7 +174,7 @@ export default function DiarioPage() {
       sleep_summary: item.sleep_summary ?? null,
       handover_required: item.handover_required ?? false,
       handover_notes: item.handover_notes ?? null,
-      handover_read_at: toInputDt(item.handover_read_at),
+      minor_journal_shift_id: item.minor_journal_shift_id ?? null,
     })
     setFormMsg(null); setFieldErrors({}); setModalOpen(true)
   }
@@ -163,7 +186,6 @@ export default function DiarioPage() {
         ...form,
         follow_up_notes: form.follow_up_required ? form.follow_up_notes : null,
         handover_notes: form.handover_required ? form.handover_notes : null,
-        handover_read_at: form.handover_read_at || null,
         nutrition_summary: form.nutrition_summary || null,
         hygiene_summary: form.hygiene_summary || null,
         sleep_summary: form.sleep_summary || null,
@@ -190,6 +212,67 @@ export default function DiarioPage() {
   const fErr = (f: string) => fieldErrors[f]?.[0]
   const setF = <K extends keyof JournalEntryWrite>(k: K, v: JournalEntryWrite[K]) =>
     setForm((prev) => ({ ...prev, [k]: v }))
+
+  // ── Turni diario ───────────────────────────────────────────────
+  const loadShifts = async () => {
+    setShiftsLoading(true)
+    try {
+      const shifts = await journalApi.listShifts(filterFacilityId ? { facility_id: filterFacilityId } : undefined)
+      setJournalShifts(shifts)
+    } catch { /* silent */ }
+    finally { setShiftsLoading(false) }
+  }
+
+  const handleOpenShift = async () => {
+    if (!shiftForm.facility_id || !shiftForm.started_at) { setShiftMsg('Struttura e orario inizio sono obbligatori.'); return }
+    setShiftSaving(true); setShiftMsg(null)
+    try {
+      await journalApi.openShift(shiftForm)
+      toast.success('Turno aperto.')
+      setOpenShiftModal(false)
+      setShiftForm(EMPTY_SHIFT_FORM)
+      loadShifts()
+    } catch (e) { setShiftMsg(apiError(e).message ?? 'Errore apertura turno') }
+    finally { setShiftSaving(false) }
+  }
+
+  const handleCloseShift = async () => {
+    if (!closeShiftTarget || !closeShiftForm.ended_at) { setCloseShiftMsg('Orario di chiusura obbligatorio.'); return }
+    setCloseShiftSaving(true); setCloseShiftMsg(null)
+    const payload: JournalShiftClosePayload = {
+      ended_at: closeShiftForm.ended_at,
+      closing_notes: closeShiftForm.closing_notes || null,
+    }
+    try {
+      await journalApi.closeShift(closeShiftTarget.id, payload)
+      toast.success('Turno chiuso e firmato con firma applicativa.')
+      setCloseShiftTarget(null)
+      setCloseShiftForm(EMPTY_CLOSE_FORM)
+      loadShifts(); load()
+    } catch (e) { setCloseShiftMsg(apiError(e).message ?? 'Errore chiusura turno') }
+    finally { setCloseShiftSaving(false) }
+  }
+
+  const handleAcknowledge = async (journalId: number) => {
+    setAcknowledgingId(journalId)
+    try {
+      await journalApi.acknowledgeHandover(journalId)
+      toast.success('Presa visione registrata.')
+      load()
+    } catch (e) { toast.error(apiError(e).message ?? 'Errore presa visione') }
+    finally { setAcknowledgingId(null) }
+  }
+
+  // Carica turni quando il pannello viene mostrato o la struttura cambia
+  useEffect(() => { if (shiftsVisible) loadShifts() }, [shiftsVisible, filterFacilityId]) // eslint-disable-line
+
+  // Carica turni aperti per il form (basati sul minore selezionato)
+  useEffect(() => {
+    if (!form.minor_id || !modalOpen) { setFormShifts([]); return }
+    const m = minors.find((x) => x.id === form.minor_id)
+    if (!m?.facility_id) { setFormShifts([]); return }
+    journalApi.listShifts({ facility_id: m.facility_id, status: 'open' }).then(setFormShifts).catch(() => setFormShifts([]))
+  }, [form.minor_id, modalOpen]) // eslint-disable-line
 
   // ── Render ─────────────────────────────────────────────────────
   return (
@@ -247,6 +330,9 @@ export default function DiarioPage() {
               <h5 className='mb-0'>Registro diario</h5>
               <div className='d-flex align-items-center gap-2'>
                 <small className='text-muted'>{displayItems.length}/{items.length} record</small>
+                <Button color={shiftsVisible ? 'secondary' : 'light'} size='sm' className='d-flex align-items-center gap-1' onClick={() => setShiftsVisible((v) => !v)}>
+                  <Clock size={13} /> Turni
+                </Button>
                 <Button color='primary' size='sm' className='d-flex align-items-center gap-1' onClick={openCreate}>
                   <Plus size={13} /> Nuova voce
                 </Button>
@@ -329,7 +415,72 @@ export default function DiarioPage() {
                     <Button size='sm' color='light' onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); setLimit(50) }}>Az.</Button>
                   </Col>
                 </Row>
+                <Row className='g-2 align-items-end mt-1'>
+                  <Col md='6'>
+                    <Label className='mb-1 small'>Ricerca testo</Label>
+                    <Input bsSize='sm' placeholder='Cerca per titolo o contenuto…' value={filterSearch}
+                      onChange={(e) => setFilterSearch(e.target.value)} />
+                  </Col>
+                  <Col md='3' className='d-flex align-items-center gap-2' style={{ paddingTop: 22 }}>
+                    <Input type='checkbox' id='filterHandoverPending' checked={filterHandoverPending}
+                      onChange={(e) => setFilterHandoverPending(e.target.checked)}
+                      style={{ width: 15, height: 15 }} />
+                    <Label for='filterHandoverPending' className='mb-0 small'>Solo handover in attesa</Label>
+                  </Col>
+                  <Col md='3' className='d-flex align-items-end'>
+                    <Button size='sm' color='light' onClick={() => { setFilterSearch(''); setFilterHandoverPending(false) }}>Azzera ricerca</Button>
+                  </Col>
+                </Row>
               </div>
+
+              {/* ── Pannello turni ── */}
+              {shiftsVisible && (
+                <div className='mb-3 p-3 border rounded bg-light'>
+                  <div className='d-flex justify-content-between align-items-center mb-2'>
+                    <strong><Clock size={14} className='me-1' />Turni diario operativi</strong>
+                    <Button size='sm' color='primary' className='d-flex align-items-center gap-1' onClick={() => { setShiftForm({ ...EMPTY_SHIFT_FORM, facility_id: filterFacilityId || 0 }); setShiftMsg(null); setOpenShiftModal(true) }}>
+                      <Plus size={12} /> Apri turno
+                    </Button>
+                  </div>
+                  {shiftsLoading ? <div className='text-center py-2'><div className='loader' /></div> : (
+                    journalShifts.length === 0
+                      ? <p className='text-muted small mb-0'>Nessun turno trovato. Usa il filtro struttura per vedere i turni di una struttura specifica.</p>
+                      : <div className='table-responsive'>
+                          <table className='table table-sm table-hover mb-0'>
+                            <thead className='table-light'>
+                              <tr>
+                                <th>Struttura</th><th>Titolo</th><th>Inizio</th><th>Fine</th><th>Voci</th><th>Stato</th><th>Azioni</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {journalShifts.map((s) => (
+                                <tr key={s.id}>
+                                  <td className='small'>{s.facility?.name ?? '—'}</td>
+                                  <td className='small'>{s.title ?? `Turno #${s.id}`}</td>
+                                  <td className='small'>{fmtDt(s.started_at)}</td>
+                                  <td className='small'>{s.closed_at ? fmtDt(s.closed_at) : '—'}</td>
+                                  <td className='small'>{s.entries_count ?? 0}</td>
+                                  <td>
+                                    {s.closed_at
+                                      ? <span className='badge badge-light-success'>Chiuso e firmato</span>
+                                      : <span className='badge badge-light-warning'>Aperto</span>}
+                                  </td>
+                                  <td>
+                                    {!s.closed_at && (
+                                      <Button size='sm' color='danger' className='d-flex align-items-center gap-1'
+                                        onClick={() => { setCloseShiftTarget(s); setCloseShiftForm(EMPTY_CLOSE_FORM); setCloseShiftMsg(null) }}>
+                                        <CheckSquare size={12} /> Chiudi
+                                      </Button>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                  )}
+                </div>
+              )}
 
               {error && <Alert color='danger'>{error}</Alert>}
               {loading ? <div className='text-center py-5'><div className='loader' /></div> : (
@@ -355,7 +506,12 @@ export default function DiarioPage() {
                             <small className='text-muted'>{item.minor?.internal_code}</small>
                           </td>
                           <td className='small'>{item.journal_entry_type?.name ?? '—'}</td>
-                          <td className='small'>{item.title}</td>
+                          <td className='small'>
+                            {item.title}
+                            {item.journal_shift?.closed_at && (
+                              <span className='badge badge-light-success ms-1' style={{ fontSize: 10 }}>Turno chiuso</span>
+                            )}
+                          </td>
                           <td>
                             {item.priority_level
                               ? <span className={`badge ${PRIORITY_BADGE[item.priority_level]}`}>{PRIORITY_LABEL[item.priority_level]}</span>
@@ -380,8 +536,28 @@ export default function DiarioPage() {
                           </td>
                           <td className='small text-muted'>{item.created_by?.display_name ?? '—'}</td>
                           <td onClick={(e) => e.stopPropagation()}>
-                            <Button color='light' size='sm' className='me-1' onClick={() => openEdit(item)}><Edit2 size={12} /></Button>
-                            <Button color='light' size='sm' onClick={() => setDeleteTarget(item)}><Trash2 size={12} /></Button>
+                            <div className='d-flex gap-1 align-items-center flex-wrap'>
+                              {item.handover_required && !item.handover_read_at && (
+                                <Button color='info' size='sm' className='d-flex align-items-center gap-1'
+                                  disabled={acknowledgingId === item.id}
+                                  onClick={() => handleAcknowledge(item.id)}
+                                  title='Registra presa visione'>
+                                  <CheckSquare size={12} />
+                                </Button>
+                              )}
+                              <Button color='light' size='sm'
+                                disabled={!!item.journal_shift?.closed_at}
+                                title={item.journal_shift?.closed_at ? 'Turno chiuso — voce non modificabile' : 'Modifica'}
+                                onClick={() => openEdit(item)}>
+                                <Edit2 size={12} />
+                              </Button>
+                              <Button color='light' size='sm'
+                                disabled={!!item.journal_shift?.closed_at}
+                                title={item.journal_shift?.closed_at ? 'Turno chiuso — voce non eliminabile' : 'Elimina'}
+                                onClick={() => setDeleteTarget(item)}>
+                                <Trash2 size={12} />
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -440,6 +616,19 @@ export default function DiarioPage() {
               </div>
             )}
 
+            {/* Turno diario */}
+            {detailTarget.journal_shift && (
+              <div className='mt-3 p-2 border-start border-secondary border-3 ps-3'>
+                <strong><Clock size={13} className='me-1' />Turno diario</strong>
+                {detailTarget.journal_shift.closed_at
+                  ? <span className='badge badge-light-success ms-2'>Turno chiuso e firmato</span>
+                  : <span className='badge badge-light-warning ms-2'>Turno aperto</span>}
+                {detailTarget.journal_shift.title && <p className='small mt-1 mb-0'>{detailTarget.journal_shift.title}</p>}
+                <div className='small text-muted mt-1'>Inizio: {fmtDt(detailTarget.journal_shift.started_at)}</div>
+                {detailTarget.journal_shift.closed_at && <div className='small text-muted'>Fine: {fmtDt(detailTarget.journal_shift.closed_at)}</div>}
+              </div>
+            )}
+
             {/* Handover */}
             {detailTarget.handover_required && (
               <div className='mt-3 p-2 border-start border-info border-3 ps-3'>
@@ -449,11 +638,21 @@ export default function DiarioPage() {
                   : <span className='badge badge-light-danger ms-2'>Presa visione in attesa</span>}
                 {detailTarget.handover_notes && <p className='small mt-1'>{detailTarget.handover_notes}</p>}
                 {detailTarget.handover_read_at && <div className='small text-muted'>Letto il: {fmtDt(detailTarget.handover_read_at)}</div>}
+                {detailTarget.handover_read_by && <div className='small text-muted'>Da: {detailTarget.handover_read_by.display_name}</div>}
               </div>
             )}
           </ModalBody>
           <ModalFooter>
-            <Button color='primary' onClick={() => openEdit(detailTarget)}><Edit2 size={13} className='me-1' />Modifica</Button>
+            {detailTarget.handover_required && !detailTarget.handover_read_at && (
+              <Button color='info' className='d-flex align-items-center gap-1 me-auto'
+                disabled={acknowledgingId === detailTarget.id}
+                onClick={() => { handleAcknowledge(detailTarget.id); setDetailTarget(null) }}>
+                <CheckSquare size={13} /> Prendi visione
+              </Button>
+            )}
+            <Button color='primary' disabled={!!detailTarget.journal_shift?.closed_at} onClick={() => openEdit(detailTarget)}>
+              <Edit2 size={13} className='me-1' />Modifica
+            </Button>
             <Button color='light' onClick={() => setDetailTarget(null)}>Chiudi</Button>
           </ModalFooter>
         </Modal>
@@ -556,6 +755,21 @@ export default function DiarioPage() {
           <Alert color='info' className='py-2 px-3 mb-3' style={{ fontSize: 13 }}>
             Compila questi campi quando vuoi trasformare la voce in una registrazione più strutturata del turno educativo.
           </Alert>
+          <FormGroup>
+            <Label>Turno diario <small className='text-muted'>(opzionale)</small></Label>
+            <Input type='select' value={form.minor_journal_shift_id ?? ''} onChange={(e) => setF('minor_journal_shift_id', e.target.value ? Number(e.target.value) : null)}>
+              <option value=''>Nessun turno associato</option>
+              {formShifts.map((s) => (
+                <option key={s.id} value={s.id}>{s.title ?? `Turno #${s.id}`} — aperto {fmtDt(s.started_at)}</option>
+              ))}
+            </Input>
+            {formShifts.length === 0 && form.minor_id > 0 && (
+              <small className='text-muted'>Nessun turno aperto per la struttura di questo minore.</small>
+            )}
+            {form.minor_id === 0 && (
+              <small className='text-muted'>Seleziona prima il minore per vedere i turni disponibili.</small>
+            )}
+          </FormGroup>
           <Row>
             <Col md='4'>
               <FormGroup>
@@ -608,18 +822,11 @@ export default function DiarioPage() {
               <Label for='handover_required' className='mb-0 fw-semibold'>Passaggio consegne richiesto</Label>
             </div>
             {form.handover_required && (
-              <>
-                <FormGroup>
-                  <Label>Note handover <span className='text-danger'>*</span></Label>
-                  <Input type='textarea' rows={2} value={form.handover_notes ?? ''} placeholder='Indica cosa deve essere passato al turno successivo…'
-                    onChange={(e) => setF('handover_notes', e.target.value || null)} />
-                </FormGroup>
-                <FormGroup>
-                  <Label>Data/ora presa visione</Label>
-                  <Input type='datetime-local' lang='it' value={form.handover_read_at ?? ''}
-                    onChange={(e) => setF('handover_read_at', e.target.value || null)} />
-                </FormGroup>
-              </>
+              <FormGroup>
+                <Label>Note handover <span className='text-danger'>*</span></Label>
+                <Input type='textarea' rows={2} value={form.handover_notes ?? ''} placeholder='Indica cosa deve essere passato al turno successivo…'
+                  onChange={(e) => setF('handover_notes', e.target.value || null)} />
+              </FormGroup>
             )}
           </FormGroup>
         </ModalBody>
@@ -636,6 +843,62 @@ export default function DiarioPage() {
         <ModalFooter>
           <Button color='danger' onClick={handleDelete} disabled={deleting}>{deleting ? 'Eliminazione…' : 'Elimina'}</Button>
           <Button color='light' onClick={() => setDeleteTarget(null)}>Annulla</Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* ── Modale apri turno ── */}
+      <Modal isOpen={openShiftModal} toggle={() => setOpenShiftModal(false)} size='md'>
+        <ModalHeader toggle={() => setOpenShiftModal(false)}>Apri turno diario</ModalHeader>
+        <ModalBody>
+          {shiftMsg && <Alert color='danger'>{shiftMsg}</Alert>}
+          <FormGroup>
+            <Label>Struttura <span className='text-danger'>*</span></Label>
+            <Input type='select' value={shiftForm.facility_id}
+              onChange={(e) => setShiftForm((f) => ({ ...f, facility_id: Number(e.target.value) }))}>
+              <option value={0}>Seleziona struttura…</option>
+              {facilities.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </Input>
+          </FormGroup>
+          <FormGroup>
+            <Label>Titolo turno <small className='text-muted'>(opzionale)</small></Label>
+            <Input value={shiftForm.title ?? ''} placeholder='Es. Turno mattino, Turno notte…'
+              onChange={(e) => setShiftForm((f) => ({ ...f, title: e.target.value || null }))} />
+          </FormGroup>
+          <FormGroup>
+            <Label>Orario inizio <span className='text-danger'>*</span></Label>
+            <Input type='datetime-local' lang='it' value={shiftForm.started_at}
+              onChange={(e) => setShiftForm((f) => ({ ...f, started_at: e.target.value }))} />
+          </FormGroup>
+        </ModalBody>
+        <ModalFooter>
+          <Button color='primary' onClick={handleOpenShift} disabled={shiftSaving}>{shiftSaving ? 'Apertura…' : 'Apri turno'}</Button>
+          <Button color='light' onClick={() => setOpenShiftModal(false)}>Annulla</Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* ── Modale chiudi turno ── */}
+      <Modal isOpen={!!closeShiftTarget} toggle={() => setCloseShiftTarget(null)} size='md'>
+        <ModalHeader toggle={() => setCloseShiftTarget(null)}>Chiudi turno — firma applicativa</ModalHeader>
+        <ModalBody>
+          {closeShiftMsg && <Alert color='danger'>{closeShiftMsg}</Alert>}
+          <Alert color='info' className='py-2 px-3' style={{ fontSize: 13 }}>
+            La chiusura turno applica una <strong>firma applicativa</strong> (authenticated_application_signature). Dopo la chiusura, le voci collegate non saranno più modificabili o eliminabili.
+          </Alert>
+          <FormGroup>
+            <Label>Orario di chiusura <span className='text-danger'>*</span></Label>
+            <Input type='datetime-local' lang='it' value={closeShiftForm.ended_at}
+              onChange={(e) => setCloseShiftForm((f) => ({ ...f, ended_at: e.target.value }))} />
+          </FormGroup>
+          <FormGroup>
+            <Label>Note di chiusura <small className='text-muted'>(opzionale)</small></Label>
+            <Input type='textarea' rows={3} value={closeShiftForm.closing_notes}
+              placeholder='Situazione al termine del turno, indicazioni per il turno successivo…'
+              onChange={(e) => setCloseShiftForm((f) => ({ ...f, closing_notes: e.target.value }))} />
+          </FormGroup>
+        </ModalBody>
+        <ModalFooter>
+          <Button color='danger' onClick={handleCloseShift} disabled={closeShiftSaving}>{closeShiftSaving ? 'Chiusura…' : 'Chiudi e firma'}</Button>
+          <Button color='light' onClick={() => setCloseShiftTarget(null)}>Annulla</Button>
         </ModalFooter>
       </Modal>
 
@@ -667,9 +930,13 @@ export default function DiarioPage() {
           <p style={{ fontSize: 14, color: '#444' }}>Attiva il follow-up quando la voce richiede un controllo successivo. Usa il passaggio consegne per informare formalmente il turno successivo.</p>
         </section>
         <section className='mb-4'>
+          <h6 className='fw-bold mb-2'>Turni diario</h6>
+          <p style={{ fontSize: 14, color: '#444' }}>Usa il pannello "Turni" per aprire e chiudere turni operativi. Alla chiusura viene applicata una firma applicativa automatica. Le voci collegate a un turno chiuso non sono più modificabili o eliminabili.</p>
+        </section>
+        <section className='mb-4'>
           <h6 className='fw-bold mb-2'>Stato funzionale</h6>
           <div className='alert alert-info py-2 px-3' style={{ fontSize: 13 }}>
-            <strong>Modulo v2 funzionale.</strong> Funzioni supportate: voci strutturate, priorità, umore, follow-up, passaggio consegne, KPI di riepilogo. Non ancora disponibili: firma digitale obbligatoria a chiusura turno, ricerca full-text avanzata, messaggistica interna cifrata per team.
+            <strong>Modulo v3 funzionale.</strong> Funzioni supportate: voci strutturate, priorità, umore, follow-up, passaggio consegne con presa visione, turni diario con firma applicativa, ricerca full-text, filtro handover in attesa.
           </div>
         </section>
         <section className='mb-4'>

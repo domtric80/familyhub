@@ -32,6 +32,7 @@ import type {
   AuditLog, AuditLogFilters, AuditPreset, AuditKpi, AuditKpiTopActor, AuditKpiBreakdown, AuditKpiDailySeries, PaginatedResponse,
   ApproachType, Approach, ApproachWrite, ApproachTrend,
   JournalEntryType, JournalEntry, JournalEntryWrite, JournalSummary,
+  JournalShift, JournalShiftWrite, JournalShiftClosePayload, JournalShiftCloseResponse,
   InternalMessage, InternalMessageThread, InternalMessageThreadWrite, MessageParticipantOption, MessageParticipantOptionsResponse,
   ExitSummary,
   DocumentAccessMatrix,
@@ -1076,11 +1077,21 @@ export const approachApi = {
   delete: (id: number) => http.delete(`/approaches/${id}`),
   trend: (params?: { facility_id?: number; minor_id?: number; date_from?: string; date_to?: string }) =>
     http.get<ApproachTrend>('/approaches/trend', { params }).then((r) => r.data),
+  renewAuthorization: (id: number, data: {
+    authorization_reference?: string | null
+    authorization_minor_document_id?: number | null
+    authorization_issued_at?: string | null
+    authorization_expires_at: string
+    authorization_renewal_alert_days?: number | null
+  }) =>
+    http.post<Approach>(`/approaches/${id}/renew-authorization`, data).then((r) => r.data),
+  signSuspension: (id: number, data?: { suspension_reason?: string; suspended_at?: string }) =>
+    http.post<Approach>(`/approaches/${id}/sign-suspension`, data ?? {}).then((r) => r.data),
 }
 
 // ── Diario educativo ──────────────────────────────────────────────────────────
 export const journalApi = {
-  list: (params?: { facility_id?: number; minor_id?: number; journal_entry_type_id?: number; priority_level?: string; mood_level?: string; handover_required?: boolean }) =>
+  list: (params?: { facility_id?: number; minor_id?: number; journal_entry_type_id?: number; priority_level?: string; mood_level?: string; handover_required?: boolean; handover_pending?: boolean; minor_journal_shift_id?: number; search?: string; date_from?: string; date_to?: string }) =>
     http.get<JournalEntry[]>('/journals', { params }).then((r) => r.data),
   get: (id: number) => http.get<JournalEntry>(`/journals/${id}`).then((r) => r.data),
   create: (data: JournalEntryWrite) => http.post<JournalEntry>('/journals', data).then((r) => r.data),
@@ -1089,6 +1100,15 @@ export const journalApi = {
   delete: (id: number) => http.delete(`/journals/${id}`),
   summary: (params?: { facility_id?: number; minor_id?: number }) =>
     http.get<JournalSummary>('/journals/summary', { params }).then((r) => r.data),
+  // Turni diario (handoff 180)
+  listShifts: (params?: { facility_id?: number; status?: 'open' | 'closed'; date_from?: string; date_to?: string }) =>
+    http.get<JournalShift[]>('/journals/shifts', { params }).then((r) => r.data),
+  openShift: (data: JournalShiftWrite) =>
+    http.post<JournalShift>('/journals/shifts', data).then((r) => r.data),
+  closeShift: (shiftId: number, data: JournalShiftClosePayload) =>
+    http.post<JournalShiftCloseResponse>(`/journals/shifts/${shiftId}/close`, data).then((r) => r.data),
+  acknowledgeHandover: (journalId: number) =>
+    http.post<JournalEntry>(`/journals/${journalId}/acknowledge-handover`).then((r) => r.data),
 }
 
 // ── Messaggistica interna ─────────────────────────────────────────────────────

@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Card, CardHeader, CardBody, Button, Row, Col, Input, FormGroup, Label,
-  Modal, ModalHeader, ModalBody, ModalFooter, Alert, Badge,
+  Modal, ModalHeader, ModalBody, ModalFooter, Alert, Badge, Table,
 } from 'reactstrap'
-import { Plus, Edit2, Eye, X, Trash2, Info } from 'react-feather'
+import { Plus, Edit2, Eye, X, Trash2, Info, RefreshCw, PenTool } from 'react-feather'
 import { toast } from 'react-toastify'
 import {
   approachApi, lookupsApi, staffMemberApi, facilityApi, minorApi, apiError,
@@ -12,7 +12,7 @@ import {
 import type {
   Approach, ApproachWrite, ApproachType, ApproachParticipantWrite,
   ApproachStaffParticipantWrite, Facility, Minor, LookupItem, StaffMember,
-  ReactionLevel,
+  ReactionLevel, ApproachTrend,
 } from '../../types'
 import InfoDrawer from '../../components/common/InfoDrawer'
 
@@ -245,6 +245,17 @@ export default function AvvicinamentiPage() {
   const [saving, setSaving]             = useState(false)
   const [formMsg, setFormMsg]           = useState<string | null>(null)
 
+  // Trend e azioni operative (handoff 179)
+  const [trend, setTrend]                     = useState<ApproachTrend | null>(null)
+  const [showTrend, setShowTrend]             = useState(false)
+  const [renewTarget, setRenewTarget]         = useState<Approach | null>(null)
+  const [renewForm, setRenewForm]             = useState({ authorization_expires_at: '', authorization_reference: '', authorization_issued_at: '', authorization_renewal_alert_days: '' })
+  const [renewSaving, setRenewSaving]         = useState(false)
+  const [renewMsg, setRenewMsg]               = useState<string | null>(null)
+  const [signTarget, setSignTarget]           = useState<Approach | null>(null)
+  const [signMsg, setSignMsg]                 = useState<string | null>(null)
+  const [signSaving, setSignSaving]           = useState(false)
+
   // ── Caricamento dati ────────────────────────────────────────────
   const load = () => {
     setLoading(true); setError(null)
@@ -259,6 +270,11 @@ export default function AvvicinamentiPage() {
       .finally(() => setLoading(false))
   }
 
+  const loadTrend = () => {
+    approachApi.trend({ facility_id: filterFacilityId || undefined, minor_id: filterMinorId || undefined })
+      .then(setTrend).catch(() => {})
+  }
+
   useEffect(() => {
     load()
     facilityApi.list().then(setFacilities).catch(() => {})
@@ -269,6 +285,7 @@ export default function AvvicinamentiPage() {
       setStaffQualifications(qs.map((q) => ({ code: q.code, name: q.name })))
     ).catch(() => {})
     lookupsApi.documentTypes().then(setDocTypes).catch(() => {})
+    loadTrend()
   }, []) // eslint-disable-line
 
   // Carica contatti minore e staff struttura quando cambiano nel form
@@ -401,6 +418,37 @@ export default function AvvicinamentiPage() {
     } finally { setSaving(false) }
   }
 
+  const handleRenew = async () => {
+    if (!renewTarget || !renewForm.authorization_expires_at) {
+      setRenewMsg('La data di scadenza è obbligatoria.'); return
+    }
+    setRenewSaving(true); setRenewMsg(null)
+    try {
+      await approachApi.renewAuthorization(renewTarget.id, {
+        authorization_expires_at: renewForm.authorization_expires_at,
+        authorization_reference: renewForm.authorization_reference || null,
+        authorization_issued_at: renewForm.authorization_issued_at || null,
+        authorization_renewal_alert_days: renewForm.authorization_renewal_alert_days ? Number(renewForm.authorization_renewal_alert_days) : null,
+      })
+      toast.success('Provvedimento rinnovato.')
+      setRenewTarget(null); load(); loadTrend()
+    } catch (e) {
+      setRenewMsg(apiError(e).message ?? 'Errore durante il rinnovo.')
+    } finally { setRenewSaving(false) }
+  }
+
+  const handleSignSuspension = async () => {
+    if (!signTarget) return
+    setSignSaving(true); setSignMsg(null)
+    try {
+      await approachApi.signSuspension(signTarget.id)
+      toast.success('Sospensione firmata.')
+      setSignTarget(null); load()
+    } catch (e) {
+      setSignMsg(apiError(e).message ?? 'Errore durante la firma.')
+    } finally { setSignSaving(false) }
+  }
+
   return (
     <div className='container-fluid'>
       <div className='page-title'>
@@ -449,6 +497,10 @@ export default function AvvicinamentiPage() {
             <Button size='sm' color='outline-secondary' onClick={load}>Aggiorna</Button>
           </div>
           <div className='d-flex gap-2'>
+            <Button size='sm' color='outline-secondary' className='d-flex align-items-center gap-1'
+              onClick={() => { setShowTrend((v) => !v); if (!showTrend) loadTrend() }}>
+              <RefreshCw size={12} /> {showTrend ? 'Nascondi trend' : 'Mostra trend'}
+            </Button>
             <Button size='sm' color='outline-info' onClick={() => setInfoOpen(true)}>
               <Info size={13} />
             </Button>
@@ -458,6 +510,58 @@ export default function AvvicinamentiPage() {
           </div>
         </CardHeader>
         <CardBody className='p-0'>
+          {/* Trend e rinnovi imminenti */}
+          {showTrend && trend && (
+            <div className='p-3 border-bottom'>
+              <Row className='g-2 mb-3'>
+                {(trend.totals_by_approach_type ?? []).length > 0 && (
+                  <Col md='6'>
+                    <div className='fw-semibold mb-2 small'>Distribuzione tipologie</div>
+                    <Table size='sm' bordered className='mb-0'>
+                      <thead className='table-light'>
+                        <tr><th>Tipologia</th><th className='text-end'>Totale</th></tr>
+                      </thead>
+                      <tbody>
+                        {(trend.totals_by_approach_type ?? []).map((t) => (
+                          <tr key={t.approach_type_code}>
+                            <td className='small'>{t.approach_type_name}</td>
+                            <td className='text-end small'><strong>{t.total}</strong></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                  </Col>
+                )}
+                {(trend.upcoming_authorization_renewals ?? []).length > 0 && (
+                  <Col md='6'>
+                    <div className='fw-semibold mb-2 small'>Rinnovi imminenti / scaduti</div>
+                    <Table size='sm' bordered className='mb-0'>
+                      <thead className='table-light'>
+                        <tr><th>Minore</th><th>Scade il</th><th>Giorni</th><th>Stato</th></tr>
+                      </thead>
+                      <tbody>
+                        {(trend.upcoming_authorization_renewals ?? []).map((r) => (
+                          <tr key={r.id}>
+                            <td className='small'>{r.minor_label}</td>
+                            <td className='small'>{r.authorization_expires_at ? new Date(r.authorization_expires_at).toLocaleDateString('it-IT') : '—'}</td>
+                            <td className='small'>{r.authorization_days_until_expiry != null ? r.authorization_days_until_expiry : '—'}</td>
+                            <td>
+                              {r.authorization_status && (
+                                <span className={`badge ${AUTH_BADGE[r.authorization_status] ?? 'badge-light-secondary'}`}>
+                                  {AUTH_LABEL[r.authorization_status] ?? r.authorization_status}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                  </Col>
+                )}
+              </Row>
+            </div>
+          )}
+
           {loading && <div className='text-center py-4'><span className='spinner-border spinner-border-sm' /></div>}
           {error && <Alert color='warning' className='m-3'>{error}</Alert>}
           {!loading && !error && (
@@ -500,13 +604,33 @@ export default function AvvicinamentiPage() {
                       </td>
                       <td>
                         {item.authorization_status
-                          ? <span className={`badge ${AUTH_BADGE[item.authorization_status]}`}>{AUTH_LABEL[item.authorization_status]}</span>
+                          ? <>
+                              <span className={`badge ${AUTH_BADGE[item.authorization_status]}`}>{AUTH_LABEL[item.authorization_status]}</span>
+                              {item.authorization_days_until_expiry != null && (
+                                <div className='small text-muted'>{item.authorization_days_until_expiry}g</div>
+                              )}
+                            </>
                           : <span className='text-muted'>—</span>}
+                        {item.suspension_is_signed && (
+                          <span className='badge badge-light-success d-block mt-1' style={{ fontSize: 10 }}>Sosp. firmata</span>
+                        )}
                       </td>
                       <td onClick={(e) => e.stopPropagation()}>
-                        <div className='d-flex gap-1'>
+                        <div className='d-flex gap-1 flex-wrap'>
                           <Button size='sm' color='outline-secondary' onClick={() => setDetailTarget(item)}><Eye size={12} /></Button>
                           <Button size='sm' color='outline-primary' onClick={() => openEdit(item)}><Edit2 size={12} /></Button>
+                          {item.can_renew_authorization && (
+                            <Button size='sm' color='outline-warning' title='Rinnova provvedimento'
+                              onClick={() => { setRenewTarget(item); setRenewForm({ authorization_expires_at: '', authorization_reference: item.authorization_reference ?? '', authorization_issued_at: '', authorization_renewal_alert_days: String(item.authorization_renewal_alert_days ?? '') }); setRenewMsg(null) }}>
+                              <RefreshCw size={12} />
+                            </Button>
+                          )}
+                          {item.can_sign_suspension && item.status === 'suspended' && (
+                            <Button size='sm' color='outline-danger' title='Firma sospensione'
+                              onClick={() => { setSignTarget(item); setSignMsg(null) }}>
+                              <PenTool size={12} />
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -934,17 +1058,53 @@ export default function AvvicinamentiPage() {
             {/* Provvedimento */}
             {(detailTarget.authorization_reference || detailTarget.authorization_status) && (
               <div className='mt-2 p-3 rounded' style={{ background: '#f4f5f7' }}>
-                <strong>Provvedimento autorizzativo</strong>
-                {detailTarget.authorization_status && (
-                  <span className={`badge ms-2 ${AUTH_BADGE[detailTarget.authorization_status]}`}>
-                    {AUTH_LABEL[detailTarget.authorization_status]}
-                  </span>
-                )}
+                <div className='d-flex align-items-center justify-content-between flex-wrap gap-2'>
+                  <strong>Provvedimento autorizzativo</strong>
+                  <div className='d-flex gap-2 align-items-center'>
+                    {detailTarget.authorization_status && (
+                      <span className={`badge ${AUTH_BADGE[detailTarget.authorization_status]}`}>
+                        {AUTH_LABEL[detailTarget.authorization_status]}
+                      </span>
+                    )}
+                    {detailTarget.can_renew_authorization && (
+                      <Button size='sm' color='warning' className='d-flex align-items-center gap-1'
+                        onClick={() => { setDetailTarget(null); setRenewTarget(detailTarget); setRenewForm({ authorization_expires_at: '', authorization_reference: detailTarget.authorization_reference ?? '', authorization_issued_at: '', authorization_renewal_alert_days: String(detailTarget.authorization_renewal_alert_days ?? '') }); setRenewMsg(null) }}>
+                        <RefreshCw size={12} /> Rinnova provvedimento
+                      </Button>
+                    )}
+                  </div>
+                </div>
                 <div className='mt-1 small'>
                   {detailTarget.authorization_reference && <div>Rif.: {detailTarget.authorization_reference}</div>}
                   {detailTarget.authorization_issued_at && <div>Emesso il: {fmtDate(detailTarget.authorization_issued_at)}</div>}
                   {detailTarget.authorization_expires_at && <div>Scade il: {fmtDate(detailTarget.authorization_expires_at)}</div>}
+                  {detailTarget.authorization_days_until_expiry != null && (
+                    <div>Giorni alla scadenza: <strong>{detailTarget.authorization_days_until_expiry}</strong></div>
+                  )}
                 </div>
+              </div>
+            )}
+
+            {/* Sospensione */}
+            {detailTarget.status === 'suspended' && (
+              <div className='mt-2 p-3 rounded' style={{ background: '#fff0f0' }}>
+                <div className='d-flex align-items-center justify-content-between flex-wrap gap-2'>
+                  <strong>Sospensione</strong>
+                  <div className='d-flex gap-2 align-items-center'>
+                    {detailTarget.suspension_is_signed
+                      ? <span className='badge badge-light-success'>Firmata</span>
+                      : <span className='badge badge-light-warning'>Non firmata</span>}
+                    {detailTarget.can_sign_suspension && (
+                      <Button size='sm' color='danger' className='d-flex align-items-center gap-1'
+                        onClick={() => { setDetailTarget(null); setSignTarget(detailTarget); setSignMsg(null) }}>
+                        <PenTool size={12} /> Firma sospensione
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                {detailTarget.suspension_reason && <div className='mt-1 small'>{detailTarget.suspension_reason}</div>}
+                {detailTarget.suspended_at && <div className='small text-muted'>Data sospensione: {fmtDt(detailTarget.suspended_at)}</div>}
+                {detailTarget.suspension_signed_at && <div className='small text-muted'>Firmata il: {fmtDt(detailTarget.suspension_signed_at)}</div>}
               </div>
             )}
 
@@ -973,6 +1133,53 @@ export default function AvvicinamentiPage() {
           </ModalFooter>
         </Modal>
       )}
+
+      {/* ── Modal rinnovo provvedimento ────────────────────────────────────── */}
+      <Modal isOpen={!!renewTarget} toggle={() => setRenewTarget(null)} centered>
+        <ModalHeader toggle={() => setRenewTarget(null)}>Rinnova provvedimento</ModalHeader>
+        <ModalBody>
+          {renewMsg && <Alert color='danger'>{renewMsg}</Alert>}
+          <FormGroup>
+            <Label>Numero riferimento / decreto</Label>
+            <Input value={renewForm.authorization_reference} onChange={(e) => setRenewForm((p) => ({ ...p, authorization_reference: e.target.value }))} />
+          </FormGroup>
+          <FormGroup>
+            <Label>Data emissione</Label>
+            <Input type='date' value={renewForm.authorization_issued_at} onChange={(e) => setRenewForm((p) => ({ ...p, authorization_issued_at: e.target.value }))} />
+          </FormGroup>
+          <FormGroup>
+            <Label>Nuova data scadenza <span className='text-danger'>*</span></Label>
+            <Input type='date' value={renewForm.authorization_expires_at} onChange={(e) => setRenewForm((p) => ({ ...p, authorization_expires_at: e.target.value }))} />
+          </FormGroup>
+          <FormGroup>
+            <Label>Giorni alert scadenza</Label>
+            <Input type='number' min={0} value={renewForm.authorization_renewal_alert_days} onChange={(e) => setRenewForm((p) => ({ ...p, authorization_renewal_alert_days: e.target.value }))} />
+          </FormGroup>
+        </ModalBody>
+        <ModalFooter>
+          <Button color='warning' onClick={handleRenew} disabled={renewSaving}>{renewSaving ? 'Salvataggio…' : 'Rinnova'}</Button>
+          <Button color='secondary' onClick={() => setRenewTarget(null)}>Annulla</Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* ── Modal firma sospensione ─────────────────────────────────────────── */}
+      <Modal isOpen={!!signTarget} toggle={() => setSignTarget(null)} centered>
+        <ModalHeader toggle={() => setSignTarget(null)}>Firma sospensione</ModalHeader>
+        <ModalBody>
+          {signMsg && <Alert color='danger'>{signMsg}</Alert>}
+          <Alert color='warning'>
+            Questa azione registra la firma applicativa della sospensione dell'avvicinamento per il minore{' '}
+            <strong>{signTarget?.minor?.last_name} {signTarget?.minor?.first_name}</strong>.
+          </Alert>
+          <p className='small text-muted mb-0'>La firma viene attribuita all'utente autenticato con data/ora corrente.</p>
+        </ModalBody>
+        <ModalFooter>
+          <Button color='danger' className='d-flex align-items-center gap-1' onClick={handleSignSuspension} disabled={signSaving}>
+            <PenTool size={13} /> {signSaving ? 'Firma in corso…' : 'Firma sospensione'}
+          </Button>
+          <Button color='secondary' onClick={() => setSignTarget(null)}>Annulla</Button>
+        </ModalFooter>
+      </Modal>
 
       <InfoDrawer isOpen={infoOpen} onClose={() => setInfoOpen(false)} title='Guida avvicinamenti'>
         <section className='mb-4'>

@@ -1200,10 +1200,29 @@ export interface ApproachTrendSummary {
   authorization_expired: number
 }
 
+export interface ApproachTrendByType {
+  approach_type_code: string
+  approach_type_name: string
+  total: number
+}
+
+export interface ApproachTrendUpcomingRenewal {
+  id: number
+  minor_id: number
+  minor_label: string
+  title: string
+  authorization_reference?: string | null
+  authorization_status?: string | null
+  authorization_expires_at?: string | null
+  authorization_days_until_expiry?: number | null
+}
+
 export interface ApproachTrend {
   summary: ApproachTrendSummary
   monthly_series: { month: string; total: number; avg_post_reaction_score: number | null }[]
   reaction_distribution: { phase: 'pre' | 'during' | 'post'; level: string; total: number }[]
+  totals_by_approach_type?: ApproachTrendByType[]
+  upcoming_authorization_renewals?: ApproachTrendUpcomingRenewal[]
 }
 
 // ─── Exit accompaniers — modello relazionale (spec 069) ──────────────────────
@@ -1770,6 +1789,12 @@ export interface Approach {
   suspended_at?: string | null
   suspended_by_user_id?: number | null
   suspension_signed_at?: string | null
+  // v4 — handoff 179
+  authorization_days_until_expiry?: number | null
+  authorization_is_expired?: boolean
+  can_renew_authorization?: boolean
+  suspension_is_signed?: boolean
+  can_sign_suspension?: boolean
   // v3 — Multi-contatto
   minor_contact_ids?: number[] | null
   minor_contacts_count?: number | null
@@ -1829,6 +1854,42 @@ export interface ApproachWrite {
 
 // ── Diario educativo ──────────────────────────────────────────────────────────
 
+export interface JournalShift {
+  id: number
+  facility_id: number
+  title?: string | null
+  started_at: string
+  ended_at?: string | null
+  closed_at?: string | null
+  closed_by_user_id?: number | null
+  closure_signature_type?: string | null
+  closing_notes?: string | null
+  entries_count?: number | null
+  opened_by_user_id?: number | null
+  facility?: { id: number; name: string } | null
+  opened_by?: { id: number; display_name: string } | null
+  closed_by?: { id: number; display_name: string } | null
+}
+
+export interface JournalShiftWrite {
+  facility_id: number
+  started_at: string
+  title?: string | null
+  ended_at?: string | null
+}
+
+export interface JournalShiftClosePayload {
+  ended_at: string
+  closing_notes?: string | null
+}
+
+export interface JournalShiftCloseResponse {
+  closed_at: string
+  closed_by_user_id: number
+  closure_signature_type: string
+  entries_count: number
+}
+
 export interface JournalEntryType {
   id: number
   code: string
@@ -1862,6 +1923,10 @@ export interface JournalEntry {
   handover_notes?: string | null
   handover_read_at?: string | null
   handover_read_by_user_id?: number | null
+  handover_read_by?: { id: number; display_name: string } | null
+  // v3 — turni diario (handoff 180)
+  minor_journal_shift_id?: number | null
+  journal_shift?: JournalShift | null
   // Relations
   facility?: { id: number; name: string } | null
   minor?: { id: number; first_name: string; last_name: string; internal_code: string } | null
@@ -1886,8 +1951,8 @@ export interface JournalEntryWrite {
   sleep_summary?: string | null
   handover_required?: boolean
   handover_notes?: string | null
-  handover_read_at?: string | null
-  handover_read_by_user_id?: number | null
+  // handover_read_at e handover_read_by_user_id non sono più scrivibili dal client (handoff 180)
+  minor_journal_shift_id?: number | null
 }
 
 // ─── Messaggistica interna ────────────────────────────────────────────────────

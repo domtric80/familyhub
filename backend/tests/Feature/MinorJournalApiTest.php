@@ -166,7 +166,7 @@ class MinorJournalApiTest extends TestCase
                 'handover_read_at' => '2026-07-03 11:15:00',
             ])
             ->assertStatus(422)
-            ->assertJsonValidationErrors(['handover_read_by_user_id']);
+            ->assertJsonValidationErrors(['handover_read_at']);
     }
 
     public function test_can_filter_journals_by_handover_required(): void
@@ -257,6 +257,107 @@ class MinorJournalApiTest extends TestCase
             'source_type' => 'minor_journal_entry',
             'source_id' => (string) $response->json('id'),
             'source_label' => 'Osservazione PEI',
+        ]);
+    }
+
+    public function test_can_close_signed_journal_shift_and_prevent_entry_changes(): void
+    {
+        $facility = Facility::query()->firstOrFail();
+        $minor = Minor::query()->create([
+            'facility_id' => $facility->id,
+            'internal_code' => 'MIN-JRN-SHIFT-001',
+            'first_name' => 'Anna',
+            'last_name' => 'Turno',
+            'birth_date' => '2012-01-01',
+            'entry_date' => '2026-01-01',
+            'minor_status_id' => \App\Models\MinorStatus::query()->firstOrFail()->id,
+        ]);
+        $type = JournalEntryType::query()->where('code', 'OBSERVATION')->firstOrFail();
+
+        $shift = $this->withToken($this->token)
+            ->postJson('/api/journals/shifts', [
+                'facility_id' => $facility->id,
+                'started_at' => '2026-08-14 07:00:00',
+                'title' => 'Turno mattina',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('closed_at', null);
+
+        $entry = $this->withToken($this->token)
+            ->postJson('/api/journals', [
+                'minor_id' => $minor->id,
+                'minor_journal_shift_id' => $shift->json('id'),
+                'journal_entry_type_id' => $type->id,
+                'observed_at' => '2026-08-14 08:00:00',
+                'title' => 'Osservazione turno',
+                'content' => 'Il minore ha svolto la colazione con serenita.',
+            ])
+            ->assertCreated();
+
+        $this->withToken($this->token)
+            ->postJson('/api/journals/shifts/'.$shift->json('id').'/close', [
+                'ended_at' => '2026-08-14 14:00:00',
+                'closing_notes' => 'Consegne completate.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('closure_signature_type', 'authenticated_application_signature');
+
+        $this->withToken($this->token)
+            ->patchJson('/api/journals/'.$entry->json('id'), [
+                'minor_id' => $minor->id,
+                'minor_journal_shift_id' => $shift->json('id'),
+                'journal_entry_type_id' => $type->id,
+                'observed_at' => '2026-08-14 08:00:00',
+                'title' => 'Osservazione turno corretta',
+                'content' => 'Test.',
+            ])
+            ->assertStatus(422);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'resource_type' => 'minor_journal_shift',
+            'action' => 'sign',
+        ]);
+    }
+
+    public function test_can_acknowledge_handover_and_search_journal_entries(): void
+    {
+        $facility = Facility::query()->firstOrFail();
+        $minor = Minor::query()->create([
+            'facility_id' => $facility->id,
+            'internal_code' => 'MIN-JRN-HANDOVER-001',
+            'first_name' => 'Sara',
+            'last_name' => 'Ricerca',
+            'birth_date' => '2012-01-01',
+            'entry_date' => '2026-01-01',
+            'minor_status_id' => \App\Models\MinorStatus::query()->firstOrFail()->id,
+        ]);
+        $type = JournalEntryType::query()->where('code', 'OBSERVATION')->firstOrFail();
+        $adminId = \App\Models\User::query()->where('email', 'admin@familyhub.local')->value('id');
+
+        $entry = MinorJournalEntry::query()->create([
+            'facility_id' => $facility->id,
+            'minor_id' => $minor->id,
+            'journal_entry_type_id' => $type->id,
+            'observed_at' => '2026-08-14 09:00:00',
+            'title' => 'Consegna alimentazione',
+            'content' => 'Serve verificare la dieta serale.',
+            'handover_required' => true,
+            'handover_notes' => 'Controllare il pasto serale.',
+        ]);
+
+        $this->withToken($this->token)
+            ->getJson('/api/journals?minor_id='.$minor->id.'&search=dieta')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $entry->id]);
+
+        $this->withToken($this->token)
+            ->postJson('/api/journals/'.$entry->id.'/acknowledge-handover')
+            ->assertOk()
+            ->assertJsonPath('handover_read_by_user_id', $adminId);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'resource_type' => 'minor_journal_handover',
+            'action' => 'acknowledge',
         ]);
     }
 }

@@ -1,6 +1,6 @@
 # FamilyHub
 
-[![Versione](https://img.shields.io/badge/version-1.3.0-7366ff)](CHANGELOG.md)
+[![Versione](https://img.shields.io/badge/version-1.4.0-7366ff)](CHANGELOG.md)
 [![Licenza](https://img.shields.io/badge/license-source--available-orange)](LICENSE.md)
 [![Security](https://img.shields.io/badge/security-policy-success)](SECURITY.md)
 [![Release Process](https://img.shields.io/badge/release-process-blue)](docs/releases/RELEASE-PROCESS.md)
@@ -317,7 +317,7 @@ sudo supervisorctl restart familyhub-worker:*
 - Template .env.prod: infra/env/backend.prod.env.template
 - Primo accesso VPS OVH/Aruba: docs/operations/2026-08-08-ovh-aruba-first-access-checklist.md
 - Changelog: CHANGELOG.md
-- Release notes v1.3.0: docs/releases/2026-08-13-v1.3.0.md
+- Release notes v1.4.0: docs/releases/2026-08-15-v1.4.0.md
 - Disegno storage config + health servizi: docs/architecture/2026-08-08-storage-configuration-and-service-health.md
 
 

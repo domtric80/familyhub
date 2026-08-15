@@ -4,6 +4,7 @@ namespace App\Http\Requests\Journals;
 
 use App\Models\Minor;
 use App\Models\MinorPeiObjective;
+use App\Models\MinorJournalShift;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -18,6 +19,7 @@ class StoreMinorJournalEntryRequest extends FormRequest
     {
         return [
             'minor_id' => ['required', 'integer', 'exists:minors,id'],
+            'minor_journal_shift_id' => ['nullable', 'integer', 'exists:minor_journal_shifts,id'],
             'journal_entry_type_id' => ['required', 'integer', 'exists:journal_entry_types,id'],
             'observed_at' => ['required', 'date'],
             'title' => ['required', 'string', 'max:150'],
@@ -32,8 +34,8 @@ class StoreMinorJournalEntryRequest extends FormRequest
             'pei_objective_id' => ['nullable', 'integer', 'exists:minor_pei_objectives,id'],
             'handover_required' => ['nullable', 'boolean'],
             'handover_notes' => ['nullable', 'string'],
-            'handover_read_at' => ['nullable', 'date'],
-            'handover_read_by_user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'handover_read_at' => ['prohibited'],
+            'handover_read_by_user_id' => ['prohibited'],
         ];
     }
 
@@ -50,8 +52,15 @@ class StoreMinorJournalEntryRequest extends FormRequest
                 $validator->errors()->add('handover_notes', 'Le note di passaggio consegne sono obbligatorie quando la presa visione e richiesta.');
             }
 
-            if ($this->filled('handover_read_at') && ! $this->filled('handover_read_by_user_id')) {
-                $validator->errors()->add('handover_read_by_user_id', "L'utente di presa visione e obbligatorio se la presa visione e registrata.");
+            $shiftId = $this->integer('minor_journal_shift_id');
+            if ($minor && $shiftId > 0) {
+                $shift = MinorJournalShift::query()->find($shiftId);
+
+                if (! $shift || (int) $shift->facility_id !== (int) $minor->facility_id) {
+                    $validator->errors()->add('minor_journal_shift_id', 'Il turno selezionato non appartiene alla struttura del minore.');
+                } elseif ($shift->closed_at) {
+                    $validator->errors()->add('minor_journal_shift_id', 'Non e possibile aggiungere voci a un turno gia chiuso e firmato.');
+                }
             }
 
             $peiObjectiveId = $this->integer('pei_objective_id');
