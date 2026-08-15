@@ -284,9 +284,76 @@ export interface StaffDocument {
   status?: string | null
   status_code?: string | null
   status_label?: string | null
+  issue_date?: string | null
+  expiry_date?: string | null
+  expiry_status?: 'no_expiry' | 'valid' | 'expiring' | 'expired' | null
+  days_until_expiry?: number | null
   status_lookup?: { id: number; code: string; name: string } | null
   document_type?: { id: number; name: string } | null
   attachment?: Attachment | null
+  staff_member?: { id: number; display_name: string; facility?: { id: number; name: string } | null } | null
+}
+
+export interface StaffDocumentWrite {
+  document_type_id: number
+  issue_date?: string | null
+  expiry_date?: string | null
+  status_code?: string | null
+}
+
+export interface StaffDocumentExpirySummary {
+  expired: number
+  expiring: number
+  valid: number
+  documents: StaffDocument[]
+}
+
+export interface StaffProfileLookupItem {
+  id: number
+  code: string
+  name: string
+  description?: string | null
+  sort_order?: number | null
+  is_active: boolean
+}
+
+export interface StaffSkillEntry {
+  id?: number
+  skill_id: number
+  proficiency_level_code?: string | null
+  acquired_at?: string | null
+  notes?: string | null
+  skill?: StaffProfileLookupItem | null
+  proficiency_level?: StaffProfileLookupItem | null
+}
+
+export interface StaffLanguageEntry {
+  id?: number
+  language_id: number
+  proficiency_level_code?: string | null
+  notes?: string | null
+  language?: StaffProfileLookupItem | null
+  proficiency_level?: StaffProfileLookupItem | null
+}
+
+export interface StaffSpecializationEntry {
+  id?: number
+  specialization_id: number
+  achieved_at?: string | null
+  notes?: string | null
+  specialization?: StaffProfileLookupItem | null
+}
+
+export interface StaffProfessionalProfile {
+  skills?: StaffSkillEntry[]
+  languages?: StaffLanguageEntry[]
+  specializations?: StaffSpecializationEntry[]
+}
+
+export interface StaffProfessionalProfileWrite {
+  skills?: { skill_id: number; proficiency_level_code?: string | null; acquired_at?: string | null; notes?: string | null }[]
+  languages?: { language_id: number; proficiency_level_code?: string | null; notes?: string | null }[]
+  specializations?: { specialization_id: number; achieved_at?: string | null; notes?: string | null }[]
 }
 
 export interface DocumentIssuer {
@@ -1378,6 +1445,110 @@ export interface GeoLoadProvinceOption {
   code?: string | null
   istat_code?: string | null
   vehicle_code?: string | null
+}
+
+// ─── Handoff 184 — Certificazioni e requisiti struttura ──────────────────────
+
+export interface StaffCertification {
+  id: number
+  staff_member_id: number
+  certification_type_id: number
+  document_id?: number | null
+  issue_date?: string | null
+  expiry_date?: string | null
+  reference?: string | null
+  notes?: string | null
+  validity_status?: 'valid' | 'expiring' | 'expired' | 'revoked' | null
+  days_until_expiry?: number | null
+  certification_type?: StaffProfileLookupItem | null
+  document?: StaffDocument | null
+}
+
+export interface StaffCertificationWrite {
+  certification_type_id: number
+  document_id?: number | null
+  issue_date?: string | null
+  expiry_date?: string | null
+  reference?: string | null
+  notes?: string | null
+}
+
+export interface FacilityCertificationRequirement {
+  id: number
+  facility_id: number
+  certification_type_id: number
+  qualification_code?: string | null
+  is_mandatory: boolean
+  advance_notice_days?: number | null
+  notes?: string | null
+  certification_type?: StaffProfileLookupItem | null
+  qualification?: { id: number; code: string; name: string } | null
+}
+
+export interface FacilityCertificationRequirementWrite {
+  certification_type_id: number
+  qualification_code?: string | null
+  is_mandatory: boolean
+  advance_notice_days?: number | null
+  notes?: string | null
+}
+
+export interface FacilityCertificationComplianceRow {
+  staff_member_id: number
+  display_name: string
+  qualification_label?: string | null
+  certification_type_id: number
+  certification_type_name: string
+  requirement_id: number
+  is_mandatory: boolean
+  status: 'compliant' | 'expiring' | 'expired' | 'missing' | 'revoked'
+  expiry_date?: string | null
+  days_until_expiry?: number | null
+}
+
+export interface FacilityCertificationCompliance {
+  total: number
+  compliant: number
+  non_compliant: number
+  rows: FacilityCertificationComplianceRow[]
+}
+
+// ─── Handoff 185 — Dashboard HR ──────────────────────────────────────────────
+
+export interface StaffHRDashboardKpis {
+  total_staff: number
+  active_staff: number
+  staff_without_account: number
+  staff_without_skills: number
+  staff_without_languages: number
+  documents_expired: number
+  documents_expiring: number
+  certifications_expired: number
+  certifications_expiring: number
+  missing_requirements: number
+}
+
+export interface StaffHRAlertItem {
+  staff_member_id: number
+  display_name: string
+  certification_type_name?: string | null
+  document_type_name?: string | null
+  status: 'expired' | 'expiring' | 'revoked' | 'missing'
+  expiry_date?: string | null
+  days_until_expiry?: number | null
+  facility_name?: string | null
+}
+
+export interface StaffHRDashboard {
+  kpis: StaffHRDashboardKpis
+  alerts: {
+    documents: StaffHRAlertItem[]
+    certifications: StaffHRAlertItem[]
+    missing_requirements: StaffHRAlertItem[]
+  }
+  configuration: {
+    document_expiry_alert_days: number
+  }
 }
 
 export interface GeoLoadCityOption {

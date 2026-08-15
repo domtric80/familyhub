@@ -352,6 +352,7 @@ export default function EducatoriPage() {
                                   </td>
                                   <td>
                                     <div className='d-flex gap-1'>
+                                      <Link to={`/educatori/${item.id}`} className='btn btn-sm btn-outline-info' title='Dettaglio'>Dettaglio</Link>
                                       <button className='btn btn-sm btn-outline-primary' onClick={() => openEdit(item)}><Edit2 size={12} /></button>
                                       <button className='btn btn-sm btn-outline-danger' onClick={() => { setDeleteTarget(item); setDeleteConflict(null) }}><Trash2 size={12} /></button>
                                     </div>

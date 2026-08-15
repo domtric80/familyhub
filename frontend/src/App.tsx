@@ -58,6 +58,10 @@ import AttivitaPage from './pages/attivita/AttivitaPage'
 import AvvicinamentiPage from './pages/avvicinamenti/AvvicinamentiPage'
 import DiarioPage from './pages/diario/DiarioPage'
 import EducatoriPage from './pages/educatori/EducatoriPage'
+import EducatoreDetailPage from './pages/educatori/EducatoreDetailPage'
+import AnagraficheProfessionaliPage from './pages/admin/AnagraficheProfessionaliPage'
+import StrutturaDetailPage from './pages/admin/StrutturaDetailPage'
+import DashboardHRPage from './pages/admin/DashboardHRPage'
 import PianificazionePage from './pages/turni/PianificazionePage'
 import TimesheetPage from './pages/turni/TimesheetPage'
 import ModelliTurnoPage from './pages/turni/ModelliTurnoPage'
@@ -99,6 +103,7 @@ function AppRoutes() {
         <Route path='/avvicinamenti' element={<AvvicinamentiPage />} />
         <Route path='/diario' element={<DiarioPage />} />
         <Route path='/educatori' element={<EducatoriPage />} />
+        <Route path='/educatori/:id' element={<EducatoreDetailPage />} />
         <Route path='/turni' element={<PianificazionePage />} />
         <Route path='/turni/timesheet' element={<TimesheetPage />} />
         <Route path='/turni/modelli' element={<ModelliTurnoPage />} />
@@ -113,6 +118,8 @@ function AppRoutes() {
         <Route path='/messaggi/:id' element={<MessaggioDetailPage />} />
         <Route path='/admin/organizzazioni' element={<OrganizzazioniPage />} />
         <Route path='/admin/strutture' element={<StrutturePage />} />
+        <Route path='/admin/strutture/:id' element={<StrutturaDetailPage />} />
+        <Route path='/admin/hr-dashboard' element={<DashboardHRPage />} />
         <Route path='/admin/utenti' element={<UtentiPage />} />
         <Route path='/admin/assegnazioni' element={<AssegnazioniPage />} />
         <Route path='/admin/assegnazioni-minori' element={<AssegnazioniMinoriPage />} />
@@ -147,6 +154,7 @@ function AppRoutes() {
         <Route path='/anagrafiche/enti-rilascio' element={<EntiRilascioPage />} />
         <Route path='/anagrafiche/tipi-avvicinamento' element={<TipiAvvicinamentoPage />} />
         <Route path='/anagrafiche/tipi-diario' element={<TipiDiarioPage />} />
+        <Route path='/anagrafiche/professionali' element={<AnagraficheProfessionaliPage />} />
       </Route>
       <Route path='*' element={<Navigate to='/dashboard' replace />} />
     </Routes>

@@ -282,6 +282,81 @@ export const staffMemberApi = {
     http.get(`/admin/staff-members/${staffId}/documents/${documentId}/download`, { responseType: 'blob' }).then((r) => r.data as Blob),
 }
 
+export const staffMemberDocumentApi = {
+  list: (staffId: number) =>
+    http.get<import('../types').StaffDocument[]>(`/admin/staff-members/${staffId}/documents`).then((r) => r.data),
+
+  upload: (staffId: number, formData: FormData) =>
+    http.post<import('../types').StaffDocument>(`/admin/staff-members/${staffId}/documents`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data),
+
+  update: (staffId: number, docId: number, data: import('../types').StaffDocumentWrite) =>
+    http.put<import('../types').StaffDocument>(`/admin/staff-members/${staffId}/documents/${docId}`, data).then((r) => r.data),
+
+  /** Archiviazione logica — non cancella il file */
+  archive: (staffId: number, docId: number) =>
+    http.delete(`/admin/staff-members/${staffId}/documents/${docId}`),
+
+  expirySummary: (params?: { facility_id?: number }) =>
+    http.get<import('../types').StaffDocumentExpirySummary>('/admin/staff-documents/expiry-summary', { params }).then((r) => r.data),
+
+  previewDocument: (staffId: number, documentId: number) =>
+    http.get(`/admin/staff-members/${staffId}/documents/${documentId}/preview`, { responseType: 'blob' }).then((r) => r.data as Blob),
+
+  downloadDocument: (staffId: number, documentId: number) =>
+    http.get(`/admin/staff-members/${staffId}/documents/${documentId}/download`, { responseType: 'blob' }).then((r) => r.data as Blob),
+}
+
+export const staffProfessionalProfileApi = {
+  get: (staffId: number) =>
+    http.get<import('../types').StaffProfessionalProfile>(`/admin/staff-members/${staffId}/professional-profile`).then((r) => r.data),
+
+  save: (staffId: number, data: import('../types').StaffProfessionalProfileWrite) =>
+    http.put<import('../types').StaffProfessionalProfile>(`/admin/staff-members/${staffId}/professional-profile`, data).then((r) => r.data),
+
+  lookups: (type: 'skills' | 'languages' | 'specializations' | 'proficiency-levels' | 'certification-types') =>
+    http.get<import('../types').StaffProfileLookupItem[]>(`/admin/staff-profile-lookups/${type}`).then((r) => r.data),
+
+  createLookupItem: (type: 'skills' | 'languages' | 'specializations' | 'proficiency-levels' | 'certification-types', data: Omit<import('../types').StaffProfileLookupItem, 'id'>) =>
+    http.post<import('../types').StaffProfileLookupItem>(`/admin/staff-profile-lookups/${type}`, data).then((r) => r.data),
+
+  updateLookupItem: (type: 'skills' | 'languages' | 'specializations' | 'proficiency-levels' | 'certification-types', id: number, data: Partial<Omit<import('../types').StaffProfileLookupItem, 'id'>>) =>
+    http.put<import('../types').StaffProfileLookupItem>(`/admin/staff-profile-lookups/${type}/${id}`, data).then((r) => r.data),
+
+  deleteLookupItem: (type: 'skills' | 'languages' | 'specializations' | 'proficiency-levels' | 'certification-types', id: number) =>
+    http.delete(`/admin/staff-profile-lookups/${type}/${id}`),
+}
+
+export const staffCertificationApi = {
+  list: (staffId: number) =>
+    http.get<import('../types').StaffCertification[]>(`/admin/staff-members/${staffId}/certifications`).then((r) => r.data),
+  create: (staffId: number, data: import('../types').StaffCertificationWrite) =>
+    http.post<import('../types').StaffCertification>(`/admin/staff-members/${staffId}/certifications`, data).then((r) => r.data),
+  update: (staffId: number, certId: number, data: import('../types').StaffCertificationWrite) =>
+    http.put<import('../types').StaffCertification>(`/admin/staff-members/${staffId}/certifications/${certId}`, data).then((r) => r.data),
+  delete: (staffId: number, certId: number) =>
+    http.delete(`/admin/staff-members/${staffId}/certifications/${certId}`),
+}
+
+export const facilityCertificationApi = {
+  listRequirements: (facilityId: number) =>
+    http.get<import('../types').FacilityCertificationRequirement[]>(`/admin/facilities/${facilityId}/certification-requirements`).then((r) => r.data),
+  createRequirement: (facilityId: number, data: import('../types').FacilityCertificationRequirementWrite) =>
+    http.post<import('../types').FacilityCertificationRequirement>(`/admin/facilities/${facilityId}/certification-requirements`, data).then((r) => r.data),
+  updateRequirement: (facilityId: number, reqId: number, data: import('../types').FacilityCertificationRequirementWrite) =>
+    http.put<import('../types').FacilityCertificationRequirement>(`/admin/facilities/${facilityId}/certification-requirements/${reqId}`, data).then((r) => r.data),
+  deleteRequirement: (facilityId: number, reqId: number) =>
+    http.delete(`/admin/facilities/${facilityId}/certification-requirements/${reqId}`),
+  compliance: (facilityId: number) =>
+    http.get<import('../types').FacilityCertificationCompliance>(`/admin/facilities/${facilityId}/certification-compliance`).then((r) => r.data),
+}
+
+export const staffHRDashboardApi = {
+  get: (params?: { facility_id?: number }) =>
+    http.get<import('../types').StaffHRDashboard>('/admin/staff-hr-dashboard', { params }).then((r) => r.data),
+}
+
 export const adminStaffQualificationApi = {
   list: (params?: { is_active?: boolean }) =>
     http.get<StaffQualification[]>('/admin/staff-qualifications', { params }).then((r) => r.data),

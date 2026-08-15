@@ -3,7 +3,7 @@ import {
   Modal, ModalHeader, ModalBody, ModalFooter,
   FormGroup, Label, Input, Alert, Button, Row, Col,
 } from 'reactstrap'
-import { Plus, Edit2, Eye, X } from 'react-feather'
+import { Plus, Edit2, Eye, X, CheckSquare } from 'react-feather'
 import { toast } from 'react-toastify'
 import { journalApi, lookupsApi, minorApi, apiError } from '../../../services/api'
 import type { JournalEntry, JournalEntryWrite, JournalEntryType, PriorityLevel, MoodLevel, PeiObjective } from '../../../types'
@@ -53,6 +53,7 @@ export default function DiarioMinoreTab({ minorId }: { minorId: number }) {
   const [saving, setSaving]             = useState(false)
   const [formMsg, setFormMsg]           = useState<string | null>(null)
   const [createOpen, setCreateOpen]     = useState(false)
+  const [acknowledgingId, setAcknowledgingId] = useState<number | null>(null)
 
   const load = () => {
     setLoading(true); setError(null)
@@ -125,6 +126,16 @@ export default function DiarioMinoreTab({ minorId }: { minorId: number }) {
       if (ae.status === 403) setFormMsg('Non hai i permessi per questa operazione.')
       else setFormMsg(ae.message ?? 'Errore durante il salvataggio.')
     } finally { setSaving(false) }
+  }
+
+  const handleAcknowledge = async (journalId: number) => {
+    setAcknowledgingId(journalId)
+    try {
+      await journalApi.acknowledgeHandover(journalId)
+      toast.success('Presa visione registrata.')
+      load()
+    } catch (e) { toast.error(apiError(e).message ?? 'Errore presa visione') }
+    finally { setAcknowledgingId(null) }
   }
 
   const PRIORITY_OPTIONS: PriorityLevel[] = ['green', 'yellow', 'red']
@@ -369,7 +380,14 @@ export default function DiarioMinoreTab({ minorId }: { minorId: number }) {
                     <div><span className='badge badge-light-warning me-1'>Follow-up richiesto</span><span style={{ color: '#444' }}>{detailTarget.follow_up_notes}</span></div>
                   )}
                   {detailTarget.handover_required && (
-                    <div className='mt-1'><span className='badge badge-light-info me-1'>Handover richiesto</span><span style={{ color: '#444' }}>{detailTarget.handover_notes}</span></div>
+                    <div className='mt-1'>
+                      <span className='badge badge-light-info me-1'>Handover richiesto</span>
+                      {detailTarget.handover_read_at
+                        ? <span className='badge badge-light-success ms-1'>Presa visione registrata</span>
+                        : <span className='badge badge-light-danger ms-1'>In attesa</span>}
+                      {detailTarget.handover_notes && <span style={{ color: '#444', marginLeft: 6 }}>{detailTarget.handover_notes}</span>}
+                      {detailTarget.handover_read_at && <div className='text-muted' style={{ fontSize: 12, marginTop: 2 }}>Letto il: {fmtDt(detailTarget.handover_read_at)}{detailTarget.handover_read_by ? ` da ${detailTarget.handover_read_by.display_name}` : ''}</div>}
+                    </div>
                   )}
                 </div>
               </div>
@@ -380,7 +398,19 @@ export default function DiarioMinoreTab({ minorId }: { minorId: number }) {
           </>)}
         </ModalBody>
         <ModalFooter>
-          {detailTarget && <Button color='primary' size='sm' onClick={() => { openEdit(detailTarget); setDetailTarget(null) }}>Modifica</Button>}
+          {detailTarget?.handover_required && !detailTarget.handover_read_at && (
+            <Button color='info' size='sm' className='d-flex align-items-center gap-1 me-auto'
+              disabled={acknowledgingId === detailTarget?.id}
+              onClick={() => { if (detailTarget) { handleAcknowledge(detailTarget.id); setDetailTarget(null) } }}>
+              <CheckSquare size={13} /> Prendi visione
+            </Button>
+          )}
+          {detailTarget && (
+            <Button color='primary' size='sm'
+              disabled={!!detailTarget.journal_shift?.closed_at}
+              title={detailTarget.journal_shift?.closed_at ? 'Turno chiuso — voce non modificabile' : undefined}
+              onClick={() => { openEdit(detailTarget); setDetailTarget(null) }}>Modifica</Button>
+          )}
           <Button color='secondary' size='sm' onClick={() => setDetailTarget(null)}>Chiudi</Button>
         </ModalFooter>
       </Modal>

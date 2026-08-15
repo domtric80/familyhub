@@ -295,6 +295,7 @@ export default function StrutturePage() {
                             </td>
                             <td>
                               <div className='d-flex gap-1'>
+                                <Link to={`/admin/strutture/${f.id}`} className='btn btn-sm btn-light' title='Requisiti e conformità'>Dettaglio</Link>
                                 <Button color='light' size='sm' title='Modifica' onClick={() => openEdit(f)}>
                                   <Edit2 size={12} />
                                 </Button>

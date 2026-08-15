@@ -1978,6 +1978,314 @@ paths:
           description: Permesso insufficiente
         '423':
           description: Documento bloccato in quarantena o non ancora validato
+  /admin/staff-documents/expiry-summary:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: getStaffDocumentExpirySummary
+      summary: Elenco e KPI delle scadenze documentali del personale
+      description: >-
+        Restituisce i documenti con scadenza e i conteggi `expired`, `expiring`
+        e `valid`. La soglia `alert_days` e configurata lato server e non viene
+        decisa dalla UI. Richiede `staff_members.read`.
+      parameters:
+        - name: facility_id
+          in: query
+          required: false
+          schema: { type: integer }
+      responses:
+        '200':
+          description: KPI e documenti in scadenza
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffDocumentExpirySummary'
+  /admin/staff-profile-lookups/{lookup}:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: listStaffProfessionalLookups
+      summary: Elenca una anagrafica professionale riusabile
+      parameters:
+        - $ref: '#/components/parameters/StaffProfessionalLookupType'
+      responses:
+        '200':
+          description: Competenze, lingue, specializzazioni o livelli di padronanza
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/StaffProfessionalLookup' }
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: createStaffProfessionalLookup
+      summary: Crea una voce di anagrafica professionale
+      parameters:
+        - $ref: '#/components/parameters/StaffProfessionalLookupType'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StaffProfessionalLookupWrite' }
+      responses:
+        '201':
+          description: Voce creata
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffProfessionalLookup' }
+  /admin/staff-hr-dashboard:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: getStaffHrDashboard
+      summary: Dashboard HR con KPI e alert operativi
+      parameters:
+        - name: facility_id
+          in: query
+          required: false
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Quadro aggregato HR, auditato dal backend
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffHrDashboard' }
+  /admin/staff-profile-lookups/{lookup}/{item}:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: getStaffProfessionalLookup
+      parameters:
+        - $ref: '#/components/parameters/StaffProfessionalLookupType'
+        - $ref: '#/components/parameters/StaffProfessionalLookupItemId'
+      responses:
+        '200':
+          description: Voce di anagrafica professionale
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffProfessionalLookup' }
+    put:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: updateStaffProfessionalLookup
+      parameters:
+        - $ref: '#/components/parameters/StaffProfessionalLookupType'
+        - $ref: '#/components/parameters/StaffProfessionalLookupItemId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StaffProfessionalLookupWrite' }
+      responses:
+        '200':
+          description: Voce aggiornata
+    delete:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: deleteStaffProfessionalLookup
+      parameters:
+        - $ref: '#/components/parameters/StaffProfessionalLookupType'
+        - $ref: '#/components/parameters/StaffProfessionalLookupItemId'
+      responses:
+        '204': { description: Voce eliminata }
+        '409': { description: Voce ancora collegata a professionisti }
+  /admin/staff-members/{staff_member}/professional-profile:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: getStaffProfessionalProfile
+      summary: Legge competenze, lingue e specializzazioni del professionista
+      responses:
+        '200':
+          description: Profilo professionale relazionale
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffProfessionalProfile' }
+    put:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: syncStaffProfessionalProfile
+      summary: Sincronizza una o piu categorie del profilo professionale
+      description: >-
+        Ogni categoria inviata sostituisce integralmente la propria lista; una
+        categoria omessa resta invariata, una lista vuota la rimuove integralmente.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StaffProfessionalProfileSync' }
+      responses:
+        '200':
+          description: Profilo professionale aggiornato
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffProfessionalProfile' }
+  /admin/staff-members/{staff_member}/certifications:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: listStaffMemberCertifications
+      summary: Elenca le certificazioni del professionista
+      responses:
+        '200': { description: Elenco certificazioni }
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: createStaffMemberCertification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StaffMemberCertificationWrite' }
+      responses:
+        '201': { description: Certificazione registrata }
+  /admin/staff-members/{staff_member}/certifications/{certification}:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: getStaffMemberCertification
+      responses:
+        '200': { description: Certificazione }
+    put:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: updateStaffMemberCertification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StaffMemberCertificationWrite' }
+      responses:
+        '200': { description: Certificazione aggiornata }
+    delete:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: deleteStaffMemberCertification
+      responses:
+        '204': { description: Certificazione rimossa }
+  /admin/facilities/{facility}/certification-requirements:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: listFacilityCertificationRequirements
+      responses:
+        '200': { description: Requisiti certificativi della struttura }
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: createFacilityCertificationRequirement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FacilityCertificationRequirementWrite' }
+      responses:
+        '201': { description: Requisito creato }
+  /admin/facilities/{facility}/certification-requirements/{requirement}:
+    put:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: updateFacilityCertificationRequirement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FacilityCertificationRequirementWrite' }
+      responses:
+        '200': { description: Requisito aggiornato }
+    delete:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: deleteFacilityCertificationRequirement
+      responses:
+        '204': { description: Requisito rimosso }
+  /admin/facilities/{facility}/certification-compliance:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: getFacilityCertificationCompliance
+      summary: Quadro conformita certificazioni della struttura
+      description: Restituisce alert informativi e non blocca automaticamente i turni.
+      responses:
+        '200': { description: Stato conformita per professionista }
+  /admin/staff-members/{staff_member}/documents:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: listStaffDocuments
+      summary: Elenco documenti di un professionista
+      responses:
+        '200':
+          description: Elenco documenti non archiviati
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/StaffDocument' }
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: uploadStaffDocument
+      summary: Carica un documento professionale
+      description: >-
+        Salva il file in quarantena e avvia la scansione obbligatoria. Il file
+        diventa visualizzabile o scaricabile solo con `attachment.security_status=clean`.
+        Richiede `attachments.upload`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StaffDocumentUpload'
+      responses:
+        '201':
+          description: Documento registrato e in attesa di scansione
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffDocument' }
+        '422': { description: File o metadati non validi }
+  /admin/staff-members/{staff_member}/documents/{document}:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: getStaffDocument
+      summary: Dettaglio metadati documento professionale
+      responses:
+        '200':
+          description: Documento non archiviato
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffDocument' }
+    put:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: updateStaffDocument
+      summary: Modifica date e stato del documento professionale
+      description: >-
+        Non sostituisce il file: ogni nuovo file deve essere caricato come nuovo
+        documento e passa nuovamente dalla quarantena. Richiede `staff_members.update`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StaffDocumentMetadataWrite' }
+      responses:
+        '200':
+          description: Documento aggiornato
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffDocument' }
+    delete:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: archiveStaffDocument
+      summary: Archivia logicamente un documento professionale
+      description: >-
+        Nasconde il record dall'operativita ma mantiene file e traccia audit per
+        retention. Richiede `staff_members.update`.
+      responses:
+        '200': { description: Documento archiviato }
   /admin/staff-members/{staff_member}/documents/{document}/preview-structured:
     get:
       tags: [Admin]
@@ -6491,6 +6799,18 @@ components:
       name: staff_document_status
       required: true
       schema: { type: integer }
+    StaffProfessionalLookupType:
+      name: lookup
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [skills, languages, specializations, proficiency-levels, certification-types]
+    StaffProfessionalLookupItemId:
+      name: item
+      in: path
+      required: true
+      schema: { type: integer }
     MinorUserAssignmentId:
       in: path
       name: minor_assignment
@@ -8339,6 +8659,11 @@ components:
         expiry_date: { type: string, format: date, nullable: true }
         status_code: { type: string, nullable: true, description: Codice relazionale dello stato documento staff }
         status_label: { type: string, nullable: true, description: Label pronta per UI }
+        expiry_status:
+          type: string
+          enum: [no_expiry, valid, expiring, expired]
+          description: Stato calcolato dal backend con la soglia configurata lato server.
+        days_until_expiry: { type: integer, nullable: true }
         status_lookup:
           allOf:
             - $ref: '#/components/schemas/StaffDocumentStatus'
@@ -8352,6 +8677,197 @@ components:
             - $ref: '#/components/schemas/Attachment'
           nullable: true
       required: [id, staff_member_id, document_type_id, attachment_id]
+    StaffDocumentUpload:
+      type: object
+      properties:
+        document_type_id: { type: integer }
+        file: { type: string, format: binary }
+        issue_date: { type: string, format: date, nullable: true }
+        expiry_date: { type: string, format: date, nullable: true }
+        status_code: { type: string, nullable: true, default: VALID }
+      required: [document_type_id, file]
+    StaffDocumentMetadataWrite:
+      type: object
+      properties:
+        issue_date: { type: string, format: date, nullable: true }
+        expiry_date: { type: string, format: date, nullable: true }
+        status_code: { type: string, nullable: true }
+    StaffDocumentExpirySummary:
+      type: object
+      properties:
+        alert_days: { type: integer }
+        summary:
+          type: object
+          properties:
+            expired: { type: integer }
+            expiring: { type: integer }
+            valid: { type: integer }
+        documents:
+          type: array
+          items: { $ref: '#/components/schemas/StaffDocument' }
+      required: [alert_days, summary, documents]
+    StaffProfessionalLookup:
+      type: object
+      properties:
+        id: { type: integer }
+        code: { type: string }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        is_active: { type: boolean }
+        sort_order: { type: integer }
+      required: [id, code, name, is_active, sort_order]
+    StaffProfessionalLookupWrite:
+      type: object
+      properties:
+        code: { type: string, maxLength: 50 }
+        name: { type: string, maxLength: 100 }
+        description: { type: string, nullable: true }
+        is_active: { type: boolean, nullable: true }
+        sort_order: { type: integer, nullable: true }
+      required: [code, name]
+    StaffProfessionalProfileItem:
+      type: object
+      properties:
+        id: { type: integer }
+        code: { type: string }
+        name: { type: string }
+        proficiency_level_code: { type: string, nullable: true }
+        proficiency_level_label: { type: string, nullable: true }
+        acquired_at: { type: string, format: date, nullable: true }
+        achieved_at: { type: string, format: date, nullable: true }
+        notes: { type: string, nullable: true }
+      required: [id, code, name]
+    StaffProfessionalProfile:
+      type: object
+      properties:
+        staff_member_id: { type: integer }
+        skills:
+          type: array
+          items: { $ref: '#/components/schemas/StaffProfessionalProfileItem' }
+        languages:
+          type: array
+          items: { $ref: '#/components/schemas/StaffProfessionalProfileItem' }
+        specializations:
+          type: array
+          items: { $ref: '#/components/schemas/StaffProfessionalProfileItem' }
+      required: [staff_member_id, skills, languages, specializations]
+    StaffProfessionalProfileSync:
+      type: object
+      properties:
+        skills:
+          type: array
+          items:
+            type: object
+            required: [id]
+            properties:
+              id: { type: integer }
+              proficiency_level_code: { type: string, nullable: true }
+              acquired_at: { type: string, format: date, nullable: true }
+              notes: { type: string, nullable: true }
+        languages:
+          type: array
+          items:
+            type: object
+            required: [id]
+            properties:
+              id: { type: integer }
+              proficiency_level_code: { type: string, nullable: true }
+              notes: { type: string, nullable: true }
+        specializations:
+          type: array
+          items:
+            type: object
+            required: [id]
+            properties:
+              id: { type: integer }
+              achieved_at: { type: string, format: date, nullable: true }
+              notes: { type: string, nullable: true }
+    StaffMemberCertification:
+      type: object
+      properties:
+        id: { type: integer }
+        staff_member_id: { type: integer }
+        staff_certification_type_id: { type: integer }
+        staff_document_id: { type: integer, nullable: true }
+        reference_number: { type: string, nullable: true }
+        issued_at: { type: string, format: date, nullable: true }
+        expires_at: { type: string, format: date, nullable: true }
+        status_code: { type: string, nullable: true }
+        validity_status: { type: string, enum: [valid, expiring, expired, revoked] }
+        days_until_expiry: { type: integer, nullable: true }
+      required: [id, staff_member_id, staff_certification_type_id, validity_status]
+    StaffMemberCertificationWrite:
+      type: object
+      required: [staff_certification_type_id]
+      properties:
+        staff_certification_type_id: { type: integer }
+        staff_document_id: { type: integer, nullable: true }
+        reference_number: { type: string, nullable: true }
+        issued_at: { type: string, format: date, nullable: true }
+        expires_at: { type: string, format: date, nullable: true }
+        status_code: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+    FacilityCertificationRequirement:
+      type: object
+      properties:
+        id: { type: integer }
+        facility_id: { type: integer }
+        staff_certification_type_id: { type: integer }
+        qualification_code: { type: string, nullable: true }
+        is_required: { type: boolean }
+        alert_days: { type: integer }
+        notes: { type: string, nullable: true }
+    FacilityCertificationRequirementWrite:
+      type: object
+      required: [staff_certification_type_id]
+      properties:
+        staff_certification_type_id: { type: integer }
+        qualification_code: { type: string, nullable: true }
+        is_required: { type: boolean, nullable: true }
+        alert_days: { type: integer, nullable: true }
+        notes: { type: string, nullable: true }
+    FacilityCertificationCompliance:
+      type: object
+      properties:
+        facility_id: { type: integer }
+        summary:
+          type: object
+          properties:
+            staff_total: { type: integer }
+            compliant: { type: integer }
+            non_compliant: { type: integer }
+        staff:
+          type: array
+          items: { type: object }
+    StaffHrDashboard:
+      type: object
+      properties:
+        generated_at: { type: string, format: date-time }
+        facility: { type: object, nullable: true }
+        kpis:
+          type: object
+          properties:
+            staff_total: { type: integer }
+            staff_active: { type: integer }
+            staff_without_user_account: { type: integer }
+            staff_without_skills: { type: integer }
+            staff_without_languages: { type: integer }
+            documents_expired: { type: integer }
+            documents_expiring: { type: integer }
+            certifications_expired: { type: integer }
+            certifications_expiring: { type: integer }
+            certification_requirements_missing: { type: integer }
+        alerts:
+          type: object
+          properties:
+            documents: { type: array, items: { type: object } }
+            certifications: { type: array, items: { type: object } }
+            missing_requirements: { type: array, items: { type: object } }
+        configuration:
+          type: object
+          properties:
+            document_expiry_alert_days: { type: integer }
+            scope: { type: string, enum: [facility, all_facilities] }
     MinorUserAssignment:
       type: object
       properties:

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class StaffMember extends Model
@@ -65,6 +66,32 @@ class StaffMember extends Model
     public function documents(): HasMany
     {
         return $this->hasMany(StaffDocument::class);
+    }
+
+    public function certifications(): HasMany
+    {
+        return $this->hasMany(StaffMemberCertification::class);
+    }
+
+    public function skills(): BelongsToMany
+    {
+        return $this->belongsToMany(StaffSkill::class, 'staff_member_skills')
+            ->withPivot(['proficiency_level_code', 'acquired_at', 'notes'])
+            ->withTimestamps();
+    }
+
+    public function languages(): BelongsToMany
+    {
+        return $this->belongsToMany(StaffLanguage::class, 'staff_member_languages')
+            ->withPivot(['proficiency_level_code', 'notes'])
+            ->withTimestamps();
+    }
+
+    public function specializations(): BelongsToMany
+    {
+        return $this->belongsToMany(StaffSpecialization::class, 'staff_member_specializations')
+            ->withPivot(['achieved_at', 'notes'])
+            ->withTimestamps();
     }
 
     public function supervisedApproaches(): HasMany

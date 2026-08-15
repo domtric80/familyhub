@@ -56,6 +56,11 @@ class Facility extends Model
         return $this->hasMany(StaffMember::class);
     }
 
+    public function certificationRequirements(): HasMany
+    {
+        return $this->hasMany(FacilityCertificationRequirement::class);
+    }
+
     public function minors(): HasMany
     {
         return $this->hasMany(Minor::class);

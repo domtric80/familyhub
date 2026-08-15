@@ -83,6 +83,7 @@ export const MENUITEMS: MenuSection[] = [
           { title: 'Assegnazioni minori',    icon: 'contact',  type: 'link', path: '/admin/assegnazioni-minori' },
           { title: 'Audit log',              icon: 'others',   type: 'link', path: '/admin/audit' },
           { title: 'KPI Sicurezza',          icon: 'charts',   type: 'link', path: '/admin/audit-kpi' },
+          { title: 'Dashboard HR',           icon: 'user',     type: 'link', path: '/admin/hr-dashboard' },
           { title: 'Backup',                 icon: 'project',  type: 'link', path: '/admin/backup' },
           { title: 'Storage documentale',    icon: 'widget',   type: 'link', path: '/admin/sistema/storage' },
           { title: 'Health servizi',         icon: 'charts',   type: 'link', path: '/admin/sistema/health' },
@@ -137,6 +138,7 @@ export const MENUITEMS: MenuSection[] = [
       { title: 'Enti rilascio',     icon: 'contact',   type: 'link', path: '/anagrafiche/enti-rilascio' },
       { title: 'Tipi avvicinamento', icon: 'email',    type: 'link', path: '/anagrafiche/tipi-avvicinamento' },
       { title: 'Tipi voce diario',  icon: 'blog',      type: 'link', path: '/anagrafiche/tipi-diario' },
+      { title: 'Prof. professionali', icon: 'user',    type: 'link', path: '/anagrafiche/professionali' },
     ],
   },
   {
