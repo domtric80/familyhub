@@ -46,4 +46,23 @@ class BootstrapCommandTest extends TestCase
         $this->assertGreaterThan(0, Permission::query()->count());
         $this->assertDatabaseCount('user_facility_roles', 1);
     }
+
+    public function test_bootstrap_command_restores_super_admin_when_rbac_is_only_partially_initialized(): void
+    {
+        DB::table('user_facility_roles')->delete();
+        Role::query()->where('code', 'SUPER_ADMIN')->delete();
+
+        $this->assertDatabaseMissing('roles', ['code' => 'SUPER_ADMIN']);
+        $this->assertGreaterThan(0, Role::query()->count());
+        $this->assertGreaterThan(0, Permission::query()->count());
+
+        $this->artisan('familyhub:ensure-bootstrap', [
+            '--admin-email' => 'admin@familyhub.local',
+            '--admin-password' => 'password',
+            '--seed-missing-only' => true,
+        ])->assertSuccessful();
+
+        $this->assertDatabaseHas('roles', ['code' => 'SUPER_ADMIN']);
+        $this->assertDatabaseCount('user_facility_roles', 1);
+    }
 }

@@ -26,7 +26,21 @@ return new class extends Migration
 
         $ids=[]; foreach ([['medication_catalog','create'],['medication_catalog','read'],['medication_catalog','update'],['medication_catalog','delete'],['minor_health','create'],['minor_health','read'],['minor_health','update'],['minor_health','administer'],['minor_health','export']] as [$r,$a]) { $c="$r.$a"; $ids[$c]=DB::table('permissions')->insertGetId(['code'=>$c,'resource'=>$r,'action'=>$a,'description'=>str($c)->replace('.',' ')->replace('_',' ')->title(),'created_at'=>$now,'updated_at'=>$now]); }
         $grants=['SUPER_ADMIN'=>array_keys($ids),'ADMIN_IT'=>['medication_catalog.create','medication_catalog.read','medication_catalog.update','medication_catalog.delete'],'DIRETTORE'=>array_keys($ids),'PEDIATRA'=>['medication_catalog.read','minor_health.create','minor_health.read','minor_health.update','minor_health.export'],'EDUCATORE'=>['medication_catalog.read','minor_health.read','minor_health.administer'],'EDUCATORE_NOTTURNO'=>['medication_catalog.read','minor_health.read','minor_health.administer']];
-        foreach($grants as $role=>$codes){$roleId=DB::table('roles')->where('code',$role)->value('id'); foreach($codes as $c) DB::table('role_permissions')->insertOrIgnore(['role_id'=>$roleId,'permission_id'=>$ids[$c],'created_at'=>$now,'updated_at'=>$now]);}
+        foreach ($grants as $role => $codes) {
+            $roleId = DB::table('roles')->where('code', $role)->value('id');
+            if ($roleId === null) {
+                continue;
+            }
+
+            foreach ($codes as $code) {
+                DB::table('role_permissions')->insertOrIgnore([
+                    'role_id' => $roleId,
+                    'permission_id' => $ids[$code],
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            }
+        }
     }
     public function down(): void
     {

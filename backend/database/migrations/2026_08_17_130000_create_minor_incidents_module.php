@@ -136,6 +136,10 @@ return new class extends Migration
         ];
         foreach ($grants as $roleCode => $codes) {
             $roleId = DB::table('roles')->where('code', $roleCode)->value('id');
+            if ($roleId === null) {
+                continue;
+            }
+
             foreach ($codes as $code) {
                 DB::table('role_permissions')->insertOrIgnore([
                     'role_id' => $roleId, 'permission_id' => $permissionIds[$code], 'created_at' => $now, 'updated_at' => $now,

@@ -41,7 +41,7 @@ class EnsureApplicationBootstrapCommand extends Command
 
     private function ensureReferenceData(): void
     {
-        if (Role::query()->count() === 0 || Permission::query()->count() === 0) {
+        if (! Role::query()->where('code', 'SUPER_ADMIN')->exists() || Permission::query()->count() === 0) {
             $this->components->info('RBAC assente: eseguo RbacSeeder.');
             $this->callSilent('db:seed', ['--class' => RbacSeeder::class, '--force' => true]);
         }
