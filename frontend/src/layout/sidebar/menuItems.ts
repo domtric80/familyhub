@@ -37,7 +37,17 @@ export const MENUITEMS: MenuSection[] = [
         ],
       },
       { title: 'Uscite',           icon: 'to-do',    type: 'link', path: '/uscite' },
-      { title: 'Attivita',         icon: 'calendar', type: 'link', path: '/attivita' },
+      {
+        title: 'Attività',
+        icon: 'calendar',
+        type: 'sub',
+        active: false,
+        children: [
+          { title: 'Lista attività',   icon: 'calendar', type: 'link', path: '/attivita' },
+          { title: 'Calendario',       icon: 'monthly',  type: 'link', path: '/attivita/calendario' },
+          { title: 'Miei promemoria',  icon: 'bell',     type: 'link', path: '/attivita/promemoria' },
+        ],
+      },
       { title: 'Avvicinamenti',    icon: 'contact',  type: 'link', path: '/avvicinamenti' },
       { title: 'Diario educativo', icon: 'blog',     type: 'link', path: '/diario' },
     ],
@@ -46,6 +56,8 @@ export const MENUITEMS: MenuSection[] = [
     menutitle: 'Organizzazione',
     Items: [
       { title: 'Educatori', icon: 'user', type: 'link', path: '/educatori' },
+      { title: 'Incidenti', icon: 'alert', type: 'link', path: '/incidenti' },
+      { title: 'Bacheca', icon: 'notification', type: 'link', path: '/bacheca' },
       { title: 'Messaggistica', icon: 'chat', type: 'link', path: '/messaggi' },
       {
         title: 'Turni',
@@ -84,6 +96,8 @@ export const MENUITEMS: MenuSection[] = [
           { title: 'Audit log',              icon: 'others',   type: 'link', path: '/admin/audit' },
           { title: 'KPI Sicurezza',          icon: 'charts',   type: 'link', path: '/admin/audit-kpi' },
           { title: 'Dashboard HR',           icon: 'user',     type: 'link', path: '/admin/hr-dashboard' },
+          { title: 'Gestione bacheca',       icon: 'notification', type: 'link', path: '/admin/bacheca' },
+          { title: 'Tipi incidente',         icon: 'alert',        type: 'link', path: '/admin/tipi-incidente' },
           { title: 'Backup',                 icon: 'project',  type: 'link', path: '/admin/backup' },
           { title: 'Storage documentale',    icon: 'widget',   type: 'link', path: '/admin/sistema/storage' },
           { title: 'Health servizi',         icon: 'charts',   type: 'link', path: '/admin/sistema/health' },

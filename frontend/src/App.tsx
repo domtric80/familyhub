@@ -55,6 +55,12 @@ import TipiDiarioPage from './pages/anagrafiche/TipiDiarioPage'
 // Moduli operativi
 import UscitePage from './pages/uscite/UscitePage'
 import AttivitaPage from './pages/attivita/AttivitaPage'
+import AttivitaCalendarioPage from './pages/attivita/AttivitaCalendarioPage'
+import MieiPromemoriPage from './pages/attivita/MieiPromemoriPage'
+import IncidentiPage from './pages/incidenti/IncidentiPage'
+import NuovaSegnalazionePage from './pages/incidenti/NuovaSegnalazionePage'
+import IncidenteDetailPage from './pages/incidenti/IncidenteDetailPage'
+import TipiIncidentePage from './pages/admin/TipiIncidentePage'
 import AvvicinamentiPage from './pages/avvicinamenti/AvvicinamentiPage'
 import DiarioPage from './pages/diario/DiarioPage'
 import EducatoriPage from './pages/educatori/EducatoriPage'
@@ -62,6 +68,8 @@ import EducatoreDetailPage from './pages/educatori/EducatoreDetailPage'
 import AnagraficheProfessionaliPage from './pages/admin/AnagraficheProfessionaliPage'
 import StrutturaDetailPage from './pages/admin/StrutturaDetailPage'
 import DashboardHRPage from './pages/admin/DashboardHRPage'
+import BachecaPage from './pages/bacheca/BachecaPage'
+import BachecaAdminPage from './pages/admin/BachecaAdminPage'
 import PianificazionePage from './pages/turni/PianificazionePage'
 import TimesheetPage from './pages/turni/TimesheetPage'
 import ModelliTurnoPage from './pages/turni/ModelliTurnoPage'
@@ -100,6 +108,12 @@ function AppRoutes() {
         <Route path='/minori/:id/modifica' element={<MinoreFormPage />} />
         <Route path='/uscite' element={<UscitePage />} />
         <Route path='/attivita' element={<AttivitaPage />} />
+        <Route path='/attivita/calendario' element={<AttivitaCalendarioPage />} />
+        <Route path='/attivita/promemoria' element={<MieiPromemoriPage />} />
+        <Route path='/incidenti' element={<IncidentiPage />} />
+        <Route path='/incidenti/nuova' element={<NuovaSegnalazionePage />} />
+        <Route path='/incidenti/:id' element={<IncidenteDetailPage />} />
+        <Route path='/admin/tipi-incidente' element={<TipiIncidentePage />} />
         <Route path='/avvicinamenti' element={<AvvicinamentiPage />} />
         <Route path='/diario' element={<DiarioPage />} />
         <Route path='/educatori' element={<EducatoriPage />} />
@@ -155,6 +169,8 @@ function AppRoutes() {
         <Route path='/anagrafiche/tipi-avvicinamento' element={<TipiAvvicinamentoPage />} />
         <Route path='/anagrafiche/tipi-diario' element={<TipiDiarioPage />} />
         <Route path='/anagrafiche/professionali' element={<AnagraficheProfessionaliPage />} />
+        <Route path='/bacheca' element={<BachecaPage />} />
+        <Route path='/admin/bacheca' element={<BachecaAdminPage />} />
       </Route>
       <Route path='*' element={<Navigate to='/dashboard' replace />} />
     </Routes>

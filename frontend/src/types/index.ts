@@ -1447,6 +1447,56 @@ export interface GeoLoadProvinceOption {
   vehicle_code?: string | null
 }
 
+// ─── Handoff 189 — Valutazioni periodiche professionisti ─────────────────────
+
+export interface StaffEvaluationCriterion {
+  id: number
+  code: string
+  name: string
+  description?: string | null
+  is_active: boolean
+  sort_order: number
+}
+
+export interface StaffEvaluationCriterionWrite {
+  code: string
+  name: string
+  description?: string | null
+  is_active?: boolean | null
+  sort_order?: number | null
+}
+
+export interface StaffEvaluationScore {
+  criterion_id: number
+  score: 1 | 2 | 3 | 4 | 5
+  notes?: string | null
+  criterion?: StaffEvaluationCriterion | null
+}
+
+export interface StaffEvaluation {
+  id: number
+  facility_id: number
+  staff_member_id: number
+  period_start: string
+  period_end: string
+  evaluation_date: string
+  status: 'DRAFT' | 'FINALIZED'
+  overall_score?: number | null
+  summary?: string | null
+  evaluator?: AdminUser | null
+  finalized_by?: AdminUser | null
+  finalized_at?: string | null
+  scores: StaffEvaluationScore[]
+}
+
+export interface StaffEvaluationWrite {
+  period_start: string
+  period_end: string
+  evaluation_date: string
+  summary?: string | null
+  scores: { criterion_id: number; score: number; notes?: string | null }[]
+}
+
 // ─── Handoff 184 — Certificazioni e requisiti struttura ──────────────────────
 
 export interface StaffCertification {
@@ -2776,4 +2826,373 @@ export interface TimesheetCoordinatorDashboardResponse {
   pending_adjustments: TimesheetDashboardPendingAdjustment[]
   staff_totals?: TimesheetDashboardStaffTotal[]
   facility_totals?: TimesheetDashboardFacilityTotal[]
+}
+
+// ─── Attività: calendario e promemoria (192) ─────────────────────────────────
+
+export interface MinorActivityReminder {
+  id: number
+  minor_activity_id: number
+  recipient_user_id: number
+  remind_at: string
+  acknowledged_at?: string | null
+  is_due: boolean
+  activity?: Activity | null
+}
+
+export interface MinorActivityReminderWrite {
+  recipient_user_id: number
+  remind_at: string
+}
+
+// ─── Attività: media con consenso (193) ──────────────────────────────────────
+
+export interface MinorActivityMedia {
+  id: number
+  minor_activity_id: number
+  media_document_id: number
+  consent_document_id: number
+  captured_at?: string | null
+  consent_expires_at?: string | null
+  consent_revoked_at?: string | null
+  consent_status: 'valid' | 'expired' | 'revoked'
+  can_preview: boolean
+  media_document?: MinorDocument | null
+  consent_document?: MinorDocument | null
+}
+
+export interface MinorActivityMediaWrite {
+  media_document_id: number
+  consent_document_id: number
+  captured_at?: string | null
+}
+
+// ─── Bacheca e circolari (191) ────────────────────────────────────────────────
+
+export interface FacilityBulletin {
+  id: number
+  facility_id: number
+  title: string
+  body: string
+  status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
+  expires_at?: string | null
+  published_at?: string | null
+  target_roles: Role[]
+  is_acknowledged: boolean
+  acknowledged_at?: string | null
+  acknowledgement_count?: number | null
+}
+
+export interface FacilityBulletinWrite {
+  facility_id: number
+  title: string
+  body: string
+  expires_at?: string | null
+  target_role_ids?: number[]
+}
+
+// ─── Incidenti e segnalazioni (194) ──────────────────────────────────────────
+
+export interface IncidentType {
+  id: number
+  name: string
+  code: string
+  description?: string | null
+  is_active: boolean
+}
+
+export interface IncidentTypeWrite {
+  name: string
+  code: string
+  description?: string | null
+  is_active?: boolean
+}
+
+export interface IncidentSeverityOption {
+  code: string
+  label: string
+  color: 'green' | 'yellow' | 'red' | string
+}
+
+export interface IncidentStatusOption {
+  code: string
+  label: string
+}
+
+export interface IncidentOptions {
+  severity_levels: IncidentSeverityOption[]
+  statuses: IncidentStatusOption[]
+}
+
+export interface IncidentAnalysis {
+  root_cause?: string | null
+  contributing_factors?: string | null
+  corrective_actions?: string | null
+  analyzed_at?: string | null
+  analyzed_by?: AdminUser | null
+}
+
+export interface IncidentExternalNotification {
+  id: number
+  incident_id: number
+  authority_id: number
+  notified_at: string
+  method: string
+  notes?: string | null
+  authority?: DocumentIssuer | null
+}
+
+export interface IncidentExternalNotificationWrite {
+  authority_id: number
+  notified_at: string
+  method: string
+  notes?: string | null
+}
+
+export interface IncidentAuthorityReport {
+  incident_id: number
+  generated_at: string
+  content: string
+}
+
+export interface Incident {
+  id: number
+  facility_id: number
+  minor_id: number
+  incident_type_id: number
+  severity: string
+  status: string
+  title: string
+  description: string
+  occurred_at: string
+  reported_by_id?: number | null
+  allowed_transitions: string[]
+  minor?: Minor | null
+  incident_type?: IncidentType | null
+  reported_by?: AdminUser | null
+  analysis?: IncidentAnalysis | null
+  external_notifications?: IncidentExternalNotification[]
+}
+
+export interface IncidentWrite {
+  facility_id: number
+  minor_id: number
+  incident_type_id: number
+  severity: string
+  title: string
+  description: string
+  occurred_at: string
+}
+
+export interface IncidentUpdate {
+  title?: string
+  description?: string
+  occurred_at?: string
+}
+
+export interface IncidentTransitionWrite {
+  transition: string
+  notes?: string | null
+}
+
+// ─── Farmaci e somministrazioni (195) ─────────────────────────────────────────
+
+export interface MedicationOption {
+  id: number
+  name: string
+  code?: string | null
+  unit?: string | null
+  route?: string | null
+}
+export interface MedicationOptions {
+  medications: MedicationOption[]
+  units: { code: string; label: string }[]
+  routes: { code: string; label: string }[]
+  frequencies: { code: string; label: string }[]
+  prescribers: { id: number; full_name: string }[]
+}
+export interface MedicationSchedule {
+  id: number
+  plan_id: number
+  day_of_week: number
+  time_of_day: string
+  dose: number
+  notes?: string | null
+}
+export interface MedicationScheduleWrite {
+  day_of_week: number
+  time_of_day: string
+  dose: number
+  notes?: string | null
+}
+export interface MedicationAdministration {
+  id: number
+  plan_id: number
+  schedule_id?: number | null
+  administered_at: string
+  dose_given: number
+  outcome: string
+  notes?: string | null
+  can_administer: boolean
+  administered_by?: AdminUser | null
+}
+export interface MedicationAdministrationWrite {
+  administered_at: string
+  dose_given: number
+  outcome: string
+  notes?: string | null
+}
+export interface MedicationPlan {
+  id: number
+  minor_id: number
+  facility_id: number
+  medication_id: number
+  unit: string
+  route: string
+  frequency: string
+  dose: number
+  prescriber_id?: number | null
+  prescription_document_id?: number | null
+  start_date: string
+  end_date?: string | null
+  status: string
+  notes?: string | null
+  can_update: boolean
+  can_add_administration: boolean
+  medication?: MedicationOption | null
+  prescriber?: AdminUser | null
+  schedules?: MedicationSchedule[]
+}
+export interface MedicationPlanWrite {
+  minor_id: number
+  facility_id: number
+  medication_id: number
+  unit: string
+  route: string
+  frequency: string
+  dose: number
+  prescriber_id?: number | null
+  prescription_document_id?: number | null
+  start_date: string
+  end_date?: string | null
+  notes?: string | null
+}
+export interface MedicationPlanUpdate {
+  dose?: number
+  end_date?: string | null
+  notes?: string | null
+  status?: string
+}
+export interface MedicationPlanAlert {
+  plan_id: number
+  type: 'expiring_soon' | 'expired' | 'prescription_missing'
+  message: string
+  due_at?: string | null
+  minor_id: number
+  minor_name?: string | null
+}
+export interface Medication {
+  id: number
+  name: string
+  code: string
+  unit?: string | null
+  route?: string | null
+  is_active: boolean
+}
+export interface MedicationWrite {
+  name: string
+  code: string
+  unit?: string | null
+  route?: string | null
+  is_active?: boolean
+}
+
+// ─── Visite ed esami sanitari (196) ──────────────────────────────────────────
+
+export interface HealthEventCategory {
+  id: number
+  name: string
+  code: string
+}
+export interface HealthEventStatus {
+  id: number
+  name: string
+  code: string
+}
+export interface HealthEventOptions {
+  categories: HealthEventCategory[]
+  statuses: HealthEventStatus[]
+  providers: { id: number; full_name: string }[]
+  health_authorities: { id: number; name: string }[]
+}
+export interface HealthEvent {
+  id: number
+  minor_id: number
+  facility_id: number
+  category_id: number
+  status_id: number
+  scheduled_at: string
+  occurred_at?: string | null
+  provider_staff_member_id?: number | null
+  health_authority_document_issuer_id?: number | null
+  linked_minor_document_id?: number | null
+  reason?: string | null
+  clinical_findings?: string | null
+  outcome_notes?: string | null
+  follow_up_at?: string | null
+  category?: HealthEventCategory | null
+  status?: HealthEventStatus | null
+  provider?: AdminUser | null
+}
+export interface HealthEventWrite {
+  minor_id: number
+  facility_id: number
+  category_id: number
+  status_id: number
+  scheduled_at: string
+  occurred_at?: string | null
+  provider_staff_member_id?: number | null
+  health_authority_document_issuer_id?: number | null
+  linked_minor_document_id?: number | null
+  reason?: string | null
+  clinical_findings?: string | null
+  outcome_notes?: string | null
+  follow_up_at?: string | null
+}
+export interface HealthEventUpdate {
+  status_id?: number
+  occurred_at?: string | null
+  provider_staff_member_id?: number | null
+  health_authority_document_issuer_id?: number | null
+  linked_minor_document_id?: number | null
+  reason?: string | null
+  clinical_findings?: string | null
+  outcome_notes?: string | null
+  follow_up_at?: string | null
+}
+export interface HealthEventAlert {
+  event_id: number
+  type: 'upcoming' | 'overdue' | 'follow_up'
+  message: string
+  scheduled_at?: string | null
+  minor_id: number
+  minor_name?: string | null
+}
+
+// ─── Idoneità personale per turni (190) ──────────────────────────────────────
+
+export interface StaffShiftEligibilityAlert {
+  code: 'staff_document_expired' | 'certification_missing' | 'certification_expired' | 'certification_revoked' | string
+  message: string
+}
+export interface StaffShiftEligibility {
+  staff_member_id: number
+  staff_member_name?: string | null
+  requires_attention: boolean
+  can_assign: boolean
+  alerts: StaffShiftEligibilityAlert[]
+}
+export interface FacilityShiftEligibility {
+  facility_id: number
+  staff: StaffShiftEligibility[]
 }

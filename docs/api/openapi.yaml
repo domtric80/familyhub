@@ -2051,6 +2051,139 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/StaffHrDashboard' }
+  /admin/facilities/{facility}/shift-eligibility:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: getFacilityShiftEligibility
+      summary: Controllo consultivo idoneità personale per la pianificazione turni
+      description: >-
+        Restituisce avvisi su documenti e certificazioni del personale attivo.
+        Non blocca né modifica assegnazioni: l'enforcement automatico non è attivo.
+      responses:
+        '200':
+          description: Quadro idoneità consultivo e auditato
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FacilityShiftEligibility' }
+  /bulletins:
+    get:
+      tags: [Bulletins]
+      security: [{ bearerAuth: [] }]
+      operationId: listVisibleFacilityBulletins
+      summary: Elenca le circolari pubblicate destinate all'utente
+      parameters:
+        - name: facility_id
+          in: query
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Circolari visibili nella struttura
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/FacilityBulletin' } }
+  /bulletins/unread-count:
+    get:
+      tags: [Bulletins]
+      security: [{ bearerAuth: [] }]
+      operationId: getUnreadFacilityBulletinCount
+      parameters:
+        - name: facility_id
+          in: query
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Numero circolari non ancora prese in visione }
+  /bulletins/{bulletin}:
+    get:
+      tags: [Bulletins]
+      security: [{ bearerAuth: [] }]
+      operationId: getVisibleFacilityBulletin
+      summary: Legge una circolare destinata all'utente e audita la lettura
+      responses:
+        '200':
+          description: Circolare visibile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FacilityBulletin' }
+        '404': { description: Circolare inesistente o non destinata all'utente }
+  /bulletins/{bulletin}/acknowledge:
+    post:
+      tags: [Bulletins]
+      security: [{ bearerAuth: [] }]
+      operationId: acknowledgeFacilityBulletin
+      summary: Registra in modo idempotente la presa visione
+      responses:
+        '200': { description: Presa visione registrata o già esistente }
+        '409': { description: Circolare non pubblicata, archiviata o scaduta }
+  /admin/facility-bulletins:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: listManagedFacilityBulletins
+      parameters:
+        - name: facility_id
+          in: query
+          required: true
+          schema: { type: integer }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [DRAFT, PUBLISHED, ARCHIVED] }
+      responses:
+        '200': { description: Elenco amministrativo circolari }
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: createFacilityBulletinDraft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FacilityBulletinWrite' }
+      responses:
+        '201':
+          description: Bozza creata
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FacilityBulletin' }
+  /admin/facility-bulletins/{bulletin}:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: getManagedFacilityBulletin
+      responses:
+        '200': { description: Dettaglio amministrativo con destinatari e statistiche }
+    put:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: updateFacilityBulletinDraft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FacilityBulletinWrite' }
+      responses:
+        '200': { description: Bozza aggiornata }
+        '409': { description: Circolare già pubblicata e immutabile }
+  /admin/facility-bulletins/{bulletin}/publish:
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: publishFacilityBulletin
+      summary: Pubblica e rende immutabile la circolare
+      responses:
+        '200': { description: Circolare pubblicata }
+        '409': { description: Stato non compatibile }
+  /admin/facility-bulletins/{bulletin}/archive:
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: archiveFacilityBulletin
+      summary: Archivia la circolare conservando storico e prese visione
+      responses:
+        '200': { description: Circolare archiviata }
   /admin/staff-profile-lookups/{lookup}/{item}:
     get:
       tags: [Admin]
@@ -2140,6 +2273,126 @@ paths:
             schema: { $ref: '#/components/schemas/StaffMemberCertificationWrite' }
       responses:
         '201': { description: Certificazione registrata }
+  /admin/staff-evaluation-criteria:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: listStaffEvaluationCriteria
+      summary: Elenca i criteri attivi per le valutazioni HR
+      responses:
+        '200':
+          description: Anagrafica criteri valutazione
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/StaffEvaluationCriterion' }
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: createStaffEvaluationCriterion
+      summary: Crea un criterio valutativo riusabile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StaffEvaluationCriterionWrite' }
+      responses:
+        '201': { description: Criterio creato }
+  /admin/staff-evaluation-criteria/{criterion}:
+    put:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: updateStaffEvaluationCriterion
+      summary: Aggiorna un criterio senza modificarne il codice
+      responses:
+        '200': { description: Criterio aggiornato }
+        '422': { description: Codice non modificabile }
+        '409': { description: Criterio gia usato e non eliminabile }
+    delete:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: deleteStaffEvaluationCriterion
+      summary: Elimina un criterio non ancora usato
+      responses:
+        '204': { description: Criterio eliminato }
+        '409': { description: Criterio collegato a valutazioni }
+  /admin/staff-members/{staff_member}/evaluations:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: listStaffEvaluations
+      summary: Elenca le valutazioni riservate del professionista
+      responses:
+        '200':
+          description: Valutazioni in ordine decrescente di periodo
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/StaffEvaluation' }
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: createStaffEvaluation
+      summary: Crea una valutazione HR in bozza
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StaffEvaluationWrite' }
+      responses:
+        '201':
+          description: Bozza valutazione creata
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffEvaluation' }
+  /admin/staff-members/{staff_member}/evaluations/{evaluation}:
+    get:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: getStaffEvaluation
+      summary: Legge una valutazione HR e ne registra l'accesso in audit
+      responses:
+        '200':
+          description: Valutazione riservata
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffEvaluation' }
+    put:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: updateStaffEvaluation
+      summary: Aggiorna una bozza non finalizzata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StaffEvaluationWrite' }
+      responses:
+        '200': { description: Bozza aggiornata }
+        '409': { description: Valutazione gia finalizzata }
+    delete:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: deleteStaffEvaluation
+      summary: Archivia una bozza non finalizzata
+      responses:
+        '204': { description: Bozza archiviata }
+        '409': { description: Valutazione gia finalizzata }
+  /admin/staff-members/{staff_member}/evaluations/{evaluation}/finalize:
+    post:
+      tags: [Admin]
+      security: [{ bearerAuth: [] }]
+      operationId: finalizeStaffEvaluation
+      summary: Finalizza la valutazione con firma applicativa dell'utente autenticato
+      responses:
+        '200':
+          description: Valutazione finalizzata e immutabile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffEvaluation' }
+        '409': { description: Valutazione gia finalizzata }
   /admin/staff-members/{staff_member}/certifications/{certification}:
     get:
       tags: [Admin]
@@ -5732,6 +5985,251 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MinorExit'
+  /health/medications/options:
+    get:
+      tags: [Health Medications]
+      security: [{ bearerAuth: [] }]
+      operationId: getMedicationOptions
+      summary: Restituisce farmaci, unità, vie, esiti e professionisti prescrittori disponibili
+      parameters:
+        - { in: query, name: facility_id, required: true, schema: { type: integer } }
+      responses: { '200': { description: Opzioni farmaci } }
+  /health/medication-plans:
+    get:
+      tags: [Health Medications]
+      security: [{ bearerAuth: [] }]
+      operationId: listMinorMedicationPlans
+      parameters:
+        - { in: query, name: minor_id, schema: { type: integer } }
+        - { in: query, name: facility_id, schema: { type: integer } }
+        - { in: query, name: active_only, schema: { type: boolean, default: true } }
+      responses:
+        '200': { description: Piani farmacologici accessibili }
+    post:
+      tags: [Health Medications]
+      security: [{ bearerAuth: [] }]
+      operationId: createMinorMedicationPlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MinorMedicationPlanWrite' }
+      responses: { '201': { description: Piano farmacologico creato } }
+  /health/medication-plans/alerts:
+    get:
+      tags: [Health Medications]
+      security: [{ bearerAuth: [] }]
+      operationId: listMedicationPlanAlerts
+      parameters:
+        - { in: query, name: facility_id, schema: { type: integer } }
+        - { in: query, name: days, schema: { type: integer, minimum: 1, maximum: 180, default: 30 } }
+      responses: { '200': { description: Piani e ricette scaduti o in scadenza } }
+  /health/medication-plans/{plan}:
+    get:
+      tags: [Health Medications]
+      security: [{ bearerAuth: [] }]
+      operationId: getMinorMedicationPlan
+      responses: { '200': { description: Dettaglio piano, orari e somministrazioni } }
+    patch:
+      tags: [Health Medications]
+      security: [{ bearerAuth: [] }]
+      operationId: updateMinorMedicationPlan
+      summary: Aggiorna o disattiva il piano senza cancellarne lo storico
+      responses: { '200': { description: Piano aggiornato } }
+  /health/medication-plans/{plan}/schedules:
+    post:
+      tags: [Health Medications]
+      security: [{ bearerAuth: [] }]
+      operationId: createMedicationSchedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MinorMedicationScheduleWrite' }
+      responses: { '201': { description: Orario creato } }
+  /health/medication-plans/{plan}/administrations:
+    get:
+      tags: [Health Medications]
+      security: [{ bearerAuth: [] }]
+      operationId: listMedicationAdministrations
+      responses: { '200': { description: Registro somministrazioni immutabile } }
+    post:
+      tags: [Health Medications]
+      security: [{ bearerAuth: [] }]
+      operationId: signMedicationAdministration
+      summary: Registra e firma applicativamente una somministrazione
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MinorMedicationAdministrationWrite' }
+      responses:
+        '201': { description: Somministrazione firmata }
+        '409': { description: Somministrazione già registrata per lo stesso momento previsto }
+  /admin/medications:
+    get:
+      tags: [Admin Health]
+      security: [{ bearerAuth: [] }]
+      operationId: listMedications
+      responses: { '200': { description: Catalogo farmaci } }
+    post:
+      tags: [Admin Health]
+      security: [{ bearerAuth: [] }]
+      operationId: createMedication
+      responses: { '201': { description: Farmaco creato } }
+  /admin/medications/{medication}:
+    put:
+      tags: [Admin Health]
+      security: [{ bearerAuth: [] }]
+      operationId: updateMedication
+      responses: { '200': { description: Farmaco aggiornato } }
+    delete:
+      tags: [Admin Health]
+      security: [{ bearerAuth: [] }]
+      operationId: deleteMedication
+      responses:
+        '204': { description: Farmaco non utilizzato eliminato }
+        '409': { description: Farmaco utilizzato; deve essere disattivato }
+  /incidents/options:
+    get:
+      tags: [Incidents]
+      security: [{ bearerAuth: [] }]
+      operationId: getIncidentOptions
+      summary: Restituisce tipologie, gravità e stati del workflow incidenti
+      responses:
+        '200': { description: Anagrafiche incidenti attive }
+  /incidents:
+    get:
+      tags: [Incidents]
+      security: [{ bearerAuth: [] }]
+      operationId: listMinorIncidents
+      summary: Elenca gli incidenti visibili nel perimetro minori dell'utente
+      parameters:
+        - { in: query, name: facility_id, schema: { type: integer } }
+        - { in: query, name: minor_id, schema: { type: integer } }
+        - { in: query, name: incident_type_id, schema: { type: integer } }
+        - { in: query, name: severity_code, schema: { type: string } }
+        - { in: query, name: status_code, schema: { type: string } }
+        - { in: query, name: date_from, schema: { type: string, format: date } }
+        - { in: query, name: date_to, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Incidenti accessibili
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/MinorIncident' } }
+    post:
+      tags: [Incidents]
+      security: [{ bearerAuth: [] }]
+      operationId: createMinorIncident
+      summary: Registra e segnala un incidente sul minore
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MinorIncidentWrite' }
+      responses:
+        '201': { description: Incidente registrato nello stato REPORTED }
+  /incidents/{incident}:
+    get:
+      tags: [Incidents]
+      security: [{ bearerAuth: [] }]
+      operationId: getMinorIncident
+      summary: Restituisce dettaglio, escalation, RCA e notifiche esterne
+      responses:
+        '200': { description: Dettaglio incidente }
+    patch:
+      tags: [Incidents]
+      security: [{ bearerAuth: [] }]
+      operationId: updateMinorIncident
+      summary: Corregge i dati dell'incidente prima della revisione del coordinatore
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MinorIncidentWrite' }
+      responses:
+        '200': { description: Incidente aggiornato }
+        '409': { description: Incidente non più modificabile }
+  /incidents/{incident}/transition:
+    post:
+      tags: [Incidents]
+      security: [{ bearerAuth: [] }]
+      operationId: transitionMinorIncident
+      summary: Esegue una transizione ammessa del workflow di escalation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to_status_code]
+              properties:
+                to_status_code: { type: string, enum: [COORDINATOR_REVIEWED, DIRECTOR_REVIEWED, EXTERNAL_NOTIFIED, CLOSED] }
+                notes: { type: string, maxLength: 4000, description: Cifrate a riposo }
+      responses:
+        '200': { description: Transizione applicata }
+        '409': { description: Transizione non ammessa nello stato corrente }
+  /incidents/{incident}/analysis:
+    put:
+      tags: [Incidents]
+      security: [{ bearerAuth: [] }]
+      operationId: upsertMinorIncidentAnalysis
+      summary: Registra root cause analysis e misure correttive
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MinorIncidentAnalysisWrite' }
+      responses:
+        '200': { description: Analisi aggiornata }
+  /incidents/{incident}/external-notifications:
+    post:
+      tags: [Incidents]
+      security: [{ bearerAuth: [] }]
+      operationId: createMinorIncidentExternalNotification
+      summary: Registra l'invio della segnalazione a una autorità esterna censita
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MinorIncidentExternalNotificationWrite' }
+      responses:
+        '201': { description: Notifica esterna registrata }
+  /incidents/{incident}/authority-report:
+    get:
+      tags: [Incidents]
+      security: [{ bearerAuth: [] }]
+      operationId: getMinorIncidentAuthorityReport
+      summary: Restituisce il payload precompilato per l'autorità selezionata
+      parameters:
+        - { in: query, name: document_issuer_id, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: Payload precompilato auditato; nessun invio automatico }
+  /admin/incident-types:
+    get:
+      tags: [Admin Incidents]
+      security: [{ bearerAuth: [] }]
+      operationId: listIncidentTypes
+      responses: { '200': { description: Tipologie incidente } }
+    post:
+      tags: [Admin Incidents]
+      security: [{ bearerAuth: [] }]
+      operationId: createIncidentType
+      responses: { '201': { description: Tipologia creata } }
+  /admin/incident-types/{incidentType}:
+    put:
+      tags: [Admin Incidents]
+      security: [{ bearerAuth: [] }]
+      operationId: updateIncidentType
+      responses: { '200': { description: Tipologia aggiornata } }
+    delete:
+      tags: [Admin Incidents]
+      security: [{ bearerAuth: [] }]
+      operationId: deleteIncidentType
+      responses:
+        '204': { description: Tipologia non utilizzata eliminata }
+        '409': { description: Tipologia già utilizzata e non eliminabile }
   /activities:
     get:
       tags: [Activities]
@@ -5812,6 +6310,144 @@ paths:
                 $ref: '#/components/schemas/MinorActivitySummary'
         '422':
           $ref: '#/components/responses/ValidationError'
+  /activities/calendar:
+    get:
+      tags: [Activities]
+      security: [{ bearerAuth: [] }]
+      operationId: getMinorActivityCalendar
+      summary: Calendario attività accessibili all'utente
+      parameters:
+        - in: query
+          name: date_from
+          required: true
+          schema: { type: string, format: date }
+        - in: query
+          name: date_to
+          required: true
+          schema: { type: string, format: date }
+        - in: query
+          name: facility_id
+          schema: { type: integer }
+        - in: query
+          name: minor_id
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Eventi calendario nell'intervallo massimo di 62 giorni
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/MinorActivity' } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /activities/reminders/mine:
+    get:
+      tags: [Activities]
+      security: [{ bearerAuth: [] }]
+      operationId: listMyActivityReminders
+      summary: Elenca i promemoria attività dell'utente autenticato
+      parameters:
+        - in: query
+          name: pending_only
+          schema: { type: boolean, default: true }
+      responses:
+        '200':
+          description: Promemoria personali accessibili
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/MinorActivityReminder' } }
+  /activities/{activity}/reminders:
+    get:
+      tags: [Activities]
+      security: [{ bearerAuth: [] }]
+      operationId: listMinorActivityReminders
+      summary: Elenca i promemoria dell'attività per chi può aggiornarla
+      responses:
+        '200':
+          description: Promemoria con destinatari
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/MinorActivityReminder' } }
+    post:
+      tags: [Activities]
+      security: [{ bearerAuth: [] }]
+      operationId: createMinorActivityReminder
+      summary: Crea un promemoria per un utente autorizzato sul minore
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MinorActivityReminderWrite' }
+      responses:
+        '201': { description: Promemoria creato }
+        '403': { description: Destinatario privo di accesso al minore }
+  /activities/{activity}/reminders/{reminder}:
+    delete:
+      tags: [Activities]
+      security: [{ bearerAuth: [] }]
+      operationId: deleteMinorActivityReminder
+      summary: Elimina un promemoria non ancora confermato
+      responses:
+        '204': { description: Promemoria eliminato }
+        '409': { description: Promemoria già confermato }
+  /activities/{activity}/reminders/{reminder}/acknowledge:
+    post:
+      tags: [Activities]
+      security: [{ bearerAuth: [] }]
+      operationId: acknowledgeMinorActivityReminder
+      summary: Conferma in modo idempotente il promemoria personale
+      responses:
+        '200': { description: Promemoria confermato o già confermato }
+  /activities/{activity}/media:
+    get:
+      tags: [Activities]
+      security: [{ bearerAuth: [] }]
+      operationId: listMinorActivityMedia
+      summary: Elenca i media dell'attività con consenso valido e accessibili via ABAC
+      responses:
+        '200':
+          description: Media collegati all'attività; i file restano fruibili esclusivamente dagli endpoint documentali protetti
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/MinorActivityMedia' } }
+    post:
+      tags: [Activities]
+      security: [{ bearerAuth: [] }]
+      operationId: createMinorActivityMedia
+      summary: Collega un documento immagine/video e il relativo documento di consenso all'attività
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MinorActivityMediaWrite' }
+      responses:
+        '201': { description: Collegamento media creato }
+        '403': { description: Accesso al minore o alle classificazioni documentali negato }
+        '422': { description: Documenti non coerenti, allegati non verificati o MIME non supportato }
+  /activities/{activity}/media/{media}:
+    delete:
+      tags: [Activities]
+      security: [{ bearerAuth: [] }]
+      operationId: deleteMinorActivityMedia
+      summary: Elimina un collegamento media non revocato senza cancellare i documenti originali
+      responses:
+        '204': { description: Collegamento eliminato }
+        '409': { description: Consenso già revocato; record conservato per audit }
+  /activities/{activity}/media/{media}/revoke-consent:
+    post:
+      tags: [Activities]
+      security: [{ bearerAuth: [] }]
+      operationId: revokeMinorActivityMediaConsent
+      summary: Revoca il consenso e rende il media non fruibile dalla galleria
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 3, maxLength: 1000, description: Memorizzata cifrata a riposo }
+      responses:
+        '200': { description: Consenso revocato o già revocato in modo idempotente }
   /activities/{activity}:
     get:
       tags: [Activities]
@@ -6657,6 +7293,91 @@ paths:
                 $ref: '#/components/schemas/InternalMessageArchiveResponse'
         '403':
           description: Utente non autorizzato all'archiviazione della conversazione
+  /health/events/options:
+    get:
+      tags: [Health Events]
+      security: [{ bearerAuth: [] }]
+      operationId: getMinorHealthEventOptions
+      summary: Restituisce categorie, stati, professionisti ed enti sanitari selezionabili
+      parameters:
+        - { in: query, name: facility_id, required: true, schema: { type: integer } }
+      responses: { '200': { description: Opzioni eventi sanitari } }
+  /health/events:
+    get:
+      tags: [Health Events]
+      security: [{ bearerAuth: [] }]
+      operationId: listMinorHealthEvents
+      parameters:
+        - { in: query, name: minor_id, schema: { type: integer } }
+        - { in: query, name: facility_id, schema: { type: integer } }
+        - { in: query, name: category_code, schema: { type: string } }
+        - { in: query, name: status_code, schema: { type: string } }
+      responses: { '200': { description: Eventi sanitari accessibili } }
+    post:
+      tags: [Health Events]
+      security: [{ bearerAuth: [] }]
+      operationId: createMinorHealthEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [minor_id, category_id, status_id, scheduled_at]
+              properties:
+                minor_id: { type: integer }
+                category_id: { type: integer }
+                status_id: { type: integer }
+                scheduled_at: { type: string, format: date-time }
+                occurred_at: { type: string, format: date-time, nullable: true }
+                provider_staff_member_id: { type: integer, nullable: true }
+                health_authority_document_issuer_id: { type: integer, nullable: true }
+                linked_minor_document_id: { type: integer, nullable: true }
+                reason: { type: string, nullable: true, maxLength: 10000 }
+                clinical_findings: { type: string, nullable: true, maxLength: 20000 }
+                outcome_notes: { type: string, nullable: true, maxLength: 10000 }
+                follow_up_at: { type: string, format: date-time, nullable: true }
+      responses: { '201': { description: Evento sanitario creato }, '422': { description: Relazioni o dati non validi } }
+  /health/events/alerts:
+    get:
+      tags: [Health Events]
+      security: [{ bearerAuth: [] }]
+      operationId: listMinorHealthEventAlerts
+      parameters:
+        - { in: query, name: facility_id, schema: { type: integer } }
+        - { in: query, name: days, schema: { type: integer, minimum: 1, maximum: 180, default: 30 } }
+      responses: { '200': { description: Appuntamenti e follow-up in scadenza } }
+  /health/events/{event}:
+    get:
+      tags: [Health Events]
+      security: [{ bearerAuth: [] }]
+      operationId: getMinorHealthEvent
+      parameters: [{ in: path, name: event, required: true, schema: { type: integer } }]
+      responses: { '200': { description: Dettaglio evento sanitario }, '403': { description: Accesso negato } }
+    patch:
+      tags: [Health Events]
+      security: [{ bearerAuth: [] }]
+      operationId: updateMinorHealthEvent
+      parameters: [{ in: path, name: event, required: true, schema: { type: integer } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                category_id: { type: integer }
+                status_id: { type: integer }
+                scheduled_at: { type: string, format: date-time }
+                occurred_at: { type: string, format: date-time, nullable: true }
+                provider_staff_member_id: { type: integer, nullable: true }
+                health_authority_document_issuer_id: { type: integer, nullable: true }
+                linked_minor_document_id: { type: integer, nullable: true }
+                reason: { type: string, nullable: true, maxLength: 10000 }
+                clinical_findings: { type: string, nullable: true, maxLength: 20000 }
+                outcome_notes: { type: string, nullable: true, maxLength: 10000 }
+                follow_up_at: { type: string, format: date-time, nullable: true }
+      responses: { '200': { description: Evento aggiornato }, '422': { description: Relazioni o transizione non valide } }
 components:
   securitySchemes:
     bearerAuth:
@@ -7186,6 +7907,87 @@ components:
         sort_order: { type: integer, nullable: true }
         is_active: { type: boolean, nullable: true }
       required: [code, name]
+    MinorMedicationPlanWrite:
+      type: object
+      required: [minor_id, medication_id, dose_quantity, dosage_unit_id, administration_route_id, prescriber_staff_member_id, start_date]
+      properties:
+        minor_id: { type: integer }
+        medication_id: { type: integer }
+        dose_quantity: { type: number, format: decimal, minimum: 0.001 }
+        dosage_unit_id: { type: integer }
+        administration_route_id: { type: integer }
+        prescriber_staff_member_id: { type: integer }
+        prescription_minor_document_id: { type: integer, nullable: true }
+        start_date: { type: string, format: date }
+        end_date: { type: string, format: date, nullable: true }
+        instructions: { type: string, nullable: true, maxLength: 10000, description: Cifrate a riposo }
+        is_active: { type: boolean, default: true }
+    MinorMedicationScheduleWrite:
+      type: object
+      required: [time_of_day, days_of_week]
+      properties:
+        time_of_day: { type: string, pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }
+        days_of_week:
+          type: array
+          uniqueItems: true
+          items: { type: string, enum: [MON, TUE, WED, THU, FRI, SAT, SUN] }
+        as_needed: { type: boolean, default: false }
+    MinorMedicationAdministrationWrite:
+      type: object
+      required: [scheduled_for, outcome_code]
+      properties:
+        medication_schedule_id: { type: integer, nullable: true }
+        scheduled_for: { type: string, format: date-time }
+        administered_at: { type: string, format: date-time, nullable: true }
+        outcome_code: { type: string, enum: [ADMINISTERED, REFUSED, MISSED, HELD] }
+        notes: { type: string, nullable: true, maxLength: 4000, description: Cifrate a riposo }
+    MinorIncident:
+      type: object
+      properties:
+        id: { type: integer }
+        facility_id: { type: integer }
+        minor_id: { type: integer }
+        incident_type_id: { type: integer }
+        severity_code: { type: string, enum: [GREEN, YELLOW, RED] }
+        status_code: { type: string, enum: [REPORTED, COORDINATOR_REVIEWED, DIRECTOR_REVIEWED, EXTERNAL_NOTIFIED, CLOSED] }
+        occurred_at: { type: string, format: date-time }
+        location: { type: string, nullable: true, description: Cifrata a riposo }
+        description: { type: string, description: Cifrata a riposo }
+        immediate_actions: { type: string, nullable: true, description: Cifrate a riposo }
+        requires_external_notification: { type: boolean }
+        transitions: { type: array, items: { type: object } }
+        analysis: { type: object, nullable: true }
+        external_notifications: { type: array, items: { type: object } }
+      required: [id, facility_id, minor_id, incident_type_id, severity_code, status_code, occurred_at, description, requires_external_notification]
+    MinorIncidentWrite:
+      type: object
+      required: [minor_id, incident_type_id, severity_code, occurred_at, description]
+      properties:
+        minor_id: { type: integer }
+        incident_type_id: { type: integer }
+        severity_code: { type: string, enum: [GREEN, YELLOW, RED] }
+        occurred_at: { type: string, format: date-time }
+        location: { type: string, nullable: true, maxLength: 1000 }
+        description: { type: string, maxLength: 10000 }
+        immediate_actions: { type: string, nullable: true, maxLength: 10000 }
+        requires_external_notification: { type: boolean, default: false }
+    MinorIncidentAnalysisWrite:
+      type: object
+      required: [root_cause, corrective_measures]
+      properties:
+        root_cause: { type: string, maxLength: 10000, description: Cifrata a riposo }
+        corrective_measures: { type: string, maxLength: 10000, description: Cifrate a riposo }
+        responsible_staff_member_id: { type: integer, nullable: true }
+        due_date: { type: string, format: date, nullable: true }
+        completed_at: { type: string, format: date-time, nullable: true }
+    MinorIncidentExternalNotificationWrite:
+      type: object
+      required: [document_issuer_id, notified_at]
+      properties:
+        document_issuer_id: { type: integer }
+        notified_at: { type: string, format: date-time }
+        reference: { type: string, nullable: true, maxLength: 1000, description: Cifrata a riposo }
+        notes: { type: string, nullable: true, maxLength: 4000, description: Cifrate a riposo }
     MinorActivity:
       type: object
       properties:
@@ -7264,6 +8066,45 @@ components:
             properties:
               attendance_status: { type: string, enum: [present, partial, absent] }
               total: { type: integer }
+    MinorActivityReminder:
+      type: object
+      properties:
+        id: { type: integer }
+        minor_activity_id: { type: integer }
+        recipient_user_id: { type: integer }
+        remind_at: { type: string, format: date-time }
+        acknowledged_at: { type: string, format: date-time, nullable: true }
+        is_due: { type: boolean }
+        activity: { $ref: '#/components/schemas/MinorActivity' }
+      required: [id, minor_activity_id, recipient_user_id, remind_at, is_due]
+    MinorActivityReminderWrite:
+      type: object
+      required: [recipient_user_id, remind_at]
+      properties:
+        recipient_user_id: { type: integer }
+        remind_at: { type: string, format: date-time }
+    MinorActivityMedia:
+      type: object
+      properties:
+        id: { type: integer }
+        minor_activity_id: { type: integer }
+        media_document_id: { type: integer }
+        consent_document_id: { type: integer }
+        captured_at: { type: string, format: date-time, nullable: true }
+        consent_expires_at: { type: string, format: date, nullable: true }
+        consent_revoked_at: { type: string, format: date-time, nullable: true }
+        consent_status: { type: string, enum: [valid, expired, revoked] }
+        can_preview: { type: boolean, description: Calcolato dal backend usando consenso, security scan e ABAC }
+        media_document: { type: object, description: Metadati del documento; nessun URL S3/MinIO viene esposto }
+        consent_document: { type: object, description: Metadati minimi del documento di consenso }
+      required: [id, minor_activity_id, media_document_id, consent_document_id, consent_status, can_preview]
+    MinorActivityMediaWrite:
+      type: object
+      required: [media_document_id, consent_document_id]
+      properties:
+        media_document_id: { type: integer, description: Documento del medesimo minore con allegato JPEG, PNG, WEBP o MP4 verificato clean }
+        consent_document_id: { type: integer, description: Documento del medesimo minore che formalizza il consenso }
+        captured_at: { type: string, format: date-time, nullable: true }
     MinorApproach:
       type: object
       properties:
@@ -8868,6 +9709,128 @@ components:
           properties:
             document_expiry_alert_days: { type: integer }
             scope: { type: string, enum: [facility, all_facilities] }
+    StaffEvaluationCriterion:
+      type: object
+      properties:
+        id: { type: integer }
+        code: { type: string, maxLength: 50 }
+        name: { type: string, maxLength: 100 }
+        description: { type: string, nullable: true }
+        is_active: { type: boolean }
+        sort_order: { type: integer }
+      required: [id, code, name, is_active, sort_order]
+    StaffEvaluationCriterionWrite:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string, maxLength: 50 }
+        name: { type: string, maxLength: 100 }
+        description: { type: string, nullable: true }
+        is_active: { type: boolean, nullable: true }
+        sort_order: { type: integer, nullable: true }
+    StaffEvaluationScore:
+      type: object
+      properties:
+        criterion_id: { type: integer }
+        criterion: { $ref: '#/components/schemas/StaffEvaluationCriterion' }
+        score: { type: integer, minimum: 1, maximum: 5 }
+        notes: { type: string, nullable: true, description: Nota riservata, cifrata a riposo }
+      required: [criterion_id, score]
+    StaffEvaluation:
+      type: object
+      properties:
+        id: { type: integer }
+        facility_id: { type: integer }
+        staff_member_id: { type: integer }
+        period_start: { type: string, format: date }
+        period_end: { type: string, format: date }
+        evaluation_date: { type: string, format: date }
+        status: { type: string, enum: [DRAFT, FINALIZED] }
+        overall_score: { type: number, format: float, nullable: true }
+        summary: { type: string, nullable: true, description: Nota riservata, cifrata a riposo }
+        evaluator: { $ref: '#/components/schemas/AdminUser' }
+        finalized_by: { $ref: '#/components/schemas/AdminUser' }
+        finalized_at: { type: string, format: date-time, nullable: true }
+        scores:
+          type: array
+          items: { $ref: '#/components/schemas/StaffEvaluationScore' }
+      required: [id, facility_id, staff_member_id, period_start, period_end, evaluation_date, status, scores]
+    StaffEvaluationWrite:
+      type: object
+      required: [period_start, period_end, evaluation_date, scores]
+      properties:
+        period_start: { type: string, format: date }
+        period_end: { type: string, format: date }
+        evaluation_date: { type: string, format: date }
+        summary: { type: string, nullable: true, maxLength: 5000 }
+        scores:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [criterion_id, score]
+            properties:
+              criterion_id: { type: integer }
+              score: { type: integer, minimum: 1, maximum: 5 }
+              notes: { type: string, nullable: true, maxLength: 2000 }
+    FacilityShiftEligibility:
+      type: object
+      properties:
+        facility: { $ref: '#/components/schemas/Facility' }
+        evaluated_at: { type: string, format: date-time }
+        enforcement: { type: string, enum: [advisory] }
+        rows:
+          type: array
+          items:
+            type: object
+            properties:
+              staff_member_id: { type: integer }
+              employee_code: { type: string }
+              display_name: { type: string }
+              qualification_code: { type: string, nullable: true }
+              can_assign: { type: boolean, description: Sempre true nella modalità advisory }
+              requires_attention: { type: boolean }
+              alerts:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code: { type: string, enum: [staff_document_expired, certification_missing, certification_expired, certification_revoked] }
+                    severity: { type: string, enum: [warning] }
+                    message: { type: string }
+                    reference_id: { type: integer, nullable: true }
+            required: [staff_member_id, display_name, can_assign, requires_attention, alerts]
+      required: [facility, evaluated_at, enforcement, rows]
+    FacilityBulletin:
+      type: object
+      properties:
+        id: { type: integer }
+        facility_id: { type: integer }
+        title: { type: string }
+        body: { type: string }
+        status: { type: string, enum: [DRAFT, PUBLISHED, ARCHIVED] }
+        expires_at: { type: string, format: date-time, nullable: true }
+        published_at: { type: string, format: date-time, nullable: true }
+        target_roles:
+          type: array
+          description: Lista vuota significa tutti i ruoli attivi della struttura
+          items: { $ref: '#/components/schemas/Role' }
+        is_acknowledged: { type: boolean }
+        acknowledged_at: { type: string, format: date-time, nullable: true }
+        acknowledgement_count: { type: integer, nullable: true }
+      required: [id, facility_id, title, body, status, target_roles, is_acknowledged]
+    FacilityBulletinWrite:
+      type: object
+      required: [facility_id, title, body]
+      properties:
+        facility_id: { type: integer }
+        title: { type: string, maxLength: 200 }
+        body: { type: string, maxLength: 20000 }
+        expires_at: { type: string, format: date-time, nullable: true }
+        target_role_ids:
+          type: array
+          uniqueItems: true
+          items: { type: integer }
     MinorUserAssignment:
       type: object
       properties:
@@ -10305,7 +11268,7 @@ components:
         file:
           type: string
           format: binary
-          description: File consentiti di default `pdf`, `jpg`, `png`, `doc`, `docx`, `xls`, `xlsx`. La validazione effettiva dipende dalla policy backend `DOCUMENT_ALLOWED_MIME_TYPES`.
+          description: File consentiti di default `pdf`, `jpg`, `png`, `webp`, `mp4`, `doc`, `docx`, `xls`, `xlsx`. La validazione effettiva dipende dalla policy backend `DOCUMENT_ALLOWED_MIME_TYPES`.
       required: [document_type_id, file]
     AuditLog:
       type: object

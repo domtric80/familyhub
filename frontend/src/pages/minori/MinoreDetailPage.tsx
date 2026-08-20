@@ -17,8 +17,10 @@ import DiarioMinoreTab from './tabs/DiarioMinoreTab'
 import NoteMinoreTab from './tabs/NoteMinoreTab'
 import CasoMinoreTab from './tabs/CasoMinoreTab'
 import ProfiloEstesoMinoreTab from './tabs/ProfiloEstesoMinoreTab'
+import FarmaciMinoreTab from './tabs/FarmaciMinoreTab'
+import VisiteMinoreTab from './tabs/VisiteMinoreTab'
 
-type Tab = 'anagrafica' | 'profilo' | 'caso' | 'contatti' | 'documenti' | 'storico' | 'operatori' | 'uscite' | 'attivita' | 'avvicinamenti' | 'diario' | 'note'
+type Tab = 'anagrafica' | 'profilo' | 'caso' | 'contatti' | 'documenti' | 'storico' | 'operatori' | 'uscite' | 'attivita' | 'avvicinamenti' | 'diario' | 'note' | 'farmaci' | 'visite'
 
 function fmtDateTime(value?: string | null) {
   if (!value) return '\u2014'
@@ -1681,6 +1683,8 @@ export default function MinoreDetailPage() {
     { key: 'documenti',      label: 'Documenti',     icon: <FileText size={14} /> },
     { key: 'note',           label: 'Note',          icon: <Lock size={14} /> },
     { key: 'operatori',      label: 'Accessi',       icon: <Users size={14} /> },
+    { key: 'farmaci',        label: 'Farmaci',       icon: <AlertTriangle size={14} /> },
+    { key: 'visite',         label: 'Visite ed esami', icon: <FileText size={14} /> },
     { key: 'storico',        label: 'Storico',       icon: <Clock size={14} /> },
   ]
 
@@ -1817,6 +1821,12 @@ export default function MinoreDetailPage() {
                 </TabPane>
                 <TabPane tabId='note'>
                   <NoteMinoreTab minorId={minorId} />
+                </TabPane>
+                <TabPane tabId='farmaci'>
+                  <FarmaciMinoreTab minorId={minorId} facilityId={minor.facility_id} />
+                </TabPane>
+                <TabPane tabId='visite'>
+                  <VisiteMinoreTab minorId={minorId} facilityId={minor.facility_id} />
                 </TabPane>
                 <TabPane tabId='storico'>
                   <StoricoTab minorId={minorId} />

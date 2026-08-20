@@ -8,12 +8,14 @@ import {
 import { ChevronLeft, ChevronRight, Plus, Trash2, Info, AlertTriangle, RefreshCw } from 'react-feather'
 import { toast } from 'react-toastify'
 import {
-  shiftAssignmentsApi, shiftTemplatesApi, staffMemberApi, facilityApi, apiError,
+  shiftAssignmentsApi, shiftTemplatesApi, staffMemberApi, facilityApi,
+  shiftEligibilityApi, apiError,
 } from '../../services/api'
 import type {
   StaffShiftWeekView, ShiftWeekBlock, StaffShiftTemplate,
   StaffShiftAssignmentWrite, ShiftAssignmentStatus, Facility,
   ShiftExceptionsResponse, ShiftExceptionItem, ShiftExceptionSeverity,
+  FacilityShiftEligibility, StaffShiftEligibility,
 } from '../../types'
 import InfoDrawer from '../../components/common/InfoDrawer'
 
@@ -266,6 +268,7 @@ export default function PianificazionePage() {
   const [weekView, setWeekView]     = useState<StaffShiftWeekView | null>(null)
   const [loading, setLoading]       = useState(false)
   const [infoOpen, setInfoOpen]     = useState(false)
+  const [eligibility, setEligibility] = useState<FacilityShiftEligibility | null>(null)
 
   // Modal nuova assegnazione
   const [modal, setModal]         = useState(false)
@@ -292,6 +295,19 @@ export default function PianificazionePage() {
   }
 
   useEffect(() => { loadWeek() }, [facilityId, weekStart]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Idoneità personale (advisory — handoff 190)
+  useEffect(() => {
+    if (!facilityId) { setEligibility(null); return }
+    shiftEligibilityApi.get(facilityId)
+      .then(setEligibility)
+      .catch(() => setEligibility(null)) // permesso staff_shift_assignments.read non garantito
+  }, [facilityId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const getEligibility = (staffMemberId?: number | null): StaffShiftEligibility | undefined => {
+    if (!staffMemberId || !eligibility) return undefined
+    return eligibility.staff.find((s) => s.staff_member_id === staffMemberId)
+  }
 
   const prevWeek = () => setWeekStart((d) => addDays(d, -7))
   const nextWeek = () => setWeekStart((d) => addDays(d, 7))
@@ -403,6 +419,19 @@ export default function PianificazionePage() {
         </CardBody>
       </Card>
 
+      {/* Box idoneità consultivo */}
+      {eligibility && eligibility.staff.some((s) => s.requires_attention) && (
+        <Alert color='warning' className='py-2 px-3 mb-3 d-flex gap-2 align-items-start' style={{ fontSize: 13 }}>
+          <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>
+            <strong>Controllo idoneità personale (consultivo):</strong>{' '}
+            {eligibility.staff.filter((s) => s.requires_attention).length} operatore/i richiedono attenzione.
+            Il controllo è consultivo: valuta documenti e certificazioni ma non blocca i turni.
+            I badge <span className='badge bg-warning text-dark mx-1' style={{ fontSize: 10 }}>⚠ Attenzione</span> indicano le situazioni da verificare.
+          </span>
+        </Alert>
+      )}
+
       {/* Legenda copertura */}
       <div className='d-flex gap-3 mb-3 small'>
         <span><span className='badge' style={{ background: '#e8f8f0', color: '#1a7a33' }}>● Coperto</span></span>
@@ -486,6 +515,16 @@ export default function PianificazionePage() {
                                 <span style={{ color: a.has_active_substitution ? '#888' : 'inherit' }}>
                                   {staffName(a.staff_member)}
                                 </span>
+                                {/* Badge idoneità consultivo */}
+                                {getEligibility(a.staff_member?.id)?.requires_attention && (
+                                  <span
+                                    className='badge bg-warning text-dark ms-1'
+                                    style={{ fontSize: 9, cursor: 'help' }}
+                                    title={getEligibility(a.staff_member?.id)?.alerts.map((al) => al.message).join('\n') || 'Richiede attenzione'}
+                                  >
+                                    ⚠ Attenzione
+                                  </span>
+                                )}
                                 {/* Operatore effettivo (sostituto) */}
                                 {a.has_active_substitution && a.effective_staff_member && (
                                   <div style={{ color: '#b76e00', fontWeight: 600 }}>
@@ -611,10 +650,27 @@ export default function PianificazionePage() {
               <Input type='select' value={form.staff_member_id}
                 onChange={(e) => setF('staff_member_id', Number(e.target.value))}>
                 <option value='0'>Seleziona operatore…</option>
-                {staffMembers.map((s) => (
-                  <option key={s.id} value={s.id}>{staffName(s)}</option>
-                ))}
+                {staffMembers.map((s) => {
+                  const elig = getEligibility(s.id)
+                  const attention = elig?.requires_attention ?? false
+                  return (
+                    <option key={s.id} value={s.id}>
+                      {attention ? '⚠ ' : ''}{staffName(s)}
+                    </option>
+                  )
+                })}
               </Input>
+              {form.staff_member_id > 0 && getEligibility(form.staff_member_id)?.requires_attention && (
+                <div className='mt-1'>
+                  {getEligibility(form.staff_member_id)!.alerts.map((al, i) => (
+                    <div key={i} className='d-flex align-items-start gap-1' style={{ fontSize: 12, color: '#856404' }}>
+                      <AlertTriangle size={11} style={{ flexShrink: 0, marginTop: 2 }} />
+                      <span>{al.message}</span>
+                    </div>
+                  ))}
+                  <small className='text-muted'>Il controllo è consultivo — l'assegnazione è comunque possibile.</small>
+                </div>
+              )}
             </FormGroup>
             <FormGroup>
               <Label>Note</Label>

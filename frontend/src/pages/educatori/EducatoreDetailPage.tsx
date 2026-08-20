@@ -10,13 +10,15 @@ import { Home, ArrowLeft, Upload, Edit2, Archive, Download, Eye, Plus, Trash2, S
 import { toast } from 'react-toastify'
 import {
   staffMemberApi, staffMemberDocumentApi, staffProfessionalProfileApi,
-  staffCertificationApi, lookupsApi, apiError,
+  staffCertificationApi, staffEvaluationApi, staffEvaluationCriteriaApi,
+  lookupsApi, apiError,
 } from '../../services/api'
 import type {
   StaffMember, StaffDocument, StaffDocumentWrite,
   StaffProfessionalProfile, StaffProfileLookupItem,
   LookupItem, StaffDocumentStatus,
   StaffCertification, StaffCertificationWrite,
+  StaffEvaluation, StaffEvaluationCriterion, StaffEvaluationWrite,
 } from '../../types'
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
@@ -106,6 +108,7 @@ export default function EducatoreDetailPage() {
                 ['documenti', 'Documenti professionali'],
                 ['certificazioni', 'Certificazioni'],
                 ['profilo', 'Profilo professionale'],
+                ['valutazioni', 'Valutazioni periodiche'],
               ].map(([key, label]) => (
                 <NavItem key={key}>
                   <NavLink className={activeTab === key ? 'active' : ''} style={{ cursor: 'pointer' }} onClick={() => setActiveTab(key)}>
@@ -128,6 +131,9 @@ export default function EducatoreDetailPage() {
               </TabPane>
               <TabPane tabId='profilo'>
                 {activeTab === 'profilo' && <ProfiloProfessionaleTab staffId={staffId} />}
+              </TabPane>
+              <TabPane tabId='valutazioni'>
+                {activeTab === 'valutazioni' && <ValutazioniTab staffId={staffId} />}
               </TabPane>
             </TabContent>
           </CardBody>
@@ -862,6 +868,350 @@ function ProfiloProfessionaleTab({ staffId }: { staffId: number }) {
           <Save size={14} /> {saving ? 'Salvataggio…' : 'Salva profilo'}
         </Button>
       </div>
+    </div>
+  )
+}
+
+// ─── Tab Valutazioni periodiche ────────────────────────────────────────────────
+
+const EVAL_STATUS_BADGE: Record<string, string> = {
+  DRAFT: 'badge-light-warning',
+  FINALIZED: 'badge-light-success',
+}
+const EVAL_STATUS_LABEL: Record<string, string> = {
+  DRAFT: 'Bozza',
+  FINALIZED: 'Finalizzata',
+}
+
+const EMPTY_EVAL_FORM = { period_start: '', period_end: '', evaluation_date: '', summary: '' }
+
+function ValutazioniTab({ staffId }: { staffId: number }) {
+  const [evaluations, setEvaluations] = useState<StaffEvaluation[]>([])
+  const [criteria, setCriteria] = useState<StaffEvaluationCriterion[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Form modal (crea / modifica DRAFT)
+  const [formOpen, setFormOpen] = useState(false)
+  const [formTarget, setFormTarget] = useState<StaffEvaluation | null>(null)
+  const [form, setForm] = useState(EMPTY_EVAL_FORM)
+  const [scores, setScores] = useState<{ criterion_id: number; score: number; notes: string }[]>([])
+  const [formMsg, setFormMsg] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  // Vista dettaglio (FINALIZED — read-only)
+  const [viewTarget, setViewTarget] = useState<StaffEvaluation | null>(null)
+
+  // Archiviazione
+  const [archiveTarget, setArchiveTarget] = useState<StaffEvaluation | null>(null)
+  const [archiving, setArchiving] = useState(false)
+
+  // Finalizzazione
+  const [finalizeTarget, setFinalizeTarget] = useState<StaffEvaluation | null>(null)
+  const [finalizing, setFinalizing] = useState(false)
+
+  const load = () => {
+    setLoading(true); setError(null)
+    Promise.all([
+      staffEvaluationApi.list(staffId),
+      staffEvaluationCriteriaApi.list(),
+    ]).then(([evs, crits]) => { setEvaluations(evs); setCriteria(crits) })
+      .catch((e) => setError(apiError(e).message ?? 'Errore caricamento'))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { load() }, [staffId]) // eslint-disable-line
+
+  const buildScores = (ev: StaffEvaluation | null, crits: StaffEvaluationCriterion[]) =>
+    crits.filter((c) => c.is_active || ev?.scores.some((s) => s.criterion_id === c.id)).map((c) => {
+      const existing = ev?.scores.find((s) => s.criterion_id === c.id)
+      return { criterion_id: c.id, score: existing?.score ?? 0, notes: existing?.notes ?? '' }
+    })
+
+  const openCreate = () => {
+    setFormTarget(null)
+    setForm(EMPTY_EVAL_FORM)
+    setScores(buildScores(null, criteria))
+    setFormMsg(null); setFormOpen(true)
+  }
+
+  const openEdit = (ev: StaffEvaluation) => {
+    setFormTarget(ev)
+    setForm({ period_start: ev.period_start, period_end: ev.period_end, evaluation_date: ev.evaluation_date, summary: ev.summary ?? '' })
+    setScores(buildScores(ev, criteria))
+    setFormMsg(null); setFormOpen(true)
+  }
+
+  const handleSave = async () => {
+    if (!form.period_start || !form.period_end || !form.evaluation_date) {
+      setFormMsg('Periodo e data valutazione sono obbligatori.'); return
+    }
+    const validScores = scores.filter((s) => s.score >= 1 && s.score <= 5)
+    if (validScores.length === 0) { setFormMsg('Inserisci almeno un punteggio (1–5).'); return }
+    setSaving(true); setFormMsg(null)
+    const payload: StaffEvaluationWrite = {
+      period_start: form.period_start,
+      period_end: form.period_end,
+      evaluation_date: form.evaluation_date,
+      summary: form.summary || null,
+      scores: validScores.map((s) => ({ criterion_id: s.criterion_id, score: s.score, notes: s.notes || null })),
+    }
+    try {
+      if (formTarget) {
+        await staffEvaluationApi.update(staffId, formTarget.id, payload)
+        toast.success('Valutazione aggiornata.')
+      } else {
+        await staffEvaluationApi.create(staffId, payload)
+        toast.success('Valutazione creata.')
+      }
+      setFormOpen(false); load()
+    } catch (e) {
+      const ae = apiError(e)
+      if (ae.status === 409) setFormMsg('La valutazione è già finalizzata e non può essere modificata o archiviata.')
+      else setFormMsg(ae.message ?? 'Errore salvataggio.')
+    } finally { setSaving(false) }
+  }
+
+  const handleArchive = async () => {
+    if (!archiveTarget) return
+    setArchiving(true)
+    try {
+      await staffEvaluationApi.archive(staffId, archiveTarget.id)
+      toast.success('Valutazione archiviata.')
+      setArchiveTarget(null); load()
+    } catch (e) {
+      const ae = apiError(e)
+      toast.error(ae.status === 409 ? 'La valutazione è già finalizzata e non può essere archiviata.' : (ae.message ?? 'Errore archiviazione.'))
+      setArchiveTarget(null)
+    } finally { setArchiving(false) }
+  }
+
+  const handleFinalize = async () => {
+    if (!finalizeTarget) return
+    setFinalizing(true)
+    try {
+      await staffEvaluationApi.finalize(staffId, finalizeTarget.id)
+      toast.success('Valutazione finalizzata.')
+      setFinalizeTarget(null); load()
+    } catch (e) {
+      const ae = apiError(e)
+      toast.error(ae.status === 409 ? 'La valutazione è già finalizzata.' : (ae.message ?? 'Errore finalizzazione.'))
+      setFinalizeTarget(null)
+    } finally { setFinalizing(false) }
+  }
+
+  return (
+    <div>
+      <div className='alert alert-info py-2 px-3 mb-3' style={{ fontSize: 13 }}>
+        Le valutazioni periodiche sono documentali e riservate. I punteggi e i commenti non influenzano automaticamente turni o assegnazioni. La finalizzazione è irreversibile e costituisce <strong>firma applicativa</strong> (non firma digitale qualificata ai sensi del D.Lgs. 82/2005).
+      </div>
+
+      <div className='d-flex justify-content-end mb-3'>
+        <Button color='primary' size='sm' className='d-flex align-items-center gap-1' onClick={openCreate}>
+          <Plus size={13} /> Nuova valutazione
+        </Button>
+      </div>
+
+      {error && <Alert color='danger'>{error}</Alert>}
+      {loading ? <div className='text-center py-4'><div className='loader' /></div> : (
+        evaluations.length === 0 ? <p className='text-muted'>Nessuna valutazione registrata.</p> : (
+          <div className='table-responsive'>
+            <table className='table table-hover table-sm align-middle'>
+              <thead className='table-light'>
+                <tr>
+                  <th>Periodo</th>
+                  <th>Data valutazione</th>
+                  <th>Valutatore</th>
+                  <th style={{ width: 80 }}>Media</th>
+                  <th style={{ width: 110 }}>Stato</th>
+                  <th style={{ width: 130 }}>Azioni</th>
+                </tr>
+              </thead>
+              <tbody>
+                {evaluations.map((ev) => (
+                  <tr key={ev.id}>
+                    <td className='small'>{fmtDate(ev.period_start)} – {fmtDate(ev.period_end)}</td>
+                    <td className='small'>{fmtDate(ev.evaluation_date)}</td>
+                    <td className='small'>{ev.evaluator ? `${ev.evaluator.first_name} ${ev.evaluator.last_name}`.trim() : '—'}</td>
+                    <td className='small fw-semibold text-center'>{ev.overall_score != null ? ev.overall_score.toFixed(1) : '—'}</td>
+                    <td>
+                      <span className={`badge ${EVAL_STATUS_BADGE[ev.status] ?? 'badge-light-secondary'}`}>
+                        {EVAL_STATUS_LABEL[ev.status] ?? ev.status}
+                      </span>
+                    </td>
+                    <td>
+                      <div className='d-flex gap-1'>
+                        {ev.status === 'DRAFT' ? (
+                          <>
+                            <Button size='sm' color='light' title='Modifica' onClick={() => openEdit(ev)}><Edit2 size={12} /></Button>
+                            <Button size='sm' color='success' title='Finalizza' onClick={() => setFinalizeTarget(ev)} style={{ fontSize: 11 }}>Finalizza</Button>
+                            <Button size='sm' color='light' title='Archivia' onClick={() => setArchiveTarget(ev)}><Archive size={12} /></Button>
+                          </>
+                        ) : (
+                          <Button size='sm' color='light' title='Visualizza' onClick={() => setViewTarget(ev)}><Eye size={12} /></Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      )}
+
+      {/* Modal crea/modifica DRAFT */}
+      <Modal isOpen={formOpen} toggle={() => setFormOpen(false)} size='lg'>
+        <ModalHeader toggle={() => setFormOpen(false)}>
+          {formTarget ? 'Modifica valutazione' : 'Nuova valutazione'}
+        </ModalHeader>
+        <ModalBody>
+          {formMsg && <Alert color='danger'>{formMsg}</Alert>}
+          <Row>
+            <Col md='4'>
+              <FormGroup>
+                <Label>Inizio periodo <span className='text-danger'>*</span></Label>
+                <Input type='date' bsSize='sm' value={form.period_start}
+                  onChange={(e) => setForm((f) => ({ ...f, period_start: e.target.value }))} />
+              </FormGroup>
+            </Col>
+            <Col md='4'>
+              <FormGroup>
+                <Label>Fine periodo <span className='text-danger'>*</span></Label>
+                <Input type='date' bsSize='sm' value={form.period_end}
+                  onChange={(e) => setForm((f) => ({ ...f, period_end: e.target.value }))} />
+              </FormGroup>
+            </Col>
+            <Col md='4'>
+              <FormGroup>
+                <Label>Data valutazione <span className='text-danger'>*</span></Label>
+                <Input type='date' bsSize='sm' value={form.evaluation_date}
+                  onChange={(e) => setForm((f) => ({ ...f, evaluation_date: e.target.value }))} />
+              </FormGroup>
+            </Col>
+          </Row>
+          <FormGroup>
+            <Label>Commento riservato</Label>
+            <Input type='textarea' rows={3} bsSize='sm' value={form.summary}
+              onChange={(e) => setForm((f) => ({ ...f, summary: e.target.value }))}
+              placeholder='Commento generale riservato…' />
+            <small className='text-muted'>Campo riservato — non incluso in notifiche o log di sistema.</small>
+          </FormGroup>
+
+          <h6 className='fw-bold border-bottom pb-1 mb-3 mt-3'>Punteggi per criterio</h6>
+          {scores.length === 0 && <p className='text-muted small'>Nessun criterio attivo. Configurare prima i criteri in Anagrafiche professionali.</p>}
+          {scores.map((s, idx) => {
+            const crit = criteria.find((c) => c.id === s.criterion_id)
+            return (
+              <Row key={s.criterion_id} className='g-2 mb-2 align-items-start'>
+                <Col md='4'>
+                  <div className='fw-semibold small mt-1'>{crit?.name ?? `Criterio ${s.criterion_id}`}</div>
+                  {crit?.description && <div className='text-muted' style={{ fontSize: 11 }}>{crit.description}</div>}
+                </Col>
+                <Col md='3'>
+                  <Input type='select' bsSize='sm' value={s.score}
+                    onChange={(e) => {
+                      const updated = [...scores]; updated[idx] = { ...updated[idx], score: Number(e.target.value) }
+                      setScores(updated)
+                    }}>
+                    <option value={0}>Seleziona…</option>
+                    <option value={1}>1 — Insufficiente</option>
+                    <option value={2}>2 — Scarso</option>
+                    <option value={3}>3 — Sufficiente</option>
+                    <option value={4}>4 — Buono</option>
+                    <option value={5}>5 — Ottimo</option>
+                  </Input>
+                </Col>
+                <Col md='5'>
+                  <Input bsSize='sm' placeholder='Nota riservata…' value={s.notes}
+                    onChange={(e) => {
+                      const updated = [...scores]; updated[idx] = { ...updated[idx], notes: e.target.value }
+                      setScores(updated)
+                    }} />
+                </Col>
+              </Row>
+            )
+          })}
+          <div className='alert alert-secondary py-2 px-3 mt-2' style={{ fontSize: 12 }}>
+            Punteggi da 1 (insufficiente) a 5 (ottimo). Solo i criteri con punteggio selezionato vengono salvati. Le note sono riservate.
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <Button color='primary' onClick={handleSave} disabled={saving}>{saving ? 'Salvataggio…' : 'Salva bozza'}</Button>
+          <Button color='light' onClick={() => setFormOpen(false)}>Annulla</Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* Modal vista FINALIZED */}
+      <Modal isOpen={!!viewTarget} toggle={() => setViewTarget(null)} size='lg'>
+        <ModalHeader toggle={() => setViewTarget(null)}>
+          Valutazione finalizzata
+          {viewTarget && <span className='ms-2 badge badge-light-success' style={{ fontSize: 12 }}>Finalizzata</span>}
+        </ModalHeader>
+        <ModalBody>
+          {viewTarget && (
+            <>
+              <table className='table table-sm table-borderless mb-3' style={{ maxWidth: 520 }}>
+                <tbody>
+                  <tr><td className='text-muted fw-semibold' style={{ width: 190 }}>Periodo</td><td>{fmtDate(viewTarget.period_start)} – {fmtDate(viewTarget.period_end)}</td></tr>
+                  <tr><td className='text-muted fw-semibold'>Data valutazione</td><td>{fmtDate(viewTarget.evaluation_date)}</td></tr>
+                  <tr><td className='text-muted fw-semibold'>Valutatore</td><td>{viewTarget.evaluator ? `${viewTarget.evaluator.first_name} ${viewTarget.evaluator.last_name}`.trim() : '—'}</td></tr>
+                  <tr><td className='text-muted fw-semibold'>Finalizzata da</td><td>{viewTarget.finalized_by ? `${viewTarget.finalized_by.first_name} ${viewTarget.finalized_by.last_name}`.trim() : '—'}</td></tr>
+                  <tr><td className='text-muted fw-semibold'>Data finalizzazione</td><td>{fmtDate(viewTarget.finalized_at)}</td></tr>
+                  <tr><td className='text-muted fw-semibold'>Punteggio medio</td><td><strong>{viewTarget.overall_score != null ? viewTarget.overall_score.toFixed(1) : '—'}</strong></td></tr>
+                </tbody>
+              </table>
+              {viewTarget.summary && (
+                <div className='mb-3'>
+                  <div className='fw-semibold small mb-1'>Commento riservato</div>
+                  <div className='small text-muted border rounded p-2'>{viewTarget.summary}</div>
+                </div>
+              )}
+              <h6 className='fw-bold border-bottom pb-1 mb-2'>Punteggi per criterio</h6>
+              {viewTarget.scores.map((s) => (
+                <div key={s.criterion_id} className='mb-2'>
+                  <div className='d-flex align-items-center gap-2'>
+                    <span className='small fw-semibold'>{s.criterion?.name ?? `Criterio ${s.criterion_id}`}</span>
+                    <Badge color='primary'>{s.score}/5</Badge>
+                  </div>
+                  {s.notes && <div className='small text-muted ms-1'>{s.notes}</div>}
+                </div>
+              ))}
+            </>
+          )}
+        </ModalBody>
+        <ModalFooter>
+          <Button color='light' onClick={() => setViewTarget(null)}>Chiudi</Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* Modal finalizza */}
+      <Modal isOpen={!!finalizeTarget} toggle={() => setFinalizeTarget(null)} size='sm'>
+        <ModalHeader toggle={() => setFinalizeTarget(null)}>Finalizza valutazione</ModalHeader>
+        <ModalBody>
+          <Alert color='warning' className='py-2 px-3' style={{ fontSize: 13 }}>
+            <strong>Attenzione:</strong> una valutazione finalizzata non può essere modificata o archiviata. Questa operazione è irreversibile.
+          </Alert>
+          <p className='small mb-0'>La finalizzazione costituisce <strong>firma applicativa</strong> e non produce effetti automatici su turni o assegnazioni.</p>
+        </ModalBody>
+        <ModalFooter>
+          <Button color='danger' onClick={handleFinalize} disabled={finalizing}>{finalizing ? 'Finalizzazione…' : 'Conferma finalizzazione'}</Button>
+          <Button color='light' onClick={() => setFinalizeTarget(null)}>Annulla</Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* Modal archivia */}
+      <Modal isOpen={!!archiveTarget} toggle={() => setArchiveTarget(null)} size='sm'>
+        <ModalHeader toggle={() => setArchiveTarget(null)}>Archivia valutazione</ModalHeader>
+        <ModalBody>
+          <p>Archiviare la bozza per il periodo <strong>{fmtDate(archiveTarget?.period_start)} – {fmtDate(archiveTarget?.period_end)}</strong>?</p>
+          <p className='small text-muted'>Solo le valutazioni in bozza possono essere archiviate. L'operazione è irreversibile.</p>
+        </ModalBody>
+        <ModalFooter>
+          <Button color='warning' onClick={handleArchive} disabled={archiving}>{archiving ? 'Archiviazione…' : 'Archivia'}</Button>
+          <Button color='light' onClick={() => setArchiveTarget(null)}>Annulla</Button>
+        </ModalFooter>
+      </Modal>
     </div>
   )
 }

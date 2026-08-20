@@ -81,7 +81,7 @@ services:
       AWS_ENDPOINT: ${AWS_ENDPOINT:-http://minio:9000}
       AWS_USE_PATH_STYLE_ENDPOINT: "true"
       DOCUMENT_MAX_UPLOAD_SIZE_BYTES: ${DOCUMENT_MAX_UPLOAD_SIZE_BYTES:-10485760}
-      DOCUMENT_ALLOWED_MIME_TYPES: ${DOCUMENT_ALLOWED_MIME_TYPES:-application/pdf,image/jpeg,image/png,application/msword,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet}
+      DOCUMENT_ALLOWED_MIME_TYPES: ${DOCUMENT_ALLOWED_MIME_TYPES:-application/pdf,image/jpeg,image/png,image/webp,video/mp4,application/msword,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet}
       DOCUMENT_QUARANTINE_PREFIX: ${DOCUMENT_QUARANTINE_PREFIX:-quarantine}
       DOCUMENT_RELEASED_PREFIX: ${DOCUMENT_RELEASED_PREFIX:-released}
       ANTIVIRUS_DRIVER: ${ANTIVIRUS_DRIVER:-clamav}
@@ -139,7 +139,7 @@ services:
       AWS_ENDPOINT: ${AWS_ENDPOINT:-http://minio:9000}
       AWS_USE_PATH_STYLE_ENDPOINT: "true"
       DOCUMENT_MAX_UPLOAD_SIZE_BYTES: ${DOCUMENT_MAX_UPLOAD_SIZE_BYTES:-10485760}
-      DOCUMENT_ALLOWED_MIME_TYPES: ${DOCUMENT_ALLOWED_MIME_TYPES:-application/pdf,image/jpeg,image/png,application/msword,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet}
+      DOCUMENT_ALLOWED_MIME_TYPES: ${DOCUMENT_ALLOWED_MIME_TYPES:-application/pdf,image/jpeg,image/png,image/webp,video/mp4,application/msword,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet}
       DOCUMENT_QUARANTINE_PREFIX: ${DOCUMENT_QUARANTINE_PREFIX:-quarantine}
       DOCUMENT_RELEASED_PREFIX: ${DOCUMENT_RELEASED_PREFIX:-released}
       ANTIVIRUS_DRIVER: ${ANTIVIRUS_DRIVER:-clamav}
@@ -195,7 +195,7 @@ services:
       AWS_ENDPOINT: ${AWS_ENDPOINT:-http://minio:9000}
       AWS_USE_PATH_STYLE_ENDPOINT: "true"
       DOCUMENT_MAX_UPLOAD_SIZE_BYTES: ${DOCUMENT_MAX_UPLOAD_SIZE_BYTES:-10485760}
-      DOCUMENT_ALLOWED_MIME_TYPES: ${DOCUMENT_ALLOWED_MIME_TYPES:-application/pdf,image/jpeg,image/png,application/msword,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet}
+      DOCUMENT_ALLOWED_MIME_TYPES: ${DOCUMENT_ALLOWED_MIME_TYPES:-application/pdf,image/jpeg,image/png,image/webp,video/mp4,application/msword,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet}
       DOCUMENT_QUARANTINE_PREFIX: ${DOCUMENT_QUARANTINE_PREFIX:-quarantine}
       DOCUMENT_RELEASED_PREFIX: ${DOCUMENT_RELEASED_PREFIX:-released}
       ANTIVIRUS_DRIVER: ${ANTIVIRUS_DRIVER:-clamav}

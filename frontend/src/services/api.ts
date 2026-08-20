@@ -46,6 +46,12 @@ import type {
   TimesheetCoordinatorDashboardResponse,
   TimesheetMonthLock, TimesheetMonthLockCreate, TimesheetMonthLockResponse, TimesheetMonthUnlockResponse,
   DatabaseBackup, DatabaseBackupListResponse, DatabaseRestoreRequest, DatabaseRestoreResponse,
+  MinorActivityReminder, MinorActivityReminderWrite,
+  MinorActivityMedia, MinorActivityMediaWrite,
+  StaffEvaluationCriterion, StaffEvaluationCriterionWrite,
+  StaffEvaluation, StaffEvaluationWrite,
+  FacilityBulletin, FacilityBulletinWrite,
+  Incident,
 } from '../types'
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
@@ -326,6 +332,32 @@ export const staffProfessionalProfileApi = {
 
   deleteLookupItem: (type: 'skills' | 'languages' | 'specializations' | 'proficiency-levels' | 'certification-types', id: number) =>
     http.delete(`/admin/staff-profile-lookups/${type}/${id}`),
+}
+
+export const staffEvaluationCriteriaApi = {
+  list: () =>
+    http.get<StaffEvaluationCriterion[]>('/admin/staff-evaluation-criteria').then((r) => r.data),
+  create: (data: StaffEvaluationCriterionWrite) =>
+    http.post<StaffEvaluationCriterion>('/admin/staff-evaluation-criteria', data).then((r) => r.data),
+  update: (id: number, data: StaffEvaluationCriterionWrite) =>
+    http.put<StaffEvaluationCriterion>(`/admin/staff-evaluation-criteria/${id}`, data).then((r) => r.data),
+  delete: (id: number) =>
+    http.delete(`/admin/staff-evaluation-criteria/${id}`),
+}
+
+export const staffEvaluationApi = {
+  list: (staffId: number) =>
+    http.get<StaffEvaluation[]>(`/admin/staff-members/${staffId}/evaluations`).then((r) => r.data),
+  create: (staffId: number, data: StaffEvaluationWrite) =>
+    http.post<StaffEvaluation>(`/admin/staff-members/${staffId}/evaluations`, data).then((r) => r.data),
+  get: (staffId: number, evalId: number) =>
+    http.get<StaffEvaluation>(`/admin/staff-members/${staffId}/evaluations/${evalId}`).then((r) => r.data),
+  update: (staffId: number, evalId: number, data: StaffEvaluationWrite) =>
+    http.put<StaffEvaluation>(`/admin/staff-members/${staffId}/evaluations/${evalId}`, data).then((r) => r.data),
+  archive: (staffId: number, evalId: number) =>
+    http.delete(`/admin/staff-members/${staffId}/evaluations/${evalId}`),
+  finalize: (staffId: number, evalId: number) =>
+    http.post<StaffEvaluation>(`/admin/staff-members/${staffId}/evaluations/${evalId}/finalize`).then((r) => r.data),
 }
 
 export const staffCertificationApi = {
@@ -1531,6 +1563,160 @@ export const systemStorageApi = {
     http.post<StorageActivateResponse>(`/admin/system/storage-configs/${id}/activate`).then((r) => r.data),
   delete: (id: number) =>
     http.delete<{ message: string }>(`/admin/system/storage-configs/${id}`).then((r) => r.data),
+}
+
+// ─── Attività: calendario e promemoria (192) ─────────────────────────────────
+
+export const activityCalendarApi = {
+  list: (params: { date_from: string; date_to: string; facility_id?: number; minor_id?: number }) =>
+    http.get<Activity[]>('/activities/calendar', { params }).then((r) => r.data),
+}
+
+export const activityReminderApi = {
+  mine: (pending_only = true) =>
+    http.get<MinorActivityReminder[]>('/activities/reminders/mine', { params: { pending_only } }).then((r) => r.data),
+  list: (activityId: number) =>
+    http.get<MinorActivityReminder[]>(`/activities/${activityId}/reminders`).then((r) => r.data),
+  create: (activityId: number, data: MinorActivityReminderWrite) =>
+    http.post<MinorActivityReminder>(`/activities/${activityId}/reminders`, data).then((r) => r.data),
+  delete: (activityId: number, reminderId: number) =>
+    http.delete(`/activities/${activityId}/reminders/${reminderId}`),
+  acknowledge: (activityId: number, reminderId: number) =>
+    http.post<MinorActivityReminder>(`/activities/${activityId}/reminders/${reminderId}/acknowledge`).then((r) => r.data),
+}
+
+// ─── Attività: media con consenso (193) ──────────────────────────────────────
+
+export const activityMediaApi = {
+  list: (activityId: number) =>
+    http.get<MinorActivityMedia[]>(`/activities/${activityId}/media`).then((r) => r.data),
+  create: (activityId: number, data: MinorActivityMediaWrite) =>
+    http.post<MinorActivityMedia>(`/activities/${activityId}/media`, data).then((r) => r.data),
+  delete: (activityId: number, mediaId: number) =>
+    http.delete(`/activities/${activityId}/media/${mediaId}`),
+  revokeConsent: (activityId: number, mediaId: number, motivazione: string) =>
+    http.post<MinorActivityMedia>(`/activities/${activityId}/media/${mediaId}/revoke-consent`, { motivazione }).then((r) => r.data),
+}
+
+// ─── Incidenti e segnalazioni (194) ──────────────────────────────────────────
+
+export const incidentApi = {
+  options: () =>
+    http.get<import('../types').IncidentOptions>('/incidents/options').then((r) => r.data),
+  list: (params?: { facility_id?: number; minor_id?: number; incident_type_id?: number; severity?: string; status?: string; date_from?: string; date_to?: string }) =>
+    http.get<Incident[]>('/incidents', { params }).then((r) => r.data),
+  create: (data: import('../types').IncidentWrite) =>
+    http.post<Incident>('/incidents', data).then((r) => r.data),
+  get: (id: number) =>
+    http.get<Incident>(`/incidents/${id}`).then((r) => r.data),
+  update: (id: number, data: import('../types').IncidentUpdate) =>
+    http.patch<Incident>(`/incidents/${id}`, data).then((r) => r.data),
+  transition: (id: number, data: import('../types').IncidentTransitionWrite) =>
+    http.post<Incident>(`/incidents/${id}/transition`, data).then((r) => r.data),
+  saveAnalysis: (id: number, data: Partial<import('../types').IncidentAnalysis>) =>
+    http.put<Incident>(`/incidents/${id}/analysis`, data).then((r) => r.data),
+  addExternalNotification: (id: number, data: import('../types').IncidentExternalNotificationWrite) =>
+    http.post<import('../types').IncidentExternalNotification>(`/incidents/${id}/external-notifications`, data).then((r) => r.data),
+  getAuthorityReport: (id: number) =>
+    http.get<import('../types').IncidentAuthorityReport>(`/incidents/${id}/authority-report`).then((r) => r.data),
+}
+
+export const incidentTypeApi = {
+  list: () =>
+    http.get<import('../types').IncidentType[]>('/admin/incident-types').then((r) => r.data),
+  create: (data: import('../types').IncidentTypeWrite) =>
+    http.post<import('../types').IncidentType>('/admin/incident-types', data).then((r) => r.data),
+  update: (id: number, data: import('../types').IncidentTypeWrite) =>
+    http.put<import('../types').IncidentType>(`/admin/incident-types/${id}`, data).then((r) => r.data),
+  delete: (id: number) =>
+    http.delete(`/admin/incident-types/${id}`),
+}
+
+// ─── Bacheca e circolari (191) ────────────────────────────────────────────────
+
+export const bulletinApi = {
+  list: (params?: { facility_id?: number }) =>
+    http.get<FacilityBulletin[]>('/bulletins', { params }).then((r) => r.data),
+  unreadCount: (facility_id?: number) =>
+    http.get<{ count: number }>('/bulletins/unread-count', { params: facility_id ? { facility_id } : {} }).then((r) => r.data),
+  get: (id: number) =>
+    http.get<FacilityBulletin>(`/bulletins/${id}`).then((r) => r.data),
+  acknowledge: (id: number) =>
+    http.post<FacilityBulletin>(`/bulletins/${id}/acknowledge`).then((r) => r.data),
+}
+
+export const bulletinAdminApi = {
+  list: (params?: { facility_id?: number; status?: string }) =>
+    http.get<FacilityBulletin[]>('/admin/facility-bulletins', { params }).then((r) => r.data),
+  create: (data: FacilityBulletinWrite) =>
+    http.post<FacilityBulletin>('/admin/facility-bulletins', data).then((r) => r.data),
+  get: (id: number) =>
+    http.get<FacilityBulletin>(`/admin/facility-bulletins/${id}`).then((r) => r.data),
+  update: (id: number, data: FacilityBulletinWrite) =>
+    http.put<FacilityBulletin>(`/admin/facility-bulletins/${id}`, data).then((r) => r.data),
+  publish: (id: number) =>
+    http.post<FacilityBulletin>(`/admin/facility-bulletins/${id}/publish`).then((r) => r.data),
+  archive: (id: number) =>
+    http.post<FacilityBulletin>(`/admin/facility-bulletins/${id}/archive`).then((r) => r.data),
+}
+
+// ─── Idoneità personale per turni (190) ──────────────────────────────────────
+
+export const shiftEligibilityApi = {
+  get: (facilityId: number) =>
+    http.get<import('../types').FacilityShiftEligibility>(`/admin/facilities/${facilityId}/shift-eligibility`).then((r) => r.data),
+}
+
+// ─── Farmaci e somministrazioni (195) ─────────────────────────────────────────
+
+export const medicationOptionsApi = {
+  get: (facility_id: number) =>
+    http.get<import('../types').MedicationOptions>('/health/medications/options', { params: { facility_id } }).then((r) => r.data),
+}
+export const medicationPlanApi = {
+  list: (params: { minor_id?: number; facility_id?: number; status?: string }) =>
+    http.get<import('../types').MedicationPlan[]>('/health/medication-plans', { params }).then((r) => r.data),
+  create: (data: import('../types').MedicationPlanWrite) =>
+    http.post<import('../types').MedicationPlan>('/health/medication-plans', data).then((r) => r.data),
+  get: (planId: number) =>
+    http.get<import('../types').MedicationPlan>(`/health/medication-plans/${planId}`).then((r) => r.data),
+  update: (planId: number, data: import('../types').MedicationPlanUpdate) =>
+    http.patch<import('../types').MedicationPlan>(`/health/medication-plans/${planId}`, data).then((r) => r.data),
+  alerts: (params?: { facility_id?: number; minor_id?: number }) =>
+    http.get<import('../types').MedicationPlanAlert[]>('/health/medication-plans/alerts', { params }).then((r) => r.data),
+  addSchedule: (planId: number, data: import('../types').MedicationScheduleWrite) =>
+    http.post<import('../types').MedicationSchedule>(`/health/medication-plans/${planId}/schedules`, data).then((r) => r.data),
+  listAdministrations: (planId: number) =>
+    http.get<import('../types').MedicationAdministration[]>(`/health/medication-plans/${planId}/administrations`).then((r) => r.data),
+  addAdministration: (planId: number, data: import('../types').MedicationAdministrationWrite) =>
+    http.post<import('../types').MedicationAdministration>(`/health/medication-plans/${planId}/administrations`, data).then((r) => r.data),
+}
+export const medicationAdminApi = {
+  list: () =>
+    http.get<import('../types').Medication[]>('/admin/medications').then((r) => r.data),
+  create: (data: import('../types').MedicationWrite) =>
+    http.post<import('../types').Medication>('/admin/medications', data).then((r) => r.data),
+  update: (id: number, data: import('../types').MedicationWrite) =>
+    http.put<import('../types').Medication>(`/admin/medications/${id}`, data).then((r) => r.data),
+  delete: (id: number) =>
+    http.delete(`/admin/medications/${id}`),
+}
+
+// ─── Visite ed esami sanitari (196) ──────────────────────────────────────────
+
+export const healthEventApi = {
+  options: (facility_id: number) =>
+    http.get<import('../types').HealthEventOptions>('/health/events/options', { params: { facility_id } }).then((r) => r.data),
+  list: (params: { minor_id?: number; facility_id?: number; category_id?: number; status_id?: number }) =>
+    http.get<import('../types').HealthEvent[]>('/health/events', { params }).then((r) => r.data),
+  create: (data: import('../types').HealthEventWrite) =>
+    http.post<import('../types').HealthEvent>('/health/events', data).then((r) => r.data),
+  get: (id: number) =>
+    http.get<import('../types').HealthEvent>(`/health/events/${id}`).then((r) => r.data),
+  update: (id: number, data: import('../types').HealthEventUpdate) =>
+    http.patch<import('../types').HealthEvent>(`/health/events/${id}`, data).then((r) => r.data),
+  alerts: (params: { facility_id: number; days?: number }) =>
+    http.get<import('../types').HealthEventAlert[]>('/health/events/alerts', { params }).then((r) => r.data),
 }
 
 // ─── Backup database ──────────────────────────────────────────────────────────

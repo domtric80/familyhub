@@ -73,6 +73,11 @@ class StaffMember extends Model
         return $this->hasMany(StaffMemberCertification::class);
     }
 
+    public function evaluations(): HasMany
+    {
+        return $this->hasMany(StaffEvaluation::class);
+    }
+
     public function skills(): BelongsToMany
     {
         return $this->belongsToMany(StaffSkill::class, 'staff_member_skills')

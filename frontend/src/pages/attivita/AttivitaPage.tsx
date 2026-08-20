@@ -5,11 +5,11 @@ import {
   Modal, ModalHeader, ModalBody, ModalFooter,
   FormGroup, Label, Input, Alert, Button,
 } from 'reactstrap'
-import { Home, Plus, Edit2, Trash2, Info } from 'react-feather'
+import { Home, Plus, Edit2, Trash2, Info, Bell, CheckCircle, Clock } from 'react-feather'
 import InfoDrawer from '../../components/common/InfoDrawer'
 import { toast } from 'react-toastify'
-import { activityApi, facilityApi, minorApi, lookupsApi, staffMemberApi, apiError } from '../../services/api'
-import type { Activity, ActivityWrite, ActivityType, AttendanceStatus, SupportLevel, Facility, Minor } from '../../types'
+import { activityApi, activityReminderApi, activityMediaApi, adminUserApi, facilityApi, minorApi, lookupsApi, staffMemberApi, apiError } from '../../services/api'
+import type { Activity, ActivityWrite, ActivityType, AttendanceStatus, SupportLevel, Facility, Minor, MinorActivityReminder, MinorActivityReminderWrite, MinorActivityMedia, MinorActivityMediaWrite, MinorDocument } from '../../types'
 import type { StaffMember } from '../../types'
 
 // ─── Costanti ────────────────────────────────────────────────────────────────
@@ -58,6 +58,15 @@ function staffDisplayName(staff?: StaffMember | null) {
   return staff.display_name ?? `${staff.last_name} ${staff.first_name}`.trim()
 }
 
+function documentDisplayName(document?: MinorDocument | null) {
+  if (!document) return '—'
+  return document.label ?? document.attachment?.original_name ?? `Doc #${document.id}`
+}
+
+function documentMimeType(document: MinorDocument) {
+  return document.attachment?.mime_type ?? ''
+}
+
 // ─── Componente ──────────────────────────────────────────────────────────────
 
 export default function AttivitaPage() {
@@ -96,6 +105,27 @@ export default function AttivitaPage() {
   const [deleteTarget, setDeleteTarget] = useState<Activity | null>(null)
   const [deleting, setDeleting]         = useState(false)
 
+  // Media (nel modal dettaglio)
+  const [media, setMedia]               = useState<MinorActivityMedia[]>([])
+  const [loadingMedia, setLoadingMedia] = useState(false)
+  const [minorDocs, setMinorDocs]       = useState<MinorDocument[]>([])
+  const [mediaForm, setMediaForm]       = useState<MinorActivityMediaWrite>({ media_document_id: 0, consent_document_id: 0, captured_at: null })
+  const [mediaMsg, setMediaMsg]         = useState<string | null>(null)
+  const [savingMedia, setSavingMedia]   = useState(false)
+  const [revokeTarget, setRevokeTarget] = useState<MinorActivityMedia | null>(null)
+  const [revokeMotivazione, setRevokeMotivazione] = useState('')
+  const [revoking, setRevoking]         = useState(false)
+  const [previewBlob, setPreviewBlob]   = useState<string | null>(null)
+  const [previewName, setPreviewName]   = useState<string>('')
+
+  // Promemoria (nel modal dettaglio)
+  const [reminders, setReminders]         = useState<MinorActivityReminder[]>([])
+  const [loadingReminders, setLoadingReminders] = useState(false)
+  const [reminderUsers, setReminderUsers] = useState<{ id: number; full_name: string }[]>([])
+  const [reminderForm, setReminderForm]   = useState<MinorActivityReminderWrite>({ recipient_user_id: 0, remind_at: '' })
+  const [reminderMsg, setReminderMsg]     = useState<string | null>(null)
+  const [savingReminder, setSavingReminder] = useState(false)
+
   // ── Caricamento ────────────────────────────────────────────────
   const load = async () => {
     setLoading(true); setError(null)
@@ -125,6 +155,34 @@ export default function AttivitaPage() {
       }).catch(() => {})
   }, [])
   useEffect(() => { load() }, [filterFacilityId, filterMinorId, filterTypeId, filterStatus, filterAttendance, filterSupport, filterFollowUp]) // eslint-disable-line
+
+  useEffect(() => {
+    if (!detailTarget) { setMedia([]); setMinorDocs([]); return }
+    setLoadingMedia(true); setMediaMsg(null)
+    setMediaForm({ media_document_id: 0, consent_document_id: 0, captured_at: null })
+    setRevokeTarget(null); setRevokeMotivazione(''); setPreviewBlob(null)
+    Promise.all([
+      activityMediaApi.list(detailTarget.id),
+      minorApi.listDocuments(detailTarget.minor_id).catch(() => []),
+    ]).then(([m, docs]) => {
+      setMedia(m); setMinorDocs(docs as MinorDocument[])
+    }).catch(() => {})
+      .finally(() => setLoadingMedia(false))
+  }, [detailTarget?.id]) // eslint-disable-line
+
+  useEffect(() => {
+    if (!detailTarget) { setReminders([]); return }
+    setLoadingReminders(true); setReminderMsg(null)
+    setReminderForm({ recipient_user_id: 0, remind_at: '' })
+    Promise.all([
+      activityReminderApi.list(detailTarget.id),
+      adminUserApi.list().catch(() => []),
+    ]).then(([rems, users]) => {
+      setReminders(rems)
+      setReminderUsers((users as any[]).map((u: any) => ({ id: u.id, full_name: `${u.first_name} ${u.last_name}`.trim() })))
+    }).catch(() => {})
+      .finally(() => setLoadingReminders(false))
+  }, [detailTarget?.id]) // eslint-disable-line
 
   const filteredMinors = filterFacilityId ? minors.filter((m) => m.facility_id === filterFacilityId) : minors
   const filteredStaff = filterFacilityId ? staffMembers.filter((s) => s.facility_id === filterFacilityId) : staffMembers
@@ -193,6 +251,86 @@ export default function AttivitaPage() {
 
   const fErr = (f: string) => fieldErrors[f]?.[0]
   const setF = (k: keyof ActivityWrite, v: unknown) => setForm((p) => ({ ...p, [k]: v }))
+
+  const handleAddReminder = async () => {
+    if (!detailTarget) return
+    if (!reminderForm.recipient_user_id) { setReminderMsg('Seleziona il destinatario.'); return }
+    if (!reminderForm.remind_at) { setReminderMsg('Inserisci la data/ora promemoria.'); return }
+    setSavingReminder(true); setReminderMsg(null)
+    try {
+      const r = await activityReminderApi.create(detailTarget.id, reminderForm)
+      setReminders((prev) => [...prev, r])
+      setReminderForm({ recipient_user_id: 0, remind_at: '' })
+      toast.success('Promemoria aggiunto.')
+    } catch (e) { setReminderMsg(apiError(e).message ?? 'Errore aggiunta promemoria.') }
+    finally { setSavingReminder(false) }
+  }
+
+  const handleDeleteReminder = async (r: MinorActivityReminder) => {
+    if (!detailTarget) return
+    try {
+      await activityReminderApi.delete(detailTarget.id, r.id)
+      setReminders((prev) => prev.filter((x) => x.id !== r.id))
+      toast.success('Promemoria rimosso.')
+    } catch (e) { toast.error(apiError(e).message ?? 'Errore rimozione.') }
+  }
+
+  const handleAcknowledgeReminder = async (r: MinorActivityReminder) => {
+    if (!detailTarget) return
+    try {
+      const updated = await activityReminderApi.acknowledge(detailTarget.id, r.id)
+      setReminders((prev) => prev.map((x) => x.id === updated.id ? updated : x))
+      toast.success('Presa visione registrata.')
+    } catch (e) { toast.error(apiError(e).message ?? 'Errore presa visione.') }
+  }
+
+  const handleAddMedia = async () => {
+    if (!detailTarget) return
+    if (!mediaForm.media_document_id) { setMediaMsg('Seleziona il documento media.'); return }
+    if (!mediaForm.consent_document_id) { setMediaMsg('Seleziona il documento di consenso.'); return }
+    setSavingMedia(true); setMediaMsg(null)
+    try {
+      const m = await activityMediaApi.create(detailTarget.id, mediaForm)
+      setMedia((prev) => [...prev, m])
+      setMediaForm({ media_document_id: 0, consent_document_id: 0, captured_at: null })
+      toast.success('Media collegato.')
+    } catch (e) {
+      const ae = apiError(e)
+      setMediaMsg(ae.message ?? 'Errore collegamento media.')
+    } finally { setSavingMedia(false) }
+  }
+
+  const handleDeleteMedia = async (m: MinorActivityMedia) => {
+    if (!detailTarget) return
+    try {
+      await activityMediaApi.delete(detailTarget.id, m.id)
+      setMedia((prev) => prev.filter((x) => x.id !== m.id))
+      toast.success('Media rimosso.')
+    } catch (e) { toast.error(apiError(e).message ?? 'Errore rimozione.') }
+  }
+
+  const handleRevokeConsent = async () => {
+    if (!detailTarget || !revokeTarget) return
+    if (!revokeMotivazione.trim()) return
+    setRevoking(true)
+    try {
+      const updated = await activityMediaApi.revokeConsent(detailTarget.id, revokeTarget.id, revokeMotivazione)
+      setMedia((prev) => prev.map((x) => x.id === updated.id ? updated : x))
+      setRevokeTarget(null); setRevokeMotivazione('')
+      toast.success('Consenso revocato.')
+    } catch (e) { toast.error(apiError(e).message ?? 'Errore revoca consenso.') }
+    finally { setRevoking(false) }
+  }
+
+  const handlePreviewMedia = async (m: MinorActivityMedia) => {
+    if (!m.can_preview || !detailTarget) return
+    try {
+      const blob = await minorApi.previewDocument(detailTarget.minor_id, m.media_document_id)
+      const url = URL.createObjectURL(blob)
+      setPreviewBlob(url)
+      setPreviewName(documentDisplayName(m.media_document) ?? `documento-${m.media_document_id}`)
+    } catch (e) { toast.error(apiError(e).message ?? 'Anteprima non disponibile.') }
+  }
 
   const minorLabel = (a: Activity) => {
     if (a.minor) return `${a.minor.last_name} ${a.minor.first_name}`
@@ -445,6 +583,192 @@ export default function AttivitaPage() {
                 <strong>Note esito:</strong>
                 <div className='p-2 bg-light rounded mt-1' style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{detailTarget.outcome_notes}</div>
               </div>
+            )}
+
+            {/* ── Media ── */}
+            <hr className='mt-3' />
+            <h6 className='fw-bold mb-2'><span className='me-1'>🖼</span>Media</h6>
+            <div className='alert alert-info py-2 px-3 mb-3' style={{ fontSize: 12 }}>
+              I media restano documenti protetti del minore. La galleria li rende visibili solo quando il consenso è valido, il file ha superato i controlli di sicurezza e il tuo profilo possiede gli accessi documentali necessari. La revoca interrompe la fruizione senza cancellare la prova storica.
+            </div>
+            {loadingMedia ? <div className='text-center py-2'><div className='loader' /></div> : (
+              <>
+                {media.length === 0
+                  ? <p className='text-muted small'>Nessun media collegato.</p>
+                  : (
+                    <table className='table table-sm table-borderless mb-2' style={{ fontSize: 12 }}>
+                      <thead className='table-light'><tr><th>File media</th><th>Consenso</th><th>Catturato il</th><th>Stato consenso</th><th></th></tr></thead>
+                      <tbody>
+                        {media.map((m) => {
+                          const statusBadge = m.consent_status === 'valid' ? 'badge-light-success' : m.consent_status === 'expired' ? 'badge-light-warning' : 'badge-light-danger'
+                          const statusLabel = m.consent_status === 'valid' ? 'Valido' : m.consent_status === 'expired' ? 'Scaduto' : 'Revocato'
+                          return (
+                            <tr key={m.id}>
+                              <td>{documentDisplayName(m.media_document)}</td>
+                              <td>{documentDisplayName(m.consent_document)}</td>
+                              <td>{m.captured_at ? new Date(m.captured_at).toLocaleDateString('it-IT') : '—'}</td>
+                              <td><span className={`badge ${statusBadge}`}>{statusLabel}</span></td>
+                              <td>
+                                <div className='d-flex gap-1'>
+                                  {m.can_preview && m.consent_status === 'valid' && (
+                                    <Button size='sm' color='light' onClick={() => handlePreviewMedia(m)} title='Anteprima'>👁</Button>
+                                  )}
+                                  {m.consent_status === 'valid' && (
+                                    <Button size='sm' color='warning' outline onClick={() => { setRevokeTarget(m); setRevokeMotivazione('') }} title='Revoca consenso'>🚫</Button>
+                                  )}
+                                  {m.consent_status !== 'valid' && (
+                                    <Button size='sm' color='light' onClick={() => handleDeleteMedia(m)} title='Rimuovi'>✕</Button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  )
+                }
+
+                {/* Form collegamento media */}
+                <div className='border rounded p-3 mb-2' style={{ background: '#f8f9fa' }}>
+                  <div className='small fw-bold mb-2'>Collega nuovo media</div>
+                  {mediaMsg && <Alert color='danger' className='py-1 px-2' style={{ fontSize: 12 }}>{mediaMsg}</Alert>}
+                  <Row>
+                    <Col md='4'>
+                      <FormGroup className='mb-2'>
+                        <Label className='small'>Documento media <span className='text-danger'>*</span></Label>
+                        <Input type='select' bsSize='sm' value={mediaForm.media_document_id}
+                          onChange={(e) => setMediaForm((f) => ({ ...f, media_document_id: Number(e.target.value) }))}>
+                          <option value={0}>Seleziona…</option>
+                          {minorDocs.filter((d) => documentMimeType(d).startsWith('image/') || documentMimeType(d).startsWith('video/')).map((d) => (
+                            <option key={d.id} value={d.id}>{documentDisplayName(d)}</option>
+                          ))}
+                          {minorDocs.filter((d) => !documentMimeType(d).startsWith('image/') && !documentMimeType(d).startsWith('video/')).length > 0 && (
+                            <optgroup label='Altri documenti'>
+                              {minorDocs.filter((d) => !documentMimeType(d).startsWith('image/') && !documentMimeType(d).startsWith('video/')).map((d) => (
+                                <option key={d.id} value={d.id}>{documentDisplayName(d)}</option>
+                              ))}
+                            </optgroup>
+                          )}
+                        </Input>
+                        <small className='text-muted'>Il backend rivalida il MIME type.</small>
+                      </FormGroup>
+                    </Col>
+                    <Col md='4'>
+                      <FormGroup className='mb-2'>
+                        <Label className='small'>Documento consenso <span className='text-danger'>*</span></Label>
+                        <Input type='select' bsSize='sm' value={mediaForm.consent_document_id}
+                          onChange={(e) => setMediaForm((f) => ({ ...f, consent_document_id: Number(e.target.value) }))}>
+                          <option value={0}>Seleziona…</option>
+                          {minorDocs.map((d) => <option key={d.id} value={d.id}>{documentDisplayName(d)}</option>)}
+                        </Input>
+                      </FormGroup>
+                    </Col>
+                    <Col md='3'>
+                      <FormGroup className='mb-2'>
+                        <Label className='small'>Data cattura</Label>
+                        <Input type='date' bsSize='sm' value={mediaForm.captured_at ?? ''}
+                          onChange={(e) => setMediaForm((f) => ({ ...f, captured_at: e.target.value || null }))} />
+                      </FormGroup>
+                    </Col>
+                    <Col md='1' className='d-flex align-items-end pb-2'>
+                      <Button size='sm' color='primary' onClick={handleAddMedia} disabled={savingMedia}>
+                        {savingMedia ? '…' : '+'}
+                      </Button>
+                    </Col>
+                  </Row>
+                </div>
+              </>
+            )}
+
+            {/* Modal revoca consenso */}
+            <Modal isOpen={!!revokeTarget} toggle={() => setRevokeTarget(null)} size='sm'>
+              <ModalHeader toggle={() => setRevokeTarget(null)}>Revoca consenso</ModalHeader>
+              <ModalBody>
+                <Alert color='warning' className='py-2 px-3' style={{ fontSize: 13 }}>
+                  La revoca interrompe immediatamente l'accesso alla preview. Il record storico rimane visibile senza possibilità di preview.
+                </Alert>
+                <FormGroup>
+                  <Label>Motivazione <span className='text-danger'>*</span></Label>
+                  <Input type='textarea' rows={3} value={revokeMotivazione}
+                    onChange={(e) => setRevokeMotivazione(e.target.value)}
+                    placeholder='Descrivi il motivo della revoca…' />
+                </FormGroup>
+              </ModalBody>
+              <ModalFooter>
+                <Button color='danger' onClick={handleRevokeConsent} disabled={revoking || !revokeMotivazione.trim()}>
+                  {revoking ? 'Revoca in corso…' : 'Conferma revoca'}
+                </Button>
+                <Button color='light' onClick={() => setRevokeTarget(null)}>Annulla</Button>
+              </ModalFooter>
+            </Modal>
+
+            {/* Modal anteprima */}
+            <Modal isOpen={!!previewBlob} toggle={() => { setPreviewBlob(null); setPreviewName('') }} size='xl'>
+              <ModalHeader toggle={() => { setPreviewBlob(null); setPreviewName('') }}>{previewName}</ModalHeader>
+              <ModalBody className='text-center'>
+                {previewBlob && <img src={previewBlob} alt={previewName} style={{ maxWidth: '100%', maxHeight: '70vh' }} onError={() => { toast.error('Formato non visualizzabile come immagine.'); setPreviewBlob(null) }} />}
+              </ModalBody>
+              <ModalFooter><Button color='light' onClick={() => { setPreviewBlob(null); setPreviewName('') }}>Chiudi</Button></ModalFooter>
+            </Modal>
+
+            {/* ── Promemoria ── */}
+            <hr className='mt-3' />
+            <h6 className='fw-bold mb-2'><Bell size={14} className='me-1' />Promemoria</h6>
+            <div className='alert alert-info py-2 px-3 mb-3' style={{ fontSize: 12 }}>
+              Il destinatario riceve il promemoria solo se possiede accesso all'attività. Nessun testo dell'attività viene incluso nelle notifiche browser. La presa visione è idempotente.
+            </div>
+            {loadingReminders ? <div className='text-center py-2'><div className='loader' /></div> : (
+              <>
+                {reminders.length === 0
+                  ? <p className='text-muted small'>Nessun promemoria.</p>
+                  : reminders.map((r) => {
+                    const uName = reminderUsers.find((u) => u.id === r.recipient_user_id)?.full_name ?? `Utente #${r.recipient_user_id}`
+                    return (
+                      <div key={r.id} className={`d-flex align-items-center justify-content-between border rounded px-3 py-2 mb-1 ${r.is_due && !r.acknowledged_at ? 'border-warning bg-warning bg-opacity-10' : ''}`}>
+                        <div>
+                          <span className='small fw-semibold'>{uName}</span>
+                          <span className='ms-2 small text-muted'>{new Date(r.remind_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                          {r.acknowledged_at
+                            ? <span className='ms-2 badge badge-light-success'><CheckCircle size={10} /> {new Date(r.acknowledged_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                            : r.is_due ? <span className='ms-2 badge badge-light-warning'><Clock size={10} /> Scaduto</span> : null}
+                        </div>
+                        <div className='d-flex gap-1'>
+                          {!r.acknowledged_at && <Button size='sm' color='light' onClick={() => handleAcknowledgeReminder(r)} title='Prendi visione'><CheckCircle size={12} /></Button>}
+                          {!r.acknowledged_at && <Button size='sm' color='light' onClick={() => handleDeleteReminder(r)} title='Elimina'>✕</Button>}
+                        </div>
+                      </div>
+                    )
+                  })}
+                <div className='border rounded p-3 mt-2' style={{ background: '#f8f9fa' }}>
+                  <div className='small fw-bold mb-2'>Aggiungi promemoria</div>
+                  {reminderMsg && <Alert color='danger' className='py-1 px-2' style={{ fontSize: 12 }}>{reminderMsg}</Alert>}
+                  <Row>
+                    <Col md='5'>
+                      <FormGroup className='mb-2'>
+                        <Label className='small'>Destinatario <span className='text-danger'>*</span></Label>
+                        <Input type='select' bsSize='sm' value={reminderForm.recipient_user_id}
+                          onChange={(e) => setReminderForm((f) => ({ ...f, recipient_user_id: Number(e.target.value) }))}>
+                          <option value={0}>Seleziona utente…</option>
+                          {reminderUsers.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                        </Input>
+                      </FormGroup>
+                    </Col>
+                    <Col md='5'>
+                      <FormGroup className='mb-2'>
+                        <Label className='small'>Data/ora <span className='text-danger'>*</span></Label>
+                        <Input type='datetime-local' bsSize='sm' value={reminderForm.remind_at}
+                          onChange={(e) => setReminderForm((f) => ({ ...f, remind_at: e.target.value }))} />
+                      </FormGroup>
+                    </Col>
+                    <Col md='2' className='d-flex align-items-end pb-2'>
+                      <Button size='sm' color='primary' onClick={handleAddReminder} disabled={savingReminder}>
+                        {savingReminder ? '…' : <Bell size={13} />}
+                      </Button>
+                    </Col>
+                  </Row>
+                </div>
+              </>
             )}
           </ModalBody>
           <ModalFooter>

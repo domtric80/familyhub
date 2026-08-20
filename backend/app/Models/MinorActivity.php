@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class MinorActivity extends Model
@@ -86,5 +87,15 @@ class MinorActivity extends Model
     public function peiObjective(): BelongsTo
     {
         return $this->belongsTo(MinorPeiObjective::class, 'pei_objective_id');
+    }
+
+    public function reminders(): HasMany
+    {
+        return $this->hasMany(MinorActivityReminder::class);
+    }
+
+    public function media(): HasMany
+    {
+        return $this->hasMany(MinorActivityMedia::class);
     }
 }

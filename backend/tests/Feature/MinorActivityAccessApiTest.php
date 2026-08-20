@@ -63,7 +63,7 @@ class MinorActivityAccessApiTest extends TestCase
                 'status' => 'planned',
             ])
             ->assertForbidden()
-            ->assertJsonPath('message', 'Creazione attivitÃ  non consentita per questo minore.');
+            ->assertJsonPath('message', 'Creazione attività non consentita per questo minore.');
     }
 
     private function createEducatorWithMinorAssignment(string $email, bool $assignMinor): array

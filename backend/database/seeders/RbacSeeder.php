@@ -172,6 +172,29 @@ class RbacSeeder extends Seeder
             ['resource' => 'system_storage', 'action' => 'delete'],
             ['resource' => 'system_health', 'action' => 'read'],
             ['resource' => 'system_health', 'action' => 'run'],
+            ['resource' => 'staff_evaluations', 'action' => 'read'],
+            ['resource' => 'staff_evaluations', 'action' => 'manage'],
+            ['resource' => 'facility_bulletins', 'action' => 'read'],
+            ['resource' => 'facility_bulletins', 'action' => 'manage'],
+            ['resource' => 'facility_bulletins', 'action' => 'publish'],
+            ['resource' => 'facility_bulletins', 'action' => 'acknowledge'],
+            ['resource' => 'incident_types', 'action' => 'create'],
+            ['resource' => 'incident_types', 'action' => 'read'],
+            ['resource' => 'incident_types', 'action' => 'update'],
+            ['resource' => 'incident_types', 'action' => 'delete'],
+            ['resource' => 'minor_incidents', 'action' => 'create'],
+            ['resource' => 'minor_incidents', 'action' => 'read'],
+            ['resource' => 'minor_incidents', 'action' => 'update'],
+            ['resource' => 'minor_incidents', 'action' => 'export'],
+            ['resource' => 'medication_catalog', 'action' => 'create'],
+            ['resource' => 'medication_catalog', 'action' => 'read'],
+            ['resource' => 'medication_catalog', 'action' => 'update'],
+            ['resource' => 'medication_catalog', 'action' => 'delete'],
+            ['resource' => 'minor_health', 'action' => 'create'],
+            ['resource' => 'minor_health', 'action' => 'read'],
+            ['resource' => 'minor_health', 'action' => 'update'],
+            ['resource' => 'minor_health', 'action' => 'administer'],
+            ['resource' => 'minor_health', 'action' => 'export'],
         ];
 
         $roleModels = collect($roles)->mapWithKeys(function (string $description, string $code) {
@@ -667,6 +690,28 @@ class RbacSeeder extends Seeder
                 'audit_logs.read',
             ],
         ];
+
+        foreach (['SUPER_ADMIN', 'DIRETTORE', 'COORDINATORE', 'REFERENTE_STRUTTURA'] as $roleCode) {
+            $grants[$roleCode] = array_merge($grants[$roleCode], ['staff_evaluations.read', 'staff_evaluations.manage', 'facility_bulletins.read', 'facility_bulletins.manage', 'facility_bulletins.publish', 'facility_bulletins.acknowledge']);
+        }
+
+        foreach (['PSICOLOGO', 'PEDIATRA', 'EDUCATORE', 'EDUCATORE_NOTTURNO', 'ASSISTENTE_SOCIALE_EST'] as $roleCode) {
+            $grants[$roleCode] = array_merge($grants[$roleCode], ['facility_bulletins.read', 'facility_bulletins.acknowledge']);
+        }
+
+        $grants['ADMIN_IT'] = array_merge($grants['ADMIN_IT'], ['incident_types.create', 'incident_types.read', 'incident_types.update', 'incident_types.delete']);
+        $grants['DIRETTORE'] = array_merge($grants['DIRETTORE'], ['incident_types.create', 'incident_types.read', 'incident_types.update', 'incident_types.delete', 'minor_incidents.create', 'minor_incidents.read', 'minor_incidents.update', 'minor_incidents.export']);
+        foreach (['COORDINATORE', 'REFERENTE_STRUTTURA'] as $roleCode) {
+            $grants[$roleCode] = array_merge($grants[$roleCode], ['incident_types.read', 'minor_incidents.create', 'minor_incidents.read', 'minor_incidents.update', 'minor_incidents.export']);
+        }
+        foreach (['PSICOLOGO', 'EDUCATORE', 'EDUCATORE_NOTTURNO'] as $roleCode) {
+            $grants[$roleCode] = array_merge($grants[$roleCode], ['incident_types.read', 'minor_incidents.create', 'minor_incidents.read', 'minor_incidents.update']);
+        }
+        $grants['ASSISTENTE_SOCIALE_EST'] = array_merge($grants['ASSISTENTE_SOCIALE_EST'], ['incident_types.read', 'minor_incidents.read']);
+        $grants['ADMIN_IT'] = array_merge($grants['ADMIN_IT'], ['medication_catalog.create', 'medication_catalog.read', 'medication_catalog.update', 'medication_catalog.delete']);
+        $grants['DIRETTORE'] = array_merge($grants['DIRETTORE'], ['medication_catalog.create', 'medication_catalog.read', 'medication_catalog.update', 'medication_catalog.delete', 'minor_health.create', 'minor_health.read', 'minor_health.update', 'minor_health.administer', 'minor_health.export']);
+        $grants['PEDIATRA'] = array_merge($grants['PEDIATRA'], ['medication_catalog.read', 'minor_health.create', 'minor_health.read', 'minor_health.update', 'minor_health.export']);
+        foreach (['EDUCATORE', 'EDUCATORE_NOTTURNO'] as $roleCode) $grants[$roleCode] = array_merge($grants[$roleCode], ['medication_catalog.read', 'minor_health.read', 'minor_health.administer']);
 
         foreach ($grants as $roleCode => $permissionCodes) {
             $role = $roleModels[$roleCode];

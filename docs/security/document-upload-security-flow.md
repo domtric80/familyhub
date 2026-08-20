@@ -49,7 +49,7 @@ Ambiente locale previsto:
 - `application/vnd.openxmlformats-officedocument.wordprocessingml.document` (`.docx`)
 - `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` (`.xlsx`)
 
-Questa policy è definita dalla variabile ambiente `DOCUMENT_ALLOWED_MIME_TYPES` ed è comune a `app`, `worker` e bootstrap iniziale container.
+Questa policy è definita dalla variabile ambiente `DOCUMENT_ALLOWED_MIME_TYPES` ed è comune a `app`, `worker` e bootstrap iniziale container. La baseline include anche `image/webp` e `video/mp4` per i media attività, mantenendo invariati quarantena, scansione antivirus e limite dimensionale configurabile.
 
 ## Nota operativa
 

@@ -129,6 +129,21 @@ class Minor extends Model
         return $this->hasMany(MinorApproach::class);
     }
 
+    public function incidents(): HasMany
+    {
+        return $this->hasMany(MinorIncident::class)->orderByDesc('occurred_at')->orderByDesc('id');
+    }
+
+    public function medicationPlans(): HasMany
+    {
+        return $this->hasMany(MinorMedicationPlan::class)->orderByDesc('start_date')->orderByDesc('id');
+    }
+
+    public function healthEvents(): HasMany
+    {
+        return $this->hasMany(MinorHealthEvent::class)->orderByDesc('scheduled_at')->orderByDesc('id');
+    }
+
     public function journalEntries(): HasMany
     {
         return $this->hasMany(MinorJournalEntry::class)

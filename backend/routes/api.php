@@ -24,6 +24,8 @@ use App\Http\Controllers\Api\Admin\CityController;
 use App\Http\Controllers\Api\Admin\ActivityTypeController;
 use App\Http\Controllers\Api\Admin\ApproachTypeController;
 use App\Http\Controllers\Api\Admin\JournalEntryTypeController;
+use App\Http\Controllers\Api\Admin\IncidentTypeController;
+use App\Http\Controllers\Api\Admin\MedicationController;
 use App\Http\Controllers\Api\Admin\MinorStatusController;
 use App\Http\Controllers\Api\Admin\MinorUserAssignmentController;
 use App\Http\Controllers\Api\Admin\OrganizationController;
@@ -35,6 +37,8 @@ use App\Http\Controllers\Api\Admin\StaffDocumentController;
 use App\Http\Controllers\Api\Admin\StaffCertificationController;
 use App\Http\Controllers\Api\Admin\StaffHrDashboardController;
 use App\Http\Controllers\Api\Admin\StaffProfessionalProfileController;
+use App\Http\Controllers\Api\Admin\StaffEvaluationController;
+use App\Http\Controllers\Api\Admin\StaffShiftEligibilityController;
 use App\Http\Controllers\Api\Admin\StaffShiftAssignmentController;
 use App\Http\Controllers\Api\Admin\StaffShiftSubstitutionController;
 use App\Http\Controllers\Api\Admin\StaffShiftTemplateController;
@@ -54,8 +58,12 @@ use App\Http\Controllers\Api\MinorActivityController;
 use App\Http\Controllers\Api\MinorApproachController;
 use App\Http\Controllers\Api\MinorExitController;
 use App\Http\Controllers\Api\MinorJournalController;
+use App\Http\Controllers\Api\MinorIncidentController;
+use App\Http\Controllers\Api\MinorMedicationController;
+use App\Http\Controllers\Api\MinorHealthEventController;
 use App\Http\Controllers\Api\StaffAttendanceEventController;
 use App\Http\Controllers\Api\StaffTimesheetController;
+use App\Http\Controllers\Api\FacilityBulletinController;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Route;
 
@@ -128,7 +136,14 @@ Route::middleware(['auth:sanctum', 'admin.api', 'audit.api'])->prefix('admin')->
     Route::post('/users/{user}/reset-mfa', [UserController::class, 'resetMfa'])->middleware('permission.api:users.update');
 
     Route::get('/staff-members', [StaffMemberController::class, 'index'])->middleware('permission.api:staff_members.read');
+    Route::get('/facility-bulletins', [FacilityBulletinController::class, 'managedIndex'])->middleware('permission.api:facility_bulletins.manage,request:facility_id');
+    Route::post('/facility-bulletins', [FacilityBulletinController::class, 'store'])->middleware('permission.api:facility_bulletins.manage,request:facility_id');
+    Route::get('/facility-bulletins/{bulletin}', [FacilityBulletinController::class, 'managedShow'])->middleware('permission.api:facility_bulletins.manage,bulletin');
+    Route::put('/facility-bulletins/{bulletin}', [FacilityBulletinController::class, 'update'])->middleware('permission.api:facility_bulletins.manage,bulletin');
+    Route::post('/facility-bulletins/{bulletin}/publish', [FacilityBulletinController::class, 'publish'])->middleware('permission.api:facility_bulletins.publish,bulletin');
+    Route::post('/facility-bulletins/{bulletin}/archive', [FacilityBulletinController::class, 'archive'])->middleware('permission.api:facility_bulletins.manage,bulletin');
     Route::get('/staff-hr-dashboard', [StaffHrDashboardController::class, 'show'])->middleware('permission.api:staff_members.read');
+    Route::get('/facilities/{facility}/shift-eligibility', [StaffShiftEligibilityController::class, 'show'])->middleware('permission.api:staff_shift_assignments.read,facility');
     Route::get('/staff-qualifications', [StaffQualificationController::class, 'index'])->middleware('permission.api:staff_members.read');
     Route::post('/staff-qualifications', [StaffQualificationController::class, 'store'])->middleware('permission.api:staff_members.create');
     Route::get('/staff-qualifications/{staff_qualification}', [StaffQualificationController::class, 'show'])->middleware('permission.api:staff_members.read');
@@ -149,6 +164,16 @@ Route::middleware(['auth:sanctum', 'admin.api', 'audit.api'])->prefix('admin')->
     Route::get('/staff-members/{staff_member}/professional-profile', [StaffProfessionalProfileController::class, 'showProfile'])->middleware('permission.api:staff_members.read,staff_member');
     Route::put('/staff-members/{staff_member}/professional-profile', [StaffProfessionalProfileController::class, 'syncProfile'])->middleware('permission.api:staff_members.update,staff_member');
     Route::get('/staff-members/{staff_member}/certifications', [StaffCertificationController::class, 'index'])->middleware('permission.api:staff_members.read,staff_member');
+    Route::get('/staff-evaluation-criteria', [StaffEvaluationController::class, 'criteria'])->middleware('permission.api:staff_evaluations.read');
+    Route::post('/staff-evaluation-criteria', [StaffEvaluationController::class, 'storeCriterion'])->middleware('permission.api:staff_evaluations.manage');
+    Route::put('/staff-evaluation-criteria/{criterion}', [StaffEvaluationController::class, 'updateCriterion'])->middleware('permission.api:staff_evaluations.manage');
+    Route::delete('/staff-evaluation-criteria/{criterion}', [StaffEvaluationController::class, 'destroyCriterion'])->middleware('permission.api:staff_evaluations.manage');
+    Route::get('/staff-members/{staff_member}/evaluations', [StaffEvaluationController::class, 'index'])->middleware('permission.api:staff_evaluations.read,staff_member');
+    Route::post('/staff-members/{staff_member}/evaluations', [StaffEvaluationController::class, 'store'])->middleware('permission.api:staff_evaluations.manage,staff_member');
+    Route::get('/staff-members/{staff_member}/evaluations/{evaluation}', [StaffEvaluationController::class, 'show'])->middleware('permission.api:staff_evaluations.read,staff_member');
+    Route::put('/staff-members/{staff_member}/evaluations/{evaluation}', [StaffEvaluationController::class, 'update'])->middleware('permission.api:staff_evaluations.manage,staff_member');
+    Route::delete('/staff-members/{staff_member}/evaluations/{evaluation}', [StaffEvaluationController::class, 'destroy'])->middleware('permission.api:staff_evaluations.manage,staff_member');
+    Route::post('/staff-members/{staff_member}/evaluations/{evaluation}/finalize', [StaffEvaluationController::class, 'finalize'])->middleware('permission.api:staff_evaluations.manage,staff_member');
     Route::post('/staff-members/{staff_member}/certifications', [StaffCertificationController::class, 'store'])->middleware('permission.api:staff_members.update,staff_member');
     Route::get('/staff-members/{staff_member}/certifications/{certification}', [StaffCertificationController::class, 'show'])->middleware('permission.api:staff_members.read,staff_member');
     Route::put('/staff-members/{staff_member}/certifications/{certification}', [StaffCertificationController::class, 'update'])->middleware('permission.api:staff_members.update,staff_member');
@@ -249,6 +274,14 @@ Route::middleware(['auth:sanctum', 'admin.api', 'audit.api'])->prefix('admin')->
     Route::get('/approach-types/{approach_type}', [ApproachTypeController::class, 'show'])->middleware('permission.api:approach_types.read');
     Route::put('/approach-types/{approach_type}', [ApproachTypeController::class, 'update'])->middleware('permission.api:approach_types.update');
     Route::delete('/approach-types/{approach_type}', [ApproachTypeController::class, 'destroy'])->middleware('permission.api:approach_types.delete');
+    Route::get('/incident-types', [IncidentTypeController::class, 'index'])->middleware('permission.api:incident_types.read');
+    Route::post('/incident-types', [IncidentTypeController::class, 'store'])->middleware('permission.api:incident_types.create');
+    Route::put('/incident-types/{incidentType}', [IncidentTypeController::class, 'update'])->middleware('permission.api:incident_types.update');
+    Route::delete('/incident-types/{incidentType}', [IncidentTypeController::class, 'destroy'])->middleware('permission.api:incident_types.delete');
+    Route::get('/medications', [MedicationController::class, 'index'])->middleware('permission.api:medication_catalog.read');
+    Route::post('/medications', [MedicationController::class, 'store'])->middleware('permission.api:medication_catalog.create');
+    Route::put('/medications/{medication}', [MedicationController::class, 'update'])->middleware('permission.api:medication_catalog.update');
+    Route::delete('/medications/{medication}', [MedicationController::class, 'destroy'])->middleware('permission.api:medication_catalog.delete');
     Route::get('/journal-entry-types', [JournalEntryTypeController::class, 'index'])->middleware('permission.api:journal_entry_types.read');
     Route::post('/journal-entry-types', [JournalEntryTypeController::class, 'store'])->middleware('permission.api:journal_entry_types.create');
     Route::get('/journal-entry-types/{journal_entry_type}', [JournalEntryTypeController::class, 'show'])->middleware('permission.api:journal_entry_types.read');
@@ -367,6 +400,13 @@ Route::middleware(['auth:sanctum', 'admin.api', 'audit.api'])->prefix('admin')->
     Route::post('/geography-imports', [GeographyImportController::class, 'store'])->middleware('permission.api:geography_sync.run');
 });
 
+Route::middleware(['auth:sanctum', 'audit.api'])->prefix('bulletins')->group(function (): void {
+    Route::get('/', [FacilityBulletinController::class, 'visibleIndex'])->middleware('permission.api:facility_bulletins.read,request:facility_id');
+    Route::get('/unread-count', [FacilityBulletinController::class, 'unreadCount'])->middleware('permission.api:facility_bulletins.read,request:facility_id');
+    Route::get('/{bulletin}', [FacilityBulletinController::class, 'visibleShow'])->middleware('permission.api:facility_bulletins.read,bulletin');
+    Route::post('/{bulletin}/acknowledge', [FacilityBulletinController::class, 'acknowledge'])->middleware('permission.api:facility_bulletins.acknowledge,bulletin');
+});
+
 Route::middleware(['auth:sanctum', 'minors.api', 'audit.api'])->prefix('minors')->group(function (): void {
     Route::get('/', [MinorController::class, 'index'])->middleware('permission.api:minors.read');
     Route::post('/', [MinorController::class, 'store'])->middleware('permission.api:minors.create,request:facility_id');
@@ -428,11 +468,51 @@ Route::middleware(['auth:sanctum', 'minors.api', 'audit.api'])->prefix('exits')-
 Route::middleware(['auth:sanctum', 'minors.api', 'audit.api'])->prefix('activities')->group(function (): void {
     Route::get('/', [MinorActivityController::class, 'index'])->middleware('permission.api:minor_activities.read');
     Route::get('/summary', [MinorActivityController::class, 'summary'])->middleware('permission.api:minor_activities.read');
+    Route::get('/calendar', [MinorActivityController::class, 'calendar'])->middleware('permission.api:minor_activities.read');
+    Route::get('/reminders/mine', [MinorActivityController::class, 'myReminders'])->middleware('permission.api:minor_activities.read');
     Route::post('/', [MinorActivityController::class, 'store'])->middleware('permission.api:minor_activities.create');
+    Route::get('/{activity}/reminders', [MinorActivityController::class, 'listReminders'])->middleware('permission.api:minor_activities.update,activity');
+    Route::post('/{activity}/reminders', [MinorActivityController::class, 'storeReminder'])->middleware('permission.api:minor_activities.update,activity');
+    Route::delete('/{activity}/reminders/{reminder}', [MinorActivityController::class, 'destroyReminder'])->middleware('permission.api:minor_activities.update,activity');
+    Route::post('/{activity}/reminders/{reminder}/acknowledge', [MinorActivityController::class, 'acknowledgeReminder'])->middleware('permission.api:minor_activities.read,activity');
+    Route::get('/{activity}/media', [MinorActivityController::class, 'listMedia'])->middleware('permission.api:minor_activities.read,activity');
+    Route::post('/{activity}/media', [MinorActivityController::class, 'storeMedia'])->middleware('permission.api:minor_activities.update,activity');
+    Route::delete('/{activity}/media/{media}', [MinorActivityController::class, 'destroyMedia'])->middleware('permission.api:minor_activities.update,activity');
+    Route::post('/{activity}/media/{media}/revoke-consent', [MinorActivityController::class, 'revokeMediaConsent'])->middleware('permission.api:minor_activities.update,activity');
     Route::get('/{activity}', [MinorActivityController::class, 'show'])->middleware('permission.api:minor_activities.read,activity');
     Route::put('/{activity}', [MinorActivityController::class, 'update'])->middleware('permission.api:minor_activities.update,activity');
     Route::patch('/{activity}', [MinorActivityController::class, 'update'])->middleware('permission.api:minor_activities.update,activity');
     Route::delete('/{activity}', [MinorActivityController::class, 'destroy'])->middleware('permission.api:minor_activities.delete,activity');
+});
+
+Route::middleware(['auth:sanctum', 'minors.api', 'audit.api'])->prefix('incidents')->group(function (): void {
+    Route::get('/options', [MinorIncidentController::class, 'options'])->middleware('permission.api:minor_incidents.read');
+    Route::get('/', [MinorIncidentController::class, 'index'])->middleware('permission.api:minor_incidents.read');
+    Route::post('/', [MinorIncidentController::class, 'store'])->middleware('permission.api:minor_incidents.create');
+    Route::get('/{incident}', [MinorIncidentController::class, 'show'])->middleware('permission.api:minor_incidents.read,incident');
+    Route::patch('/{incident}', [MinorIncidentController::class, 'update'])->middleware('permission.api:minor_incidents.update,incident');
+    Route::post('/{incident}/transition', [MinorIncidentController::class, 'transition'])->middleware('permission.api:minor_incidents.update,incident');
+    Route::put('/{incident}/analysis', [MinorIncidentController::class, 'upsertAnalysis'])->middleware('permission.api:minor_incidents.update,incident');
+    Route::post('/{incident}/external-notifications', [MinorIncidentController::class, 'storeExternalNotification'])->middleware('permission.api:minor_incidents.update,incident');
+    Route::get('/{incident}/authority-report', [MinorIncidentController::class, 'authorityReport'])->middleware('permission.api:minor_incidents.export,incident');
+});
+
+Route::middleware(['auth:sanctum', 'minors.api', 'audit.api'])->prefix('health')->group(function (): void {
+    Route::get('/events/options', [MinorHealthEventController::class, 'options'])->middleware('permission.api:minor_health.read');
+    Route::get('/events/alerts', [MinorHealthEventController::class, 'alerts'])->middleware('permission.api:minor_health.read');
+    Route::get('/events', [MinorHealthEventController::class, 'index'])->middleware('permission.api:minor_health.read');
+    Route::post('/events', [MinorHealthEventController::class, 'store'])->middleware('permission.api:minor_health.create');
+    Route::get('/events/{event}', [MinorHealthEventController::class, 'show'])->middleware('permission.api:minor_health.read,event');
+    Route::patch('/events/{event}', [MinorHealthEventController::class, 'update'])->middleware('permission.api:minor_health.update,event');
+    Route::get('/medications/options', [MinorMedicationController::class, 'options'])->middleware('permission.api:minor_health.read');
+    Route::get('/medication-plans/alerts', [MinorMedicationController::class, 'alerts'])->middleware('permission.api:minor_health.read');
+    Route::get('/medication-plans', [MinorMedicationController::class, 'index'])->middleware('permission.api:minor_health.read');
+    Route::post('/medication-plans', [MinorMedicationController::class, 'store'])->middleware('permission.api:minor_health.create');
+    Route::get('/medication-plans/{plan}', [MinorMedicationController::class, 'show'])->middleware('permission.api:minor_health.read,plan');
+    Route::patch('/medication-plans/{plan}', [MinorMedicationController::class, 'update'])->middleware('permission.api:minor_health.update,plan');
+    Route::post('/medication-plans/{plan}/schedules', [MinorMedicationController::class, 'storeSchedule'])->middleware('permission.api:minor_health.update,plan');
+    Route::get('/medication-plans/{plan}/administrations', [MinorMedicationController::class, 'administrations'])->middleware('permission.api:minor_health.read,plan');
+    Route::post('/medication-plans/{plan}/administrations', [MinorMedicationController::class, 'administer'])->middleware('permission.api:minor_health.administer,plan');
 });
 
 Route::middleware(['auth:sanctum', 'minors.api', 'audit.api'])->prefix('approaches')->group(function (): void {
