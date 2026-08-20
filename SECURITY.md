@@ -1,135 +1,72 @@
 # Security Policy
 
-FamilyHub tratta dati personali e dati ad alta sensibilità operativa. Le segnalazioni di sicurezza vengono quindi gestite con priorità e con un processo di disclosure responsabile.
-
-## Ambito
-
-Questa policy si applica al repository:
-
-- `https://github.com/domtric80/familyhub`
-
-e ai componenti runtime ufficiali del progetto:
-
-- `backend/` — API Laravel
-- `frontend/` — applicazione React/Vite
-- `docker-compose.yml`
-- `docker-compose.prod.yml`
-- configurazioni storage S3/MinIO, health checks e processi documentali descritti nella documentazione di progetto
-
-Sono esclusi dall’ambito runtime:
-
-- asset vendor di riferimento non eseguiti in produzione
-- materiale di supporto in `tmp/`
-- dipendenze o template non collegati allo stack FamilyHub attivo
+FamilyHub tratta dati personali e sanitari particolarmente sensibili. Le segnalazioni vengono gestite tramite disclosure responsabile e canali privati.
 
 ## Versioni supportate
 
-Alla data del `2026-08-09`, la versione corrente del progetto è `1.1.1`.
+| Versione | Supporto |
+| --- | --- |
+| `1.4.x` | Supportata con fix funzionali e di sicurezza |
+| `< 1.4.0` | Non supportata; aggiornamento raccomandato |
 
-| Versione | Stato supporto | Note |
-| --- | --- | --- |
-| `1.1.x` | ✅ supportata | linea corrente, riceve fix funzionali e di sicurezza |
-| `1.0.x` | ⚠️ supporto limitato | solo fix selettivi e attività di riallineamento verso `1.1.x` |
-| `< 1.0.0` | ❌ non supportata | nessun aggiornamento previsto |
+La versione corrente è indicata nel file `VERSION` e nel `CHANGELOG.md`.
 
-Regola operativa:
+## Segnalare una vulnerabilità
 
-- i fix di sicurezza vengono applicati prima alla linea corrente
-- eventuali backport su `1.0.x` vengono valutati caso per caso
-- non è garantito supporto per fork o deploy alterati fuori dalla configurazione documentata
+Non aprire issue pubbliche contenenti dettagli tecnici, credenziali, dati personali o proof of concept sfruttabili.
 
-## Come segnalare una vulnerabilità
+Usare come canale principale **GitHub Private Vulnerability Reporting** nella sezione `Security` del repository `domtric80/familyhub`.
 
-Per segnalazioni di sicurezza **non aprire issue pubbliche**.
+Il report dovrebbe includere:
 
-Il canale ufficiale è:
+- componente e versione coinvolti;
+- impatto su confidenzialità, integrità, disponibilità o audit;
+- passaggi minimi per riprodurre;
+- eventuale richiesta HTTP, log o PoC priva di dati reali;
+- ambiente interessato: locale, Docker o produzione.
 
-- **GitHub Private Vulnerability Reporting** del repository `domtric80/familyhub`
+## Tempi obiettivo
 
-Usare quindi il form privato di segnalazione vulnerabilità disponibile nella sezione sicurezza del repository.
-
-Nel report includere, se possibile:
-
-- descrizione del problema
-- impatto atteso
-- componente coinvolto (`backend`, `frontend`, `documenti`, `RBAC`, `ABAC`, `storage`, `docker`, ecc.)
-- passaggi per riprodurre
-- ambiente coinvolto (`locale`, `docker`, `produzione`)
-- eventuale PoC, log, screenshot o richiesta HTTP
-- indicazione se la vulnerabilità coinvolge dati reali o solo ambiente di test
-
-Canale secondario:
-
-- se il private reporting GitHub non è disponibile o non funziona, usare un canale privato concordato con il maintainer
-
-## Tempi di presa in carico
-
-Obiettivi di servizio attesi:
-
-- conferma ricezione: entro `3` giorni lavorativi
-- prima valutazione triage: entro `5` giorni lavorativi
-- piano di remediation o stato dell’analisi: entro `10` giorni lavorativi, salvo casi complessi
+- conferma di ricezione: 3 giorni lavorativi;
+- prima valutazione: 5 giorni lavorativi;
+- piano di remediation: 10 giorni lavorativi, salvo casi complessi.
 
 Questi tempi sono obiettivi operativi e non costituiscono SLA contrattuale.
 
-## Processo di gestione
+## Ambito prioritario
 
-Quando una segnalazione è valida, il processo minimo è:
+- autenticazione, MFA e gestione sessioni;
+- RBAC applicativo e assegnazioni ai minori;
+- ABAC documentale e note cifrate;
+- upload, preview e download;
+- storage S3/MinIO e gestione segreti;
+- audit log e storico minore;
+- API, Docker, reverse proxy e WAF;
+- dipendenze Composer, npm, immagini Docker e GitHub Actions.
 
-1. triage iniziale e classificazione
-2. riproduzione tecnica del problema
-3. valutazione impatto su:
-   - confidenzialità
-   - integrità
-   - disponibilità
-   - tracciabilità/audit
-4. definizione della remediation
-5. validazione tecnica del fix
-6. rilascio in versione patch/minor secondo il processo ufficiale di release
-7. aggiornamento di:
-   - `CHANGELOG.md`
-   - `docs/releases/`
-   - eventuale documentazione operativa o UX/API impattata
+## Regole per i test
 
-## Disclosure responsabile
+- non accedere a dati reali senza autorizzazione;
+- non effettuare esfiltrazione, persistenza o interruzione del servizio;
+- non pubblicare dettagli prima del coordinamento con il maintainer;
+- usare dati sintetici e il minimo impatto necessario alla verifica.
 
-Si richiede di:
+## Processo di remediation
 
-- evitare accessi distruttivi, esfiltrazione o alterazione intenzionale di dati
-- non colpire sistemi di terzi
-- non interrompere il servizio intenzionalmente
-- non pubblicare dettagli tecnici prima del coordinamento con il maintainer
+1. triage e classificazione;
+2. riproduzione controllata;
+3. correzione e test di regressione;
+4. aggiornamento di audit, documentazione e contratti API se coinvolti;
+5. release patch o minor con note dedicate;
+6. disclosure coordinata dopo disponibilità del fix.
 
-Se la segnalazione viene confermata, FamilyHub si impegna a gestirla in buona fede e a riconoscerne la priorità nel backlog di sicurezza.
+## Supply chain
 
-## Buone pratiche di verifica per chi segnala
+I manifest runtime ufficiali sono:
 
-Le aree particolarmente sensibili del progetto sono:
+- `backend/composer.json` e `backend/composer.lock`;
+- `frontend/package.json` e `frontend/package-lock.json`;
+- immagini dichiarate nei file Docker Compose;
+- action dichiarate in `.github/workflows/`.
 
-- autenticazione e MFA
-- sessioni e scadenza token
-- RBAC applicativo
-- ABAC documentale
-- upload, preview e download documenti
-- storage S3/MinIO e cifratura delle credenziali
-- audit log e accesso ai dati del minore
-- esposizione dei servizi Docker / reverse proxy / WAF
-
-Le segnalazioni che includono il contesto preciso di una di queste aree sono più rapide da verificare.
-
-## Dipendenze e supply chain
-
-Gli audit rilevanti per il progetto vengono eseguiti sui manifest runtime ufficiali:
-
-- `frontend/package.json`
-- `frontend/package-lock.json`
-- `backend/composer.json`
-- `backend/composer.lock`
-- `backend/package.json` se usato nel bootstrap locale Laravel/Vite
-
-Manifest vendor non runtime o lockfile obsoleti non fanno parte della supply chain ufficiale e vengono rimossi dal repository quando generano rumore di sicurezza non pertinente.
-
-## Note finali
-
-- questa policy può essere aggiornata con l’evoluzione del progetto
-- per i rilasci fare riferimento a `docs/releases/RELEASE-PROCESS.md`
+Il repository utilizza Dependabot, dependency review, CodeQL, audit Composer/npm e OpenSSF Scorecard. Gli asset vendor non utilizzati in produzione non fanno parte della supply chain runtime.

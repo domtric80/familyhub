@@ -22,7 +22,6 @@ frontend/pnpm-lock.yaml
 .env
 backups/
 
-vendor-assets/cuba/*.zip
-vendor-assets/cuba/react_context/starter-kit/package.json
-vendor-assets/cuba/react_context/template/package.json
+# Asset commerciali Cuba: disponibili solo localmente, mai distribuire nel repository.
+vendor-assets/
 ChatGPT Image *.png

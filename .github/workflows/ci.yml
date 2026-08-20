@@ -1,0 +1,83 @@
+name: familyhub-ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: familyhub-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend tests and Composer audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      COMPOSE_PROJECT_NAME: familyhub-ci
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Prepare isolated CI environment
+        shell: bash
+        run: |
+          cp .env.example .env
+          cat >> .env <<'ENV'
+          APP_ENV=testing
+          APP_DEBUG=false
+          APP_URL=http://localhost:8100
+          APP_KEY=base64:Qm9vdHN0cmFwRmFtaWx5SHViS2V5Rm9yQ0lSZWxlYXNlMDE=
+          DB_DATABASE=familyhub
+          DB_USERNAME=familyhub
+          DB_PASSWORD=familyhub-ci-password
+          MINIO_ROOT_USER=familyhub
+          MINIO_ROOT_PASSWORD=familyhub-ci-minio-password
+          AWS_BUCKET=familyhub-private
+          AWS_DEFAULT_REGION=eu-south-1
+          AWS_ENDPOINT=http://minio:9000
+          ANTIVIRUS_DRIVER=clamav
+          ANTIVIRUS_FAIL_CLOSED=true
+          FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD=true
+          FAMILYHUB_LOCAL_ADMIN_EMAIL=admin@familyhub.local
+          FAMILYHUB_LOCAL_ADMIN_PASSWORD=password
+          ENV
+      - name: Start isolated dependencies
+        run: docker compose up -d postgres redis minio clamav mc
+      - name: Initialize backend
+        run: docker compose run --rm app-init
+      - name: Run backend tests
+        run: docker compose run --rm app sh -lc "php artisan test"
+      - name: Audit Composer dependencies
+        run: docker compose run --rm app sh -lc "composer audit --format=json"
+      - name: Shutdown isolated stack
+        if: always()
+        run: docker compose down -v --remove-orphans
+
+  frontend:
+    name: Frontend build and npm audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build frontend
+        run: npm run build
+      - name: Audit all npm dependencies
+        run: npm audit --audit-level=low
