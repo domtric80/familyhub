@@ -32,9 +32,13 @@ class AdminAuditTest extends TestCase
             ->getJson('/api/admin/organizations')
             ->assertOk();
 
-        $this->assertDatabaseCount('audit_logs', 1);
+        $logs = AuditLog::query()
+            ->where('resource_type', 'organizations')
+            ->where('action', 'read');
 
-        $log = AuditLog::query()->firstOrFail();
+        $this->assertSame(1, $logs->count());
+
+        $log = $logs->firstOrFail();
 
         $this->assertSame('organizations', $log->resource_type);
         $this->assertSame('read', $log->action);

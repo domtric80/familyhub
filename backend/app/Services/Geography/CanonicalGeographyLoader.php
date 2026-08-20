@@ -163,6 +163,7 @@ class CanonicalGeographyLoader
                             }
 
                             $city = null;
+                            $normalized = is_array($cityRow->normalized_payload_json) ? $cityRow->normalized_payload_json : [];
 
                             if ($cityRow->cadastre_code) {
                                 $city = City::query()
@@ -170,10 +171,10 @@ class CanonicalGeographyLoader
                                     ->first();
                             }
 
-                            if (! $city && $cityRow->normalized_payload_json['geoname_id'] ?? null) {
+                            if (! $city && ($normalized['geoname_id'] ?? null)) {
                                 $city = City::query()
                                     ->where('province_id', $parent->id)
-                                    ->where('geoname_id', $cityRow->normalized_payload_json['geoname_id'])
+                                    ->where('geoname_id', $normalized['geoname_id'])
                                     ->first();
                             }
 
@@ -197,7 +198,6 @@ class CanonicalGeographyLoader
                                 $city->postal_code = $cityRow->postal_code;
                             }
 
-                            $normalized = is_array($cityRow->normalized_payload_json) ? $cityRow->normalized_payload_json : [];
                             $city->geoname_id = $normalized['geoname_id'] ?? $city->geoname_id;
                             $city->latitude = $normalized['latitude'] ?? $city->latitude;
                             $city->longitude = $normalized['longitude'] ?? $city->longitude;

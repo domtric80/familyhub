@@ -32,7 +32,7 @@ jobs:
           APP_ENV=testing
           APP_DEBUG=false
           APP_URL=http://localhost:8100
-          APP_KEY=base64:Qm9vdHN0cmFwRmFtaWx5SHViS2V5Rm9yQ0lSZWxlYXNlMDE=
+          APP_KEY=base64:IdU8N0RPPJV4+24CWNtwyXXgHjRoYQQWIt6HKhgYY3g=
           DB_DATABASE=familyhub
           DB_USERNAME=familyhub
           DB_PASSWORD=familyhub-ci-password

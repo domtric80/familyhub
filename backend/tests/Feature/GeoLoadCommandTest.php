@@ -9,6 +9,7 @@ use App\Models\Province;
 use App\Models\Region;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class GeoLoadCommandTest extends TestCase
@@ -32,6 +33,7 @@ class GeoLoadCommandTest extends TestCase
 
         $runId = GeoImportRun::query()->latest('id')->value('id');
 
+        DB::table('facilities')->delete();
         City::query()->delete();
         Province::query()->delete();
         Region::query()->delete();
@@ -40,6 +42,8 @@ class GeoLoadCommandTest extends TestCase
         $this->artisan('familyhub:geo-load', [
             '--run-id' => $runId,
             '--source' => 'seed',
+            '--level' => 'countries',
+            '--recursive' => true,
         ])->assertSuccessful();
 
         $this->assertDatabaseHas('countries', ['iso_code' => 'IT', 'name' => 'Italia']);
