@@ -471,7 +471,7 @@ export default function PianificazionePage() {
 
   const getEligibility = (staffMemberId?: number | null): StaffShiftEligibility | undefined => {
     if (!staffMemberId || !eligibility) return undefined
-    return eligibility.staff.find((s) => s.staff_member_id === staffMemberId)
+    return (eligibility?.rows ?? []).find((s) => s.staff_member_id === staffMemberId)
   }
 
   const prevWeek = () => setWeekStart((d) => addDays(d, -7))
@@ -646,12 +646,12 @@ export default function PianificazionePage() {
       </Card>
 
       {/* Box idoneità consultivo */}
-      {eligibility && eligibility.staff.some((s) => s.requires_attention) && (
+      {eligibility && (eligibility?.rows ?? []).some((s) => s.requires_attention) && (
         <Alert color='warning' className='py-2 px-3 mb-3 d-flex gap-2 align-items-start' style={{ fontSize: 13 }}>
           <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
           <span>
             <strong>Controllo idoneità personale (consultivo):</strong>{' '}
-            {eligibility.staff.filter((s) => s.requires_attention).length} operatore/i richiedono attenzione.
+            {(eligibility?.rows ?? []).filter((s) => s.requires_attention).length} operatore/i richiedono attenzione.
             Il controllo è consultivo: valuta documenti e certificazioni ma non blocca i turni.
             I badge <span className='badge bg-warning text-dark mx-1' style={{ fontSize: 10 }}>⚠ Attenzione</span> indicano le situazioni da verificare.
           </span>

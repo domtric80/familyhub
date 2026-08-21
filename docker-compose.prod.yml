@@ -107,7 +107,7 @@ services:
       dockerfile: Dockerfile.prod
     restart: unless-stopped
     working_dir: /var/www/html
-    command: ["sh", "-lc", "while true; do php artisan schedule:run --verbose --no-interaction; sleep 60; done"]
+    command: ["sh", "-lc", "sh /var/www/html/docker/app/start-scheduler.sh"]
     env_file:
       - ./infra/env/backend.prod.env.example
     environment:

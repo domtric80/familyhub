@@ -3193,6 +3193,8 @@ export interface StaffShiftEligibility {
   alerts: StaffShiftEligibilityAlert[]
 }
 export interface FacilityShiftEligibility {
-  facility_id: number
-  staff: StaffShiftEligibility[]
+  facility: { id: number; code: string; name: string }
+  evaluated_at: string
+  enforcement: 'advisory'
+  rows: StaffShiftEligibility[]
 }

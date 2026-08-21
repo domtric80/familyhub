@@ -93,7 +93,7 @@ export const MENUITEMS: MenuSection[] = [
           { title: 'Utenti',                 icon: 'user',     type: 'link', path: '/admin/utenti' },
           { title: 'Assegnazioni struttura', icon: 'contact',  type: 'link', path: '/admin/assegnazioni' },
           { title: 'Assegnazioni minori',    icon: 'contact',  type: 'link', path: '/admin/assegnazioni-minori' },
-          { title: 'Audit log',              icon: 'others',   type: 'link', path: '/admin/audit' },
+          { title: 'Audit log',              icon: 'others',   type: 'link', path: '/admin/audit',     permission: 'audit_logs.read' },
           { title: 'KPI Sicurezza',          icon: 'charts',   type: 'link', path: '/admin/audit-kpi' },
           { title: 'Dashboard HR',           icon: 'user',     type: 'link', path: '/admin/hr-dashboard' },
           { title: 'Gestione bacheca',       icon: 'notification', type: 'link', path: '/admin/bacheca' },

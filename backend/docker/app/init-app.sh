@@ -19,7 +19,7 @@ php artisan storage:link || true
 php artisan migrate --force
 php artisan familyhub:ensure-bootstrap --seed-missing-only
 
-if [ "${APP_ENV:-local}" = "local" ] && [ "${FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD:-true}" = "true" ]; then
+if [ "${APP_ENV:-local}" = "local" ] && [ "${FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD:-false}" = "true" ]; then
   php artisan familyhub:reset-admin-access \
     "${FAMILYHUB_LOCAL_ADMIN_EMAIL:-admin@familyhub.local}" \
     --password="${FAMILYHUB_LOCAL_ADMIN_PASSWORD:-password}"

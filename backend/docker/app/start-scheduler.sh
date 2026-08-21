@@ -10,12 +10,9 @@ until pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" >/dev/null 2>&1; 
   sleep 2
 done
 
-if [ ! -f .env ]; then
-  cp .env.example .env
-fi
+until [ -f vendor/autoload.php ]; do
+  echo "Waiting for application dependencies..."
+  sleep 2
+done
 
-if [ ! -f vendor/autoload.php ]; then
-  composer install --no-interaction
-fi
-
-php artisan queue:work --tries=3 --timeout=90
+php artisan schedule:work --verbose --no-interaction

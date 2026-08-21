@@ -16,9 +16,8 @@ class SystemHealthService
     public const SCHEDULER_HEARTBEAT_CACHE_KEY = 'system_health.scheduler.last_seen_at';
 
     public function __construct(
-        private readonly StorageConfigService $storageConfigService = new StorageConfigService(),
-    ) {
-    }
+        private readonly StorageConfigService $storageConfigService = new StorageConfigService,
+    ) {}
 
     public function snapshot(): array
     {
@@ -104,19 +103,19 @@ class SystemHealthService
 
         try {
             $response = Redis::connection()->command('PING');
-            $normalized = strtoupper((string) $response);
+            $isPong = $response === true || strtoupper(trim((string) $response)) === 'PONG';
 
             return $this->result(
                 'redis',
                 'Redis',
-                $normalized === 'PONG' ? 'ok' : 'warning',
-                $normalized === 'PONG' ? 'Redis raggiungibile.' : 'Redis risponde in modo inatteso.',
+                $isPong ? 'ok' : 'warning',
+                $isPong ? 'Redis raggiungibile.' : 'Redis risponde in modo inatteso.',
                 $this->latency($startedAt),
                 null,
                 null,
                 [
                     'client' => (string) config('database.redis.client'),
-                    'response' => (string) $response,
+                    'response' => $isPong ? 'PONG' : (string) $response,
                 ],
             );
         } catch (Throwable $exception) {
@@ -212,11 +211,35 @@ class SystemHealthService
 
     private function antivirusCheck(): array
     {
-        $host = (string) env('ANTIVIRUS_HOST', '');
-        $port = (int) env('ANTIVIRUS_PORT', 0);
+        $driver = (string) config('document_security.scan.driver');
+
+        if ($driver !== 'clamav') {
+            return $this->result(
+                'antivirus',
+                'Antivirus ClamAV',
+                'not_configured',
+                sprintf('Driver antivirus attivo "%s": test ClamAV non applicabile.', $driver),
+                null,
+                null,
+                null,
+                ['driver' => $driver],
+            );
+        }
+
+        $host = (string) config('document_security.scan.host');
+        $port = (int) config('document_security.scan.port');
 
         if ($host === '' || $port <= 0) {
-            return $this->result('antivirus', 'Antivirus ClamAV', 'not_configured', 'Antivirus non configurato.');
+            return $this->result(
+                'antivirus',
+                'Antivirus ClamAV',
+                'warning',
+                'Configurazione ClamAV incompleta.',
+                null,
+                null,
+                null,
+                ['driver' => $driver],
+            );
         }
 
         return $this->socketCheck(

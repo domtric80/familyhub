@@ -27,5 +27,9 @@ class AppServiceProvider extends ServiceProvider
         Queue::before(function (): void {
             app(SystemHealthService::class)->markWorkerHeartbeat();
         });
+
+        Queue::looping(function (): void {
+            app(SystemHealthService::class)->markWorkerHeartbeat();
+        });
     }
 }
