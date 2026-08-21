@@ -4,6 +4,34 @@ Tutte le modifiche rilevanti di FamilyHub vengono tracciate in questo file.
 
 Formato ispirato a Keep a Changelog e Semantic Versioning.
 
+## [1.5.0] - 2026-08-20
+
+### Added
+- introdotto il profilo professionale degli educatori con competenze, lingue, specializzazioni, documenti, certificazioni e requisiti per struttura
+- aggiunte valutazioni periodiche dei professionisti, dashboard HR e verifica consultiva dell'idoneita ai turni
+- introdotta la bacheca di struttura con circolari, destinatari e presa visione tracciata
+- esteso il modulo Attivita con calendario, promemoria personali e media subordinati al consenso documentale
+- aggiunto il workflow Incidenti e segnalazioni con severita, transizioni, analisi ed eventuali notifiche esterne
+- aggiunti i moduli Farmaci e somministrazioni ed Eventi sanitari, visite, esami e accessi in pronto soccorso
+- aggiunta la checklist QA/UAT completa per la release candidate `v1.5.0-RC1`
+
+### Changed
+- aggiornati frontend React, contratti OpenAPI, guide operative e handoff UX per i moduli `188-196`
+- stabilizzato il bootstrap di una nuova installazione PostgreSQL e il relativo ambiente di test
+- rimossi dal repository gli asset Cuba originali non necessari al runtime e non redistribuibili
+
+### Security
+- rafforzata la supply chain GitHub con CI, CodeQL, dependency review, Scorecard, Dependabot, secret scanning e push protection
+- aggiunti controlli RBAC, isolamento per struttura/minore e audit ai nuovi moduli HR, sanitari e operativi
+- mantenuto il fail-closed sui media attivita quando consenso, antivirus o storage non consentono l'operazione
+- audit Composer e npm runtime completati senza vulnerabilita note
+
+### Notes
+- tutte le migrazioni della release sono additive; non eseguire `migrate:fresh`, reset o reseed distruttivi
+- prima del deploy eseguire un backup verificato e poi `php artisan migrate --force`
+- verifiche automatiche locali: 18 test mirati con 202 asserzioni e suite completa con 183 test e 1.558 asserzioni; build Vite e audit dipendenze superati
+- validazione manuale guidata da `docs/qa/2026-08-20-v1.5.0-uat-checklist.md`
+
 ## [1.4.0] - 2026-08-15
 
 ### Added

@@ -5,7 +5,7 @@ import {
   Form, FormGroup, Label, Input, Alert,
   Row, Col, Nav, NavItem, NavLink, TabContent, TabPane,
 } from 'reactstrap'
-import { ChevronLeft, ChevronRight, Plus, Trash2, Info, AlertTriangle, RefreshCw } from 'react-feather'
+import { ChevronLeft, ChevronRight, Plus, Trash2, Info, AlertTriangle, RefreshCw, Repeat } from 'react-feather'
 import { toast } from 'react-toastify'
 import {
   shiftAssignmentsApi, shiftTemplatesApi, staffMemberApi, facilityApi,
@@ -16,6 +16,7 @@ import type {
   StaffShiftAssignmentWrite, ShiftAssignmentStatus, Facility,
   ShiftExceptionsResponse, ShiftExceptionItem, ShiftExceptionSeverity,
   FacilityShiftEligibility, StaffShiftEligibility,
+  StaffShiftAssignment, StaffShiftSubstitution, StaffShiftSubstitutionWrite,
 } from '../../types'
 import InfoDrawer from '../../components/common/InfoDrawer'
 
@@ -24,6 +25,14 @@ const STATUS_LABELS: Record<ShiftAssignmentStatus, string> = {
   confirmed: 'Confermato',
   completed: 'Completato',
   cancelled: 'Annullato',
+}
+
+const REASON_CODE_LABELS: Record<string, string> = {
+  illness:   'Malattia',
+  vacation:  'Ferie',
+  leave:     'Permesso',
+  emergency: 'Emergenza',
+  coverage:  'Copertura',
 }
 
 /** Lunedì della settimana che contiene `date` */
@@ -92,6 +101,7 @@ function ScostamentiPanel({ facilityId }: { facilityId: number }) {
   })
   const [filterSeverity, setFilterSeverity] = useState<string>('')
   const [filterType, setFilterType] = useState<string>('')
+  const [detailItem, setDetailItem] = useState<ShiftExceptionItem | null>(null)
 
   const load = () => {
     if (!facilityId) return
@@ -208,6 +218,7 @@ function ScostamentiPanel({ facilityId }: { facilityId: number }) {
                 <th>Tipo</th>
                 <th>Messaggio</th>
                 <th>Copertura</th>
+                <th style={{ width: 80 }}>Azioni</th>
               </tr>
             </thead>
             <tbody>
@@ -250,12 +261,155 @@ function ScostamentiPanel({ facilityId }: { facilityId: number }) {
                       </div>
                     )}
                   </td>
+                  <td>
+                    {item.assignment ? (
+                      <button
+                        className='btn btn-sm btn-outline-secondary py-0 px-1'
+                        style={{ fontSize: 10 }}
+                        onClick={() => setDetailItem(item)}
+                      >
+                        Dettaglio
+                      </button>
+                    ) : (
+                      <span className='text-muted' style={{ fontSize: 10 }}>—</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      {/* Drawer dettaglio assegnazione (handoff 173 §10) */}
+      <Modal isOpen={!!detailItem} toggle={() => setDetailItem(null)} size='lg'>
+        <ModalHeader toggle={() => setDetailItem(null)}>
+          Dettaglio eccezione
+          {detailItem?.shift_template && (
+            <span className='text-muted fw-normal ms-2' style={{ fontSize: 13 }}>
+              — {detailItem.shift_template.name} {detailItem.shift_date ? `(${new Date(detailItem.shift_date + 'T12:00:00').toLocaleDateString('it-IT')})` : ''}
+            </span>
+          )}
+        </ModalHeader>
+        <ModalBody>
+          {detailItem && (
+            <>
+              {/* Severità e tipo */}
+              <div className='d-flex gap-2 mb-3 align-items-center'>
+                <span className={`badge ${SEVERITY_CLS[detailItem.severity]}`}>
+                  {detailItem.severity === 'critical' ? '🔴' : detailItem.severity === 'warning' ? '🟡' : '🔵'} {detailItem.severity}
+                </span>
+                <span className='badge badge-light-secondary'>{EXCEPTION_TYPE_LABELS[detailItem.type] ?? detailItem.type}</span>
+                <span className='text-muted small'>{detailItem.message}</span>
+              </div>
+
+              {detailItem.assignment ? (
+                <>
+                  {/* Stato operativo */}
+                  {detailItem.assignment.operational && (
+                    <div className='mb-3 p-3 rounded' style={{ background: '#f8f8ff', border: '1px solid #e0e0ff' }}>
+                      <div className='small text-muted mb-1'>Stato operativo</div>
+                      <span className='badge badge-light-primary'>{detailItem.assignment.operational.label ?? detailItem.assignment.operational.state}</span>
+                      {detailItem.assignment.operational.has_open_anomalies && (
+                        <span className='badge badge-light-danger ms-2'>Anomalie aperte</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Operatori */}
+                  <Row className='mb-3'>
+                    <Col md='6'>
+                      <div className='p-2 rounded' style={{ background: '#f4f5f7' }}>
+                        <small className='text-muted d-block'>Operatore pianificato</small>
+                        <span className='fw-semibold'>
+                          {detailItem.assignment.staff_member
+                            ? (detailItem.assignment.staff_member.display_name?.trim() || `${detailItem.assignment.staff_member.last_name} ${detailItem.assignment.staff_member.first_name}`)
+                            : '—'}
+                        </span>
+                      </div>
+                    </Col>
+                    <Col md='6'>
+                      <div className='p-2 rounded' style={{ background: '#f4f5f7' }}>
+                        <small className='text-muted d-block'>Operatore effettivo</small>
+                        <span className='fw-semibold' style={{ color: detailItem.assignment.has_active_substitution ? '#b76e00' : 'inherit' }}>
+                          {detailItem.assignment.effective_staff_member
+                            ? (detailItem.assignment.effective_staff_member.display_name?.trim() || `${detailItem.assignment.effective_staff_member.last_name} ${detailItem.assignment.effective_staff_member.first_name}`)
+                            : detailItem.assignment.staff_member
+                              ? (detailItem.assignment.staff_member.display_name?.trim() || `${detailItem.assignment.staff_member.last_name} ${detailItem.assignment.staff_member.first_name}`)
+                              : '—'}
+                        </span>
+                        {detailItem.assignment.has_active_substitution && (
+                          <span className='badge badge-light-warning ms-1' style={{ fontSize: 10 }}>Sostituzione attiva</span>
+                        )}
+                      </div>
+                    </Col>
+                  </Row>
+
+                  {/* Consuntivo orario */}
+                  {detailItem.assignment.actual && (
+                    <div className='mb-3'>
+                      <div className='fw-semibold mb-1' style={{ fontSize: 13 }}>Consuntivo orario</div>
+                      <Row className='g-2' style={{ fontSize: 12 }}>
+                        <Col sm='6'>
+                          <div className='p-2 rounded' style={{ background: '#f4f5f7' }}>
+                            <div className='text-muted small'>Pianificato</div>
+                            <div>{detailItem.assignment.actual.planned_start ? new Date(detailItem.assignment.actual.planned_start).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '—'} – {detailItem.assignment.actual.planned_end ? new Date(detailItem.assignment.actual.planned_end).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '—'}</div>
+                            <div className='text-muted'>{detailItem.assignment.actual.planned_minutes != null ? `${Math.floor(detailItem.assignment.actual.planned_minutes / 60)}h ${detailItem.assignment.actual.planned_minutes % 60}m` : '—'}</div>
+                          </div>
+                        </Col>
+                        <Col sm='6'>
+                          <div className='p-2 rounded' style={{ background: '#f4f5f7' }}>
+                            <div className='text-muted small'>Effettivo</div>
+                            <div>{detailItem.assignment.actual.actual_start ? new Date(detailItem.assignment.actual.actual_start).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '—'} – {detailItem.assignment.actual.actual_end ? new Date(detailItem.assignment.actual.actual_end).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '—'}</div>
+                            <div className='text-muted'>{detailItem.assignment.actual.worked_minutes != null ? `${Math.floor(detailItem.assignment.actual.worked_minutes / 60)}h ${detailItem.assignment.actual.worked_minutes % 60}m` : '—'}</div>
+                          </div>
+                        </Col>
+                      </Row>
+                    </div>
+                  )}
+
+                  {/* Anomalie */}
+                  {detailItem.assignment.actual?.has_anomaly && (detailItem.assignment.actual.anomaly_flags?.length ?? 0) > 0 && (
+                    <div className='mb-3'>
+                      <div className='fw-semibold mb-1' style={{ fontSize: 13, color: '#c0392b' }}>
+                        <AlertTriangle size={12} className='me-1' /> Anomalie rilevate
+                      </div>
+                      <div className='d-flex flex-wrap gap-1'>
+                        {detailItem.assignment.actual.anomaly_flags!.map((f) => (
+                          <span key={f} className='badge badge-light-danger'>{f}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sostituzione attiva */}
+                  {detailItem.assignment.has_active_substitution && detailItem.assignment.active_substitution && (
+                    <div className='p-3 rounded' style={{ background: '#fff8e1', border: '1px solid #ff9f43' }}>
+                      <div className='fw-semibold mb-1' style={{ fontSize: 13, color: '#b76e00' }}>
+                        <Repeat size={12} className='me-1' /> Sostituzione attiva
+                      </div>
+                      <div style={{ fontSize: 12 }}>
+                        <span className='text-muted'>Motivo:</span>{' '}
+                        {REASON_CODE_LABELS[detailItem.assignment.active_substitution.reason_code] ?? detailItem.assignment.active_substitution.reason_code}
+                        {detailItem.assignment.active_substitution.reason_notes && (
+                          <span className='text-muted ms-1'>— {detailItem.assignment.active_substitution.reason_notes}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className='text-muted small'>
+                  Questo elemento rappresenta un'eccezione di copertura aggregata sul turno. Non è associato a una singola assegnazione.
+                </div>
+              )}
+            </>
+          )}
+        </ModalBody>
+        <ModalFooter>
+          <Button color='secondary' onClick={() => setDetailItem(null)}>Chiudi</Button>
+        </ModalFooter>
+      </Modal>
     </div>
   )
 }
@@ -269,6 +423,17 @@ export default function PianificazionePage() {
   const [loading, setLoading]       = useState(false)
   const [infoOpen, setInfoOpen]     = useState(false)
   const [eligibility, setEligibility] = useState<FacilityShiftEligibility | null>(null)
+
+  // Modal sostituzioni (handoff 171)
+  const [substOpen, setSubstOpen]           = useState(false)
+  const [substAssignment, setSubstAssignment] = useState<StaffShiftAssignment | null>(null)
+  const [substHistory, setSubstHistory]     = useState<StaffShiftSubstitution[]>([])
+  const [substHistLoading, setSubstHistLoading] = useState(false)
+  const [substHistoryError, setSubstHistoryError] = useState<'forbidden' | 'generic' | null>(null)
+  const [showSubstCreate, setShowSubstCreate] = useState(false)
+  const [substForm, setSubstForm]           = useState<StaffShiftSubstitutionWrite>({ replacement_staff_member_id: 0, reason_code: 'illness' })
+  const [substSaving, setSubstSaving]       = useState(false)
+  const [substFormErr, setSubstFormErr]     = useState<string | null>(null)
 
   // Modal nuova assegnazione
   const [modal, setModal]         = useState(false)
@@ -360,6 +525,67 @@ export default function PianificazionePage() {
       loadWeek()
     } catch (e) {
       toast.error(apiError(e).message ?? 'Errore durante l\'eliminazione.')
+    }
+  }
+
+  // ── Sostituzioni (handoff 171) ──
+  const openSubstModal = async (a: StaffShiftAssignment) => {
+    setSubstAssignment(a)
+    setSubstHistory([])
+    setSubstHistoryError(null)
+    setSubstFormErr(null)
+    setShowSubstCreate(false)
+    setSubstForm({ replacement_staff_member_id: 0, reason_code: 'illness' })
+    setSubstOpen(true)
+    setSubstHistLoading(true)
+    // Carica staff se non già caricati
+    if (staffMembers.length === 0) {
+      staffMemberApi.list({ facility_id: facilityId }).then(setStaffMembers).catch(() => {})
+    }
+    try {
+      const history = await shiftAssignmentsApi.substitutions(a.id)
+      setSubstHistory(history)
+    } catch (e) {
+      const ae = apiError(e)
+      setSubstHistoryError(ae.status === 403 ? 'forbidden' : 'generic')
+    } finally {
+      setSubstHistLoading(false)
+    }
+  }
+
+  const handleCreateSubstitution = async () => {
+    if (!substAssignment) return
+    if (!substForm.replacement_staff_member_id) { setSubstFormErr('Seleziona il sostituto.'); return }
+    if (!substForm.reason_code) { setSubstFormErr('Motivo obbligatorio.'); return }
+    setSubstSaving(true); setSubstFormErr(null)
+    try {
+      const payload: StaffShiftSubstitutionWrite = {
+        replacement_staff_member_id: substForm.replacement_staff_member_id,
+        reason_code: substForm.reason_code as StaffShiftSubstitutionWrite['reason_code'],
+        reason_notes: substForm.reason_notes || null,
+        effective_starts_at: substForm.effective_starts_at || null,
+        effective_ends_at: substForm.effective_ends_at || null,
+      }
+      await shiftAssignmentsApi.createSubstitution(substAssignment.id, payload)
+      toast.success('Sostituzione registrata.')
+      setSubstOpen(false)
+      loadWeek()
+    } catch (e) {
+      const ae = apiError(e)
+      if (ae.status === 422) setSubstFormErr(ae.message ?? 'Dati non validi. Verificare sostituto e finestra oraria.')
+      else setSubstFormErr(ae.message ?? 'Errore durante il salvataggio.')
+    } finally { setSubstSaving(false) }
+  }
+
+  const handleCancelSubstitution = async (assignmentId: number, substitutionId: number) => {
+    if (!confirm('Annullare la sostituzione attiva?')) return
+    try {
+      await shiftAssignmentsApi.cancelSubstitution(assignmentId, substitutionId)
+      toast.success('Sostituzione annullata.')
+      setSubstOpen(false)
+      loadWeek()
+    } catch (e) {
+      toast.error(apiError(e).message ?? 'Errore durante l\'annullamento.')
     }
   }
 
@@ -539,13 +765,22 @@ export default function PianificazionePage() {
                                   </span>
                                 )}
                               </div>
-                              <button
-                                onClick={() => handleDelete(a.id)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#e74c3c' }}
-                                title='Rimuovi assegnazione'
-                              >
-                                <Trash2 size={10} />
-                              </button>
+                              <div className='d-flex gap-1 align-items-center'>
+                                <button
+                                  onClick={() => openSubstModal(a)}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: a.has_active_substitution ? '#ff9f43' : '#7366ff' }}
+                                  title='Sostituzioni'
+                                >
+                                  <Repeat size={10} />
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(a.id)}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#e74c3c' }}
+                                  title='Rimuovi assegnazione'
+                                >
+                                  <Trash2 size={10} />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -684,6 +919,176 @@ export default function PianificazionePage() {
             {saving ? 'Salvataggio…' : 'Assegna'}
           </Button>
           <Button color='secondary' onClick={() => setModal(false)}>Annulla</Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* Modal sostituzioni (handoff 171) */}
+      <Modal isOpen={substOpen} toggle={() => setSubstOpen(false)} size='lg'>
+        <ModalHeader toggle={() => setSubstOpen(false)}>
+          Sostituzioni turno
+          {substAssignment?.shift_template && (
+            <span className='text-muted fw-normal ms-2' style={{ fontSize: 13 }}>
+              — {substAssignment.shift_template.name}
+            </span>
+          )}
+        </ModalHeader>
+        <ModalBody>
+          {/* Operatori pianificato / effettivo */}
+          {substAssignment && (
+            <div className='mb-3 p-3 rounded' style={{ background: '#f8f8ff', border: '1px solid #e0e0ff' }}>
+              <Row>
+                <Col md='6'>
+                  <small className='text-muted d-block'>Operatore pianificato</small>
+                  <span className='fw-semibold'>{staffName(substAssignment.staff_member)}</span>
+                </Col>
+                <Col md='6'>
+                  <small className='text-muted d-block'>Operatore effettivo</small>
+                  <span className='fw-semibold' style={{ color: substAssignment.has_active_substitution ? '#b76e00' : 'inherit' }}>
+                    {staffName(substAssignment.effective_staff_member ?? substAssignment.staff_member)}
+                  </span>
+                  {substAssignment.has_active_substitution && (
+                    <span className='badge badge-light-warning ms-2' style={{ fontSize: 10 }}>Sostituzione attiva</span>
+                  )}
+                </Col>
+              </Row>
+            </div>
+          )}
+
+          {/* Storico sostituzioni */}
+          <div className='mb-3'>
+            <div className='fw-semibold mb-2' style={{ fontSize: 13 }}>Storico sostituzioni</div>
+            {substHistLoading ? (
+              <div className='text-muted small'>Caricamento…</div>
+            ) : substHistoryError === 'forbidden' ? (
+              <div className='alert alert-warning py-2 px-3 small mb-0' role='alert'>
+                Non disponi del permesso necessario per consultare lo storico delle sostituzioni.
+              </div>
+            ) : substHistoryError === 'generic' ? (
+              <div className='alert alert-danger py-2 px-3 small mb-0' role='alert'>
+                Impossibile caricare lo storico delle sostituzioni. Riprova oppure contatta l&apos;assistenza.
+              </div>
+            ) : substHistory.length === 0 ? (
+              <div className='text-muted small'>Nessuna sostituzione registrata.</div>
+            ) : (
+              <div className='table-responsive'>
+                <table className='table table-sm table-bordered mb-0' style={{ fontSize: 12 }}>
+                  <thead style={{ background: '#f4f5f7' }}>
+                    <tr>
+                      <th>Motivo</th>
+                      <th>Sostituto</th>
+                      <th>Finestra</th>
+                      <th>Stato</th>
+                      <th>Registrato da</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {substHistory.map((s) => (
+                      <tr key={s.id}>
+                        <td>{REASON_CODE_LABELS[s.reason_code] ?? s.reason_code}{s.reason_notes && <div className='text-muted' style={{ fontSize: 11 }}>{s.reason_notes}</div>}</td>
+                        <td>{staffName(s.replacement_staff_member)}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          {s.effective_starts_at
+                            ? `${new Date(s.effective_starts_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })} – ${s.effective_ends_at ? new Date(s.effective_ends_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '—'}`
+                            : <span className='text-muted'>Automatica (turno)</span>}
+                        </td>
+                        <td>
+                          <span className={`badge ${s.status === 'active' ? 'badge-light-success' : 'badge-light-secondary'}`}>
+                            {s.status === 'active' ? 'Attiva' : 'Annullata'}
+                          </span>
+                        </td>
+                        <td>{s.created_by?.display_name ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <hr className='my-3' />
+
+          {/* Azioni: Annulla sostituzione attiva OPPURE Registra nuova */}
+          {substAssignment?.has_active_substitution && substAssignment.active_substitution ? (
+            <div>
+              <Button
+                color='danger' size='sm'
+                onClick={() => { const sid = substAssignment?.active_substitution?.id; if (substAssignment && sid) handleCancelSubstitution(substAssignment.id, sid) }}
+              >
+                Annulla sostituzione attiva
+              </Button>
+              <small className='text-muted ms-2'>Il turno tornerà all'operatore pianificato.</small>
+            </div>
+          ) : (
+            <>
+              {!showSubstCreate ? (
+                <Button color='primary' size='sm' onClick={() => { setShowSubstCreate(true); setSubstFormErr(null) }}>
+                  <Plus size={13} className='me-1' /> Registra sostituzione
+                </Button>
+              ) : (
+                <div>
+                  <div className='fw-semibold mb-2' style={{ fontSize: 13 }}>Nuova sostituzione</div>
+                  {substFormErr && <Alert color='warning' className='py-2 px-3 mb-2' style={{ fontSize: 12 }}>{substFormErr}</Alert>}
+                  <Form>
+                    <FormGroup>
+                      <Label style={{ fontSize: 12 }}>Operatore sostituto *</Label>
+                      <Input type='select' bsSize='sm'
+                        value={substForm.replacement_staff_member_id}
+                        onChange={(e) => setSubstForm((p) => ({ ...p, replacement_staff_member_id: Number(e.target.value) }))}>
+                        <option value='0'>Seleziona operatore…</option>
+                        {staffMembers
+                          .filter((s) => s.id !== substAssignment?.staff_member?.id)
+                          .map((s) => <option key={s.id} value={s.id}>{staffName(s)}</option>)}
+                      </Input>
+                    </FormGroup>
+                    <FormGroup>
+                      <Label style={{ fontSize: 12 }}>Motivo *</Label>
+                      <Input type='select' bsSize='sm'
+                        value={substForm.reason_code}
+                        onChange={(e) => setSubstForm((p) => ({ ...p, reason_code: e.target.value as StaffShiftSubstitutionWrite['reason_code'] }))}>
+                        {Object.entries(REASON_CODE_LABELS).map(([code, label]) => (
+                          <option key={code} value={code}>{label}</option>
+                        ))}
+                      </Input>
+                    </FormGroup>
+                    <FormGroup>
+                      <Label style={{ fontSize: 12 }}>Note (opzionale)</Label>
+                      <Input type='textarea' bsSize='sm' rows={2}
+                        value={substForm.reason_notes ?? ''}
+                        onChange={(e) => setSubstForm((p) => ({ ...p, reason_notes: e.target.value || null }))} />
+                    </FormGroup>
+                    <Row>
+                      <Col md='6'>
+                        <FormGroup>
+                          <Label style={{ fontSize: 12 }}>Inizio effettivo (opzionale)</Label>
+                          <Input type='datetime-local' bsSize='sm'
+                            value={substForm.effective_starts_at ?? ''}
+                            onChange={(e) => setSubstForm((p) => ({ ...p, effective_starts_at: e.target.value || null }))} />
+                        </FormGroup>
+                      </Col>
+                      <Col md='6'>
+                        <FormGroup>
+                          <Label style={{ fontSize: 12 }}>Fine effettiva (opzionale)</Label>
+                          <Input type='datetime-local' bsSize='sm'
+                            value={substForm.effective_ends_at ?? ''}
+                            onChange={(e) => setSubstForm((p) => ({ ...p, effective_ends_at: e.target.value || null }))} />
+                        </FormGroup>
+                      </Col>
+                    </Row>
+                    <small className='text-muted d-block mb-2'>Se non indicati, il sistema usa automaticamente la finestra oraria del turno.</small>
+                    <div className='d-flex gap-2'>
+                      <Button color='primary' size='sm' onClick={handleCreateSubstitution} disabled={substSaving}>
+                        {substSaving ? 'Salvataggio…' : 'Salva sostituzione'}
+                      </Button>
+                      <Button color='secondary' size='sm' onClick={() => setShowSubstCreate(false)}>Annulla</Button>
+                    </div>
+                  </Form>
+                </div>
+              )}
+            </>
+          )}
+        </ModalBody>
+        <ModalFooter>
+          <Button color='secondary' onClick={() => setSubstOpen(false)}>Chiudi</Button>
         </ModalFooter>
       </Modal>
 
