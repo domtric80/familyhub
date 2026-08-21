@@ -19,6 +19,13 @@ Formato ispirato a Keep a Changelog e Semantic Versioning.
 - aggiornati frontend React, contratti OpenAPI, guide operative e handoff UX per i moduli `188-196`
 - stabilizzato il bootstrap di una nuova installazione PostgreSQL e il relativo ambiente di test
 - rimossi dal repository gli asset Cuba originali non necessari al runtime e non redistribuibili
+- separati i processi applicazione, worker e scheduler nel runtime Docker senza migrazioni o reset credenziali al riavvio dei processi asincroni
+
+### Fixed
+- corretto il controllo Health di Redis con PhpRedis e reso affidabile l'heartbeat dei worker anche quando la coda è inattiva
+- allineato il controllo ClamAV alla configurazione Laravel compatibile con config cache
+- corretto il contratto frontend della pianificazione turni da `eligibility.staff` a `eligibility.rows`
+- nascosto Audit senza `audit_logs.read` e gestito esplicitamente il `403` sugli accessi diretti
 
 ### Security
 - rafforzata la supply chain GitHub con CI, CodeQL, dependency review, Scorecard, Dependabot, secret scanning e push protection
@@ -29,8 +36,8 @@ Formato ispirato a Keep a Changelog e Semantic Versioning.
 ### Notes
 - tutte le migrazioni della release sono additive; non eseguire `migrate:fresh`, reset o reseed distruttivi
 - prima del deploy eseguire un backup verificato e poi `php artisan migrate --force`
-- verifiche automatiche locali: 18 test mirati con 202 asserzioni e suite completa con 183 test e 1.558 asserzioni; build Vite e audit dipendenze superati
-- validazione manuale guidata da `docs/qa/2026-08-20-v1.5.0-uat-checklist.md`
+- verifiche automatiche locali: suite completa con 185 test e 1.564 asserzioni; build Vite e audit dipendenze superati
+- validazione manuale completata e verbalizzata in `docs/qa/2026-08-21-v1.5.0-uat-execution.md`
 
 ## [1.4.0] - 2026-08-15
 

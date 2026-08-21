@@ -59,7 +59,7 @@ services:
       APP_FALLBACK_LOCALE: it
       SANCTUM_STATEFUL_DOMAINS: localhost:8100,127.0.0.1:8100,localhost,127.0.0.1
       AUTH_TOKEN_TTL_MINUTES: "480"
-      FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD: "${FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD:-true}"
+      FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD: "${FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD:-false}"
       FAMILYHUB_LOCAL_ADMIN_EMAIL: "${FAMILYHUB_LOCAL_ADMIN_EMAIL:-admin@familyhub.local}"
       FAMILYHUB_LOCAL_ADMIN_PASSWORD: "${FAMILYHUB_LOCAL_ADMIN_PASSWORD:-password}"
       DB_CONNECTION: pgsql
@@ -117,7 +117,7 @@ services:
       APP_DEBUG: "${APP_DEBUG:-true}"
       APP_URL: ${APP_URL:-http://localhost:8100}
       APP_KEY: ${APP_KEY}
-      FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD: "${FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD:-true}"
+      FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD: "${FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD:-false}"
       FAMILYHUB_LOCAL_ADMIN_EMAIL: "${FAMILYHUB_LOCAL_ADMIN_EMAIL:-admin@familyhub.local}"
       FAMILYHUB_LOCAL_ADMIN_PASSWORD: "${FAMILYHUB_LOCAL_ADMIN_PASSWORD:-password}"
       DB_CONNECTION: pgsql
@@ -156,6 +156,13 @@ services:
     volumes:
       - ./backend:/var/www/html
 
+  scheduler:
+    extends:
+      service: worker
+    command: ["sh", "-lc", "sh /var/www/html/docker/app/start-scheduler.sh"]
+    depends_on:
+      - app
+
   app-init:
     build:
       context: ./backend
@@ -173,7 +180,7 @@ services:
       APP_FALLBACK_LOCALE: it
       SANCTUM_STATEFUL_DOMAINS: localhost:8100,127.0.0.1:8100,localhost,127.0.0.1
       AUTH_TOKEN_TTL_MINUTES: "480"
-      FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD: "${FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD:-true}"
+      FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD: "${FAMILYHUB_ENSURE_LOCAL_ADMIN_PASSWORD:-false}"
       FAMILYHUB_LOCAL_ADMIN_EMAIL: "${FAMILYHUB_LOCAL_ADMIN_EMAIL:-admin@familyhub.local}"
       FAMILYHUB_LOCAL_ADMIN_PASSWORD: "${FAMILYHUB_LOCAL_ADMIN_PASSWORD:-password}"
       DB_CONNECTION: pgsql

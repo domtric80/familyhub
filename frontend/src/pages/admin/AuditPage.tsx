@@ -16,6 +16,7 @@ export default function AuditPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [apiMissing, setApiMissing] = useState(false)
+  const [forbidden, setForbidden] = useState(false)
   const [filters, setFilters] = useState<AuditLogFilters | null>(null)
   const [facilities, setFacilities] = useState<Facility[]>([])
   const [users, setUsers] = useState<AdminUser[]>([])
@@ -53,7 +54,8 @@ export default function AuditPage() {
       })
       .catch((e) => {
         const err = apiError(e)
-        if (err.status === 404) setApiMissing(true)
+        if (err.status === 403) setForbidden(true)
+        else if (err.status === 404) setApiMissing(true)
       })
   }, [])
 
@@ -100,7 +102,9 @@ export default function AuditPage() {
       })
       .catch((e) => {
         const err = apiError(e)
-        if (err.status === 404) {
+        if (err.status === 403) {
+          setForbidden(true)
+        } else if (err.status === 404) {
           setApiMissing(true)
         } else {
           setError(err.message ?? 'Errore caricamento audit log')
@@ -187,13 +191,20 @@ export default function AuditPage() {
         </button>
       </div>
 
+      {forbidden && (
+        <div className='alert alert-danger mb-4' role='alert'>
+          <strong>Permesso insufficiente:</strong> audit_logs.read — Non disponi del permesso necessario per consultare l&apos;audit log. Contatta un amministratore.
+        </div>
+      )}
+
       {apiMissing && (
         <div className='alert alert-warning mb-4'>
           Il modulo Audit non è ancora disponibile sul backend. La pagina sarà operativa non appena l'API sarà attiva.
         </div>
       )}
 
-      {/* Filters Card */}
+      {/* Filters + Table: nascosti se 403 */}
+      {!forbidden && <>
       <Card className='mb-4'>
         <CardHeader className='d-flex align-items-center justify-content-between'>
           <h6 className='mb-0'>Filtri</h6>
@@ -391,6 +402,7 @@ export default function AuditPage() {
           </Button>
         </div>
       )}
+      </>}
 
       {/* Detail Modal */}
       <Modal isOpen={detailLog !== null} toggle={() => { setDetailLog(null); setDetailFresh(null) }} size='lg'>
