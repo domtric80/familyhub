@@ -51,6 +51,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Validate version format
         shell: bash
@@ -134,7 +135,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker compose run --rm frontend sh -lc "npm install && npm run build"
+          docker compose run --rm frontend sh -lc "npm ci && npm run build"
 
       - name: Run backend audit
         shell: bash
@@ -148,14 +149,21 @@ jobs:
           set -euo pipefail
           docker compose run --rm frontend sh -lc "npm audit --omit=dev --json"
 
-      - name: Create and push tag
+      - name: Create annotated tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "v$VERSION" -m "FamilyHub v$VERSION"
-          git push origin "v$VERSION"
+          TAG_SHA="$(gh api --method POST "repos/$GITHUB_REPOSITORY/git/tags" \
+            -f tag="v$VERSION" \
+            -f message="FamilyHub v$VERSION" \
+            -f object="$GITHUB_SHA" \
+            -f type=commit \
+            --jq .sha)"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f ref="refs/tags/v$VERSION" \
+            -f sha="$TAG_SHA" >/dev/null
 
       - name: Create draft release
         if: ${{ inputs.publish == false }}
