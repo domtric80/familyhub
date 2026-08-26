@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, type KeyboardEvent } from 'react'
 import { Bold, Italic, Underline, List, Link, AlignLeft, AlignCenter, AlignRight, RotateCcw, RotateCw } from 'react-feather'
+import { sanitizeRichText } from '../../utils/sanitize'
 
 interface Props {
   value: string          // HTML string
@@ -10,16 +11,9 @@ interface Props {
   onCtrlEnter?: () => void
 }
 
-// Sanitizzazione minima: rimuove script e handler inline
-function sanitize(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/\son\w+="[^"]*"/gi, '')
-}
-
 export function richToPlain(html: string): string {
   const div = document.createElement('div')
-  div.innerHTML = html
+  div.innerHTML = sanitizeRichText(html)
   return div.textContent ?? ''
 }
 
@@ -32,7 +26,7 @@ export default function RichTextEditor({
   // Imposta contenuto iniziale al mount soltanto
   useEffect(() => {
     if (editorRef.current && value) {
-      editorRef.current.innerHTML = sanitize(value)
+      editorRef.current.innerHTML = sanitizeRichText(value)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -52,7 +46,7 @@ export default function RichTextEditor({
   const handleInput = useCallback(() => {
     if (!editorRef.current) return
     isInternalChange.current = true
-    onChange(sanitize(editorRef.current.innerHTML))
+    onChange(sanitizeRichText(editorRef.current.innerHTML))
   }, [onChange])
 
   const exec = useCallback((command: string, arg?: string) => {

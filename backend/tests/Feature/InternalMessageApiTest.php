@@ -8,6 +8,7 @@ use App\Models\InternalMessageThread;
 use App\Models\InternalMessageThreadParticipant;
 use App\Models\Minor;
 use App\Models\MinorStatus;
+use App\Models\MinorUserAssignment;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\UserFacilityRole;
@@ -16,6 +17,7 @@ use App\Services\MinorAccessService;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\RbacSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -36,14 +38,14 @@ class InternalMessageApiTest extends TestCase
         Sanctum::actingAs($coordinatorUser, ['*']);
 
         $response = $this->postJson('/api/internal-messages/threads', [
-                'facility_id' => $facility->id,
-                'thread_type' => 'facility',
-                'subject' => 'Consegne pomeriggio',
-                'topic' => 'Allineamento rapido del team',
-                'classification_code' => 'internal',
-                'participant_user_ids' => [$otherUser->id],
-                'message_body' => 'Messaggio interno riservato.',
-            ])
+            'facility_id' => $facility->id,
+            'thread_type' => 'facility',
+            'subject' => 'Consegne pomeriggio',
+            'topic' => 'Allineamento rapido del team',
+            'classification_code' => 'internal',
+            'participant_user_ids' => [$otherUser->id],
+            'message_body' => 'Messaggio interno riservato.',
+        ])
             ->assertCreated()
             ->assertJsonPath('subject', 'Consegne pomeriggio')
             ->assertJsonPath('classification_code', 'internal')
@@ -53,6 +55,47 @@ class InternalMessageApiTest extends TestCase
         $storedMessage = InternalMessageMessage::query()->where('thread_id', $threadId)->firstOrFail();
 
         $this->assertNotSame('Messaggio interno riservato.', $storedMessage->getRawOriginal('body_encrypted'));
+    }
+
+    public function test_it_sanitizes_new_and_historical_rich_text_messages(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+        $this->seed(RbacSeeder::class);
+
+        $facility = Facility::query()->firstOrFail();
+        $coordinatorUser = $this->createFacilityUser('coord.xss@familyhub.local', 'COORDINATORE', $facility->id);
+        $otherUser = $this->createFacilityUser('edu.xss@familyhub.local', 'EDUCATORE', $facility->id);
+
+        Sanctum::actingAs($coordinatorUser, ['*']);
+
+        $threadResponse = $this->postJson('/api/internal-messages/threads', [
+            'facility_id' => $facility->id,
+            'thread_type' => 'facility',
+            'subject' => 'Verifica contenuto sicuro',
+            'classification_code' => 'internal',
+            'participant_user_ids' => [$otherUser->id],
+            'message_body' => '<p onclick="alert(1)">Messaggio <strong>valido</strong></p><script>alert(2)</script>',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('messages.0.body', '<p>Messaggio <strong>valido</strong></p>');
+
+        $threadId = (int) $threadResponse->json('id');
+        $storedMessage = InternalMessageMessage::query()->where('thread_id', $threadId)->firstOrFail();
+
+        $this->assertSame(
+            '<p>Messaggio <strong>valido</strong></p>',
+            Crypt::decryptString($storedMessage->getRawOriginal('body_encrypted'))
+        );
+
+        InternalMessageMessage::query()->create([
+            'thread_id' => $threadId,
+            'sender_user_id' => $coordinatorUser->id,
+            'body_encrypted' => Crypt::encryptString('<p>Storico</p><svg><script>alert(3)</script></svg>'),
+        ]);
+
+        $this->getJson('/api/internal-messages/threads/'.$threadId)
+            ->assertOk()
+            ->assertJsonPath('messages.1.body', '<p>Storico</p>');
     }
 
     public function test_minor_scoped_thread_requires_active_minor_assignment_for_access(): void
@@ -74,7 +117,7 @@ class InternalMessageApiTest extends TestCase
         $coordUser = $this->createFacilityUser('coord.minor@familyhub.local', 'COORDINATORE', $facility->id);
         $educatorUser = $this->createFacilityUser('edu.minor@familyhub.local', 'EDUCATORE', $facility->id);
 
-        \App\Models\MinorUserAssignment::query()->create([
+        MinorUserAssignment::query()->create([
             'minor_id' => $minor->id,
             'user_id' => $coordUser->id,
             'facility_id' => $facility->id,
@@ -83,7 +126,7 @@ class InternalMessageApiTest extends TestCase
             'assigned_by_user_id' => User::query()->where('email', 'admin@familyhub.local')->firstOrFail()->id,
         ]);
 
-        $educatorAssignment = \App\Models\MinorUserAssignment::query()->create([
+        $educatorAssignment = MinorUserAssignment::query()->create([
             'minor_id' => $minor->id,
             'user_id' => $educatorUser->id,
             'facility_id' => $facility->id,
@@ -95,14 +138,14 @@ class InternalMessageApiTest extends TestCase
         Sanctum::actingAs($coordUser, ['*']);
 
         $thread = $this->postJson('/api/internal-messages/threads', [
-                'facility_id' => $facility->id,
-                'minor_id' => $minor->id,
-                'thread_type' => 'minor',
-                'subject' => 'Caso minore - confronto team',
-                'classification_code' => 'internal',
-                'participant_user_ids' => [$educatorUser->id],
-                'message_body' => 'Confronto riservato sul caso.',
-            ])
+            'facility_id' => $facility->id,
+            'minor_id' => $minor->id,
+            'thread_type' => 'minor',
+            'subject' => 'Caso minore - confronto team',
+            'classification_code' => 'internal',
+            'participant_user_ids' => [$educatorUser->id],
+            'message_body' => 'Confronto riservato sul caso.',
+        ])
             ->assertCreated();
 
         $threadId = $thread->json('id');
@@ -141,13 +184,13 @@ class InternalMessageApiTest extends TestCase
         Sanctum::actingAs($coordinatorUser, ['*']);
 
         $thread = $this->postJson('/api/internal-messages/threads', [
-                'facility_id' => $facility->id,
-                'thread_type' => 'facility',
-                'subject' => 'Turno sera',
-                'classification_code' => 'internal',
-                'participant_user_ids' => [$educatorUser->id],
-                'message_body' => 'Ricordati la consegna finale.',
-            ])
+            'facility_id' => $facility->id,
+            'thread_type' => 'facility',
+            'subject' => 'Turno sera',
+            'classification_code' => 'internal',
+            'participant_user_ids' => [$educatorUser->id],
+            'message_body' => 'Ricordati la consegna finale.',
+        ])
             ->assertCreated();
 
         $threadId = $thread->json('id');
@@ -155,8 +198,8 @@ class InternalMessageApiTest extends TestCase
         Sanctum::actingAs($educatorUser, ['*']);
 
         $this->postJson('/api/internal-messages/threads/'.$threadId.'/messages', [
-                'body' => 'Ricevuto, aggiorno il diario prima di uscire.',
-            ])
+            'body' => 'Ricevuto, aggiorno il diario prima di uscire.',
+        ])
             ->assertCreated()
             ->assertJsonPath('body', 'Ricevuto, aggiorno il diario prima di uscire.');
 
@@ -185,7 +228,7 @@ class InternalMessageApiTest extends TestCase
         $educatorAssigned = $this->createFacilityUser('edu.assigned@familyhub.local', 'EDUCATORE', $facility->id);
         $educatorUnassigned = $this->createFacilityUser('edu.unassigned@familyhub.local', 'EDUCATORE', $facility->id);
 
-        \App\Models\MinorUserAssignment::query()->create([
+        MinorUserAssignment::query()->create([
             'minor_id' => $minor->id,
             'user_id' => $coordinatorUser->id,
             'facility_id' => $facility->id,
@@ -194,7 +237,7 @@ class InternalMessageApiTest extends TestCase
             'assigned_by_user_id' => User::query()->where('email', 'admin@familyhub.local')->firstOrFail()->id,
         ]);
 
-        \App\Models\MinorUserAssignment::query()->create([
+        MinorUserAssignment::query()->create([
             'minor_id' => $minor->id,
             'user_id' => $educatorAssigned->id,
             'facility_id' => $facility->id,
@@ -250,7 +293,7 @@ class InternalMessageApiTest extends TestCase
         $educatorUser = $this->createFacilityUser('edu.options2@familyhub.local', 'EDUCATORE', $facility->id);
 
         foreach ([$pediatricianUser, $psychologistUser, $educatorUser] as $assignedUser) {
-            \App\Models\MinorUserAssignment::query()->create([
+            MinorUserAssignment::query()->create([
                 'minor_id' => $minor->id,
                 'user_id' => $assignedUser->id,
                 'facility_id' => $facility->id,
@@ -291,7 +334,7 @@ class InternalMessageApiTest extends TestCase
         $coordUser = $this->createFacilityUser('coord.minor2@familyhub.local', 'COORDINATORE', $facility->id);
         $educatorUser = $this->createFacilityUser('edu.minor2@familyhub.local', 'EDUCATORE', $facility->id);
 
-        \App\Models\MinorUserAssignment::query()->create([
+        MinorUserAssignment::query()->create([
             'minor_id' => $minor->id,
             'user_id' => $coordUser->id,
             'facility_id' => $facility->id,
@@ -335,7 +378,7 @@ class InternalMessageApiTest extends TestCase
         $educatorUser = $this->createFacilityUser('edu.thread@familyhub.local', 'EDUCATORE', $facility->id);
 
         foreach ([$psychologistUser, $educatorUser] as $assignedUser) {
-            \App\Models\MinorUserAssignment::query()->create([
+            MinorUserAssignment::query()->create([
                 'minor_id' => $minor->id,
                 'user_id' => $assignedUser->id,
                 'facility_id' => $facility->id,
@@ -380,7 +423,7 @@ class InternalMessageApiTest extends TestCase
         $educatorUser = $this->createFacilityUser('edu.read@familyhub.local', 'EDUCATORE', $facility->id);
 
         foreach ([$pediatricianUser, $educatorUser] as $assignedUser) {
-            \App\Models\MinorUserAssignment::query()->create([
+            MinorUserAssignment::query()->create([
                 'minor_id' => $minor->id,
                 'user_id' => $assignedUser->id,
                 'facility_id' => $facility->id,

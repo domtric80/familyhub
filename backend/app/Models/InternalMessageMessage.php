@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\SafeRichTextSanitizer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Crypt;
@@ -38,6 +39,8 @@ class InternalMessageMessage extends Model
             return null;
         }
 
-        return Crypt::decryptString($this->body_encrypted);
+        return app(SafeRichTextSanitizer::class)->sanitize(
+            Crypt::decryptString($this->body_encrypted)
+        );
     }
 }
