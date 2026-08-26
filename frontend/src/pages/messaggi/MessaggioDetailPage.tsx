@@ -7,6 +7,7 @@ import {
 import { Home, ArrowLeft, Send, Users, MessageSquare, CheckCircle } from 'react-feather'
 import { toast } from 'react-toastify'
 import { internalMessageApi, apiError } from '../../services/api'
+import { sanitizeRichText } from '../../utils/sanitize'
 import type { InternalMessageThread, InternalMessage, MessageParticipant } from '../../types'
 import { useAuth } from '../../contexts/AuthContext'
 import { useUnreadMessages } from '../../contexts/UnreadMessagesContext'
@@ -65,7 +66,7 @@ function MessageBubble({
         <div
           className={`rounded p-3 ${isOwn ? 'bg-primary text-white msg-own-bubble' : 'bg-light text-dark'}`}
           style={{ fontSize: 14, lineHeight: 1.5 }}
-          dangerouslySetInnerHTML={{ __html: msg.body }}
+          dangerouslySetInnerHTML={{ __html: sanitizeRichText(msg.body) }}
         />
         <div
           className={`small text-muted mt-1 ${isOwn ? 'text-end' : ''}`}

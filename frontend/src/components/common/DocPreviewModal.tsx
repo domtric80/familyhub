@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Modal, ModalHeader, ModalBody, ModalFooter, Button, Alert } from 'reactstrap'
 import { Download, X } from 'react-feather'
 import type { SpreadsheetPreviewPayload } from '../../types'
+import { sanitizeRichText } from '../../utils/sanitize'
 
 export interface DocPreviewProps {
   isOpen: boolean
@@ -263,7 +264,7 @@ export default function DocPreviewModal({
           <div
             className='p-3'
             style={{ maxHeight: '75vh', overflow: 'auto', fontSize: 13 }}
-            dangerouslySetInnerHTML={{ __html: htmlContent }}
+            dangerouslySetInnerHTML={{ __html: sanitizeRichText(htmlContent) }}
           />
         )}
 

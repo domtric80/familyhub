@@ -14,6 +14,7 @@ use App\Models\UserFacilityRole;
 use App\Services\AuditLogService;
 use App\Services\InternalMessageAccessService;
 use App\Services\MinorAccessService;
+use App\Services\SafeRichTextSanitizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
@@ -22,11 +23,11 @@ use Illuminate\Support\Facades\DB;
 class InternalMessageController extends Controller
 {
     public function __construct(
-        private readonly AuditLogService $auditLogService = new AuditLogService(),
-        private readonly InternalMessageAccessService $internalMessageAccessService = new InternalMessageAccessService(),
-        private readonly MinorAccessService $minorAccessService = new MinorAccessService(),
-    ) {
-    }
+        private readonly AuditLogService $auditLogService = new AuditLogService,
+        private readonly InternalMessageAccessService $internalMessageAccessService = new InternalMessageAccessService,
+        private readonly SafeRichTextSanitizer $safeRichTextSanitizer = new SafeRichTextSanitizer,
+        private readonly MinorAccessService $minorAccessService = new MinorAccessService,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -147,7 +148,7 @@ class InternalMessageController extends Controller
 
                 return [
                     'id' => $candidate->id,
-                    'display_name' => trim(($candidate->last_name ?? '') . ' ' . ($candidate->first_name ?? '')),
+                    'display_name' => trim(($candidate->last_name ?? '').' '.($candidate->first_name ?? '')),
                     'first_name' => $candidate->first_name,
                     'last_name' => $candidate->last_name,
                     'email' => $candidate->email,
@@ -202,7 +203,9 @@ class InternalMessageController extends Controller
             InternalMessageMessage::query()->create([
                 'thread_id' => $thread->id,
                 'sender_user_id' => $request->user()?->id,
-                'body_encrypted' => Crypt::encryptString((string) $request->input('message_body')),
+                'body_encrypted' => Crypt::encryptString(
+                    (string) $this->safeRichTextSanitizer->sanitize((string) $request->input('message_body'))
+                ),
             ]);
 
             return $thread;
@@ -269,7 +272,9 @@ class InternalMessageController extends Controller
             $message = InternalMessageMessage::query()->create([
                 'thread_id' => $thread->id,
                 'sender_user_id' => $request->user()?->id,
-                'body_encrypted' => Crypt::encryptString((string) $request->input('body')),
+                'body_encrypted' => Crypt::encryptString(
+                    (string) $this->safeRichTextSanitizer->sanitize((string) $request->input('body'))
+                ),
             ]);
 
             $thread->update([
