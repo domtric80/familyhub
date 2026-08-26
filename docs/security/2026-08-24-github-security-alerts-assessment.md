@@ -51,3 +51,9 @@ I tre alert CodeQL frontend restano correttamente aperti fino alla nuova analisi
 - introdurre CODEOWNERS solo dopo aver definito almeno un revisore indipendente;
 - ridurre il bypass permanente del ruleset senza compromettere il recupero di emergenza;
 - rivalutare gli alert Scorecard dopo la successiva scansione pianificata.
+
+## Governance delle modifiche
+
+Dal 26 agosto 2026 `@tuxlbit` è CODEOWNER globale con ruolo Write. Il ruleset di `master` richiede almeno una approvazione del CODEOWNER, oltre alla risoluzione delle conversazioni e al superamento dei controlli CI, CodeQL, Dependency Review e Semgrep.
+
+Il bypass amministrativo resta temporaneamente disponibile come recupero di emergenza fino alla validazione completa del nuovo flusso tramite pull request dedicata.
