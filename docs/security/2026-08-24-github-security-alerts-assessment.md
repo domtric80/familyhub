@@ -57,3 +57,5 @@ I tre alert CodeQL frontend restano correttamente aperti fino alla nuova analisi
 Dal 26 agosto 2026 `@tuxlbit` è CODEOWNER globale con ruolo Write. Il ruleset di `master` richiede almeno una approvazione del CODEOWNER, oltre alla risoluzione delle conversazioni e al superamento dei controlli CI, CodeQL, Dependency Review e Semgrep.
 
 Il bypass amministrativo resta temporaneamente disponibile come recupero di emergenza fino alla validazione completa del nuovo flusso tramite pull request dedicata.
+
+I commit e i tag prodotti dalla postazione di sviluppo FamilyHub vengono firmati con una chiave SSH dedicata registrata su GitHub. La chiave di firma è separata dalle credenziali SSH usate per amministrare server e ambienti di produzione.
