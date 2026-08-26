@@ -4,6 +4,32 @@ Tutte le modifiche rilevanti di FamilyHub vengono tracciate in questo file.
 
 Formato ispirato a Keep a Changelog e Semantic Versioning.
 
+## [1.5.1] - 2026-08-26
+
+### Changed
+- sostituita la sanitizzazione HTML frontend basata su espressioni regolari con un helper DOMPurify centralizzato e una allowlist condivisa
+- aggiunti CodeQL per GitHub Actions e Semgrep PHP/TypeScript ai controlli obbligatori della pull request
+- introdotto `@tuxlbit` come CODEOWNER globale con approvazione indipendente obbligatoria
+- abilitate firme SSH verificate per commit e tag prodotti dalla postazione di sviluppo FamilyHub
+
+### Fixed
+- corretti i tre alert CodeQL stored XSS nell'editor rich text, nella messaggistica interna e nella preview DOCX
+- aggiunta sanitizzazione backend dei messaggi sia prima della cifratura sia in lettura, inclusi i dati storici
+- allineato il nome del check Dependency Review al ruleset di protezione di `master`
+- eliminati i rilievi Scorecard sui permessi eccessivi dei token CodeQL
+
+### Security
+- rimossi tutti i bypass amministrativi permanenti dal ruleset di `master`
+- resi obbligatori firma valida, review CODEOWNER, approvazione dell'ultimo push, risoluzione delle conversazioni e controlli CI/SAST
+- aggiunti test con payload script, event handler, URI JavaScript, SVG e MathML
+- audit npm runtime completato senza vulnerabilità note; CodeQL e Semgrep completati con esito positivo
+
+### Notes
+- release senza migrazioni database e senza modifiche distruttive ai dati
+- dopo l'aggiornamento ricostruire le immagini applicazione e frontend per includere DOMPurify e il sanitizzatore backend
+- verifiche mirate: 8 test unitari del sanitizzatore con 26 asserzioni e 10 test API messaggistica con 82 asserzioni
+- tutti i controlli GitHub della pull request di sicurezza sono risultati verdi
+
 ## [1.5.0] - 2026-08-20
 
 ### Added
