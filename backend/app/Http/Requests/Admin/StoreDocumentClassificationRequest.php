@@ -24,6 +24,8 @@ class StoreDocumentClassificationRequest extends FormRequest
             'description' => ['nullable', 'string'],
             'allowed_role_codes' => ['nullable', 'array'],
             'allowed_role_codes.*' => ['string', Rule::in($roleCodes)],
+            'allowed_download_role_codes' => ['nullable', 'array'],
+            'allowed_download_role_codes.*' => ['string', Rule::in($roleCodes)],
             'is_active' => ['nullable', 'boolean'],
         ];
     }
