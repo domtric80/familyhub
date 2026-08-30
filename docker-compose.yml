@@ -2,6 +2,8 @@ name: familyhub
 
 services:
   safeline:
+    # Placeholder legacy: use the official SafeLine compose bundle in production.
+    # The chaitin/safeline:latest image is not resolvable from Docker Hub.
     image: chaitin/safeline:latest
     profiles: ["edge"]
     restart: unless-stopped
@@ -16,7 +18,7 @@ services:
       - safeline_data:/data
 
   nginx:
-    image: nginx:1.27-alpine
+    image: nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
     restart: unless-stopped
     depends_on:
       - frontend
@@ -223,7 +225,7 @@ services:
       - ./backend:/var/www/html
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_DATABASE:-familyhub}
@@ -237,7 +239,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--save", "60", "1000"]
     expose:
@@ -248,7 +250,7 @@ services:
       - redis_data:/data
 
   minio:
-    image: minio/minio:latest
+    image: minio/minio:latest@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -263,7 +265,7 @@ services:
       - minio_data:/data
 
   clamav:
-    image: clamav/clamav:stable
+    image: clamav/clamav:stable@sha256:0e85467cb0d6e7d860a45035707741cd5ffc032ffefc6002a3510c75b6d07027
     restart: unless-stopped
     expose:
       - "3310"
@@ -273,7 +275,7 @@ services:
       - clamav_data:/var/lib/clamav
 
   mc:
-    image: minio/mc:latest
+    image: minio/mc:latest@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
     restart: "no"
     depends_on:
       - minio

@@ -9,6 +9,7 @@ storage\framework\sessions\*
 storage\framework\testing\*
 storage\framework\views\*
 storage\logs\*
+public\storage
 bootstrap\cache\*.phpunit.result.cache
 coverage
 npm-debug.log
