@@ -12,6 +12,7 @@ const EMPTY_FORM: DocumentClassificationWrite = {
   name: '',
   description: '',
   allowed_role_codes: [],
+  allowed_download_role_codes: [],
   is_active: true,
 }
 
@@ -63,7 +64,8 @@ export default function ClassificazioniPage() {
       code: item.code,
       name: item.name,
       description: item.description ?? '',
-      allowed_role_codes: item.allowed_roles ?? [],
+      allowed_role_codes: item.allowed_role_codes ?? item.allowed_roles ?? [],
+      allowed_download_role_codes: item.allowed_download_role_codes ?? item.allowed_download_roles ?? [],
       is_active: item.is_active ?? true,
     })
     setFieldErrors({})
@@ -77,6 +79,21 @@ export default function ClassificazioniPage() {
       allowed_role_codes: checked
         ? Array.from(new Set([...(prev.allowed_role_codes ?? []), roleCode]))
         : (prev.allowed_role_codes ?? []).filter((code) => code !== roleCode),
+      allowed_download_role_codes: checked
+        ? (prev.allowed_download_role_codes ?? [])
+        : (prev.allowed_download_role_codes ?? []).filter((code) => code !== roleCode),
+    }))
+  }
+
+  const handleDownloadRoleToggle = (roleCode: string, checked: boolean) => {
+    setForm((prev) => ({
+      ...prev,
+      allowed_role_codes: checked
+        ? Array.from(new Set([...(prev.allowed_role_codes ?? []), roleCode]))
+        : (prev.allowed_role_codes ?? []),
+      allowed_download_role_codes: checked
+        ? Array.from(new Set([...(prev.allowed_download_role_codes ?? []), roleCode]))
+        : (prev.allowed_download_role_codes ?? []).filter((code) => code !== roleCode),
     }))
   }
 
@@ -195,13 +212,14 @@ export default function ClassificazioniPage() {
                       <th>Nome</th>
                       <th>Descrizione</th>
                       <th>Ruoli ammessi</th>
+                      <th>Ruoli download</th>
                       <th>Stato</th>
                       <th>Azioni</th>
                     </tr>
                   </thead>
                   <tbody>
                     {items.length === 0 ? (
-                      <tr><td colSpan={6} className='text-center text-muted'>Nessuna classificazione.</td></tr>
+                      <tr><td colSpan={7} className='text-center text-muted'>Nessuna classificazione.</td></tr>
                     ) : items.map((item) => (
                       <tr key={item.id ?? item.code}>
                         <td><Badge color='light' className='text-primary f-w-600'>{item.code}</Badge></td>
@@ -209,7 +227,14 @@ export default function ClassificazioniPage() {
                         <td className='text-muted f-13'>{item.description ?? '—'}</td>
                         <td>
                           <div className='d-flex flex-wrap gap-1'>
-                            {(item.allowed_roles ?? []).map((roleCode) => (
+                            {(item.allowed_role_codes ?? item.allowed_roles ?? []).map((roleCode) => (
+                              <span key={roleCode} className='badge badge-light-secondary'>{roleCode}</span>
+                            ))}
+                          </div>
+                        </td>
+                        <td>
+                          <div className='d-flex flex-wrap gap-1'>
+                            {(item.allowed_download_role_codes ?? item.allowed_download_roles ?? []).map((roleCode) => (
                               <span key={roleCode} className='badge badge-light-secondary'>{roleCode}</span>
                             ))}
                           </div>
@@ -252,7 +277,7 @@ export default function ClassificazioniPage() {
             <Input type='textarea' rows={2} value={form.description ?? ''} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} />
           </FormGroup>
           <FormGroup>
-            <Label>Ruoli ammessi</Label>
+            <Label>Ruoli ammessi in lettura</Label>
             <div className='d-flex flex-wrap gap-3'>
               {roles.map((role) => (
                 <FormGroup check key={role.id}>
@@ -266,6 +291,25 @@ export default function ClassificazioniPage() {
               ))}
             </div>
             {fErr('allowed_role_codes') && <div className='invalid-feedback d-block'>{fErr('allowed_role_codes')}</div>}
+          </FormGroup>
+          <FormGroup>
+            <Label>Ruoli ammessi al download</Label>
+            <div className='text-muted small mb-2'>
+              Il download richiede anche il permesso RBAC <code>attachments.download</code>. Un ruolo selezionato qui viene incluso automaticamente anche in lettura.
+            </div>
+            <div className='d-flex flex-wrap gap-3'>
+              {roles.map((role) => (
+                <FormGroup check key={role.id}>
+                  <Input
+                    type='checkbox'
+                    checked={(form.allowed_download_role_codes ?? []).includes(role.code)}
+                    onChange={(e) => handleDownloadRoleToggle(role.code, e.target.checked)}
+                  />
+                  <Label check>{role.name}</Label>
+                </FormGroup>
+              ))}
+            </div>
+            {fErr('allowed_download_role_codes') && <div className='invalid-feedback d-block'>{fErr('allowed_download_role_codes')}</div>}
           </FormGroup>
           <FormGroup check>
             <Input type='checkbox' checked={form.is_active ?? true} onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))} />

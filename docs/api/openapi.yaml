@@ -8552,11 +8552,24 @@ components:
         code: { type: string }
         name: { type: string }
         description: { type: string, nullable: true }
+        allowed_role_codes:
+          type: array
+          description: Campo canonico dei ruoli abilitati alla lettura/preview.
+          items: { type: string }
         allowed_roles:
           type: array
+          description: Alias retrocompatibile di `allowed_role_codes`.
+          items: { type: string }
+        allowed_download_role_codes:
+          type: array
+          description: Campo canonico dei ruoli abilitati al download. Deve essere sottoinsieme di `allowed_role_codes`.
+          items: { type: string }
+        allowed_download_roles:
+          type: array
+          description: Alias retrocompatibile di `allowed_download_role_codes`.
           items: { type: string }
         is_active: { type: boolean, nullable: true }
-      required: [code, name]
+      required: [code, name, allowed_role_codes, allowed_roles, allowed_download_role_codes, allowed_download_roles]
     DocumentClassificationWrite:
       type: object
       properties:
@@ -8565,6 +8578,11 @@ components:
         description: { type: string, nullable: true }
         allowed_role_codes:
           type: array
+          description: Ruoli abilitati alla lettura/preview per questa classificazione ABAC.
+          items: { type: string }
+        allowed_download_role_codes:
+          type: array
+          description: Ruoli abilitati al download. Il backend salva solo ruoli presenti anche in `allowed_role_codes`.
           items: { type: string }
         is_active: { type: boolean, nullable: true }
       required: [code, name]

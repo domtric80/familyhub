@@ -6,7 +6,10 @@ export interface DocumentClassification {
   code: string
   name: string
   description?: string | null
+  allowed_role_codes?: string[]
   allowed_roles?: string[]
+  allowed_download_role_codes?: string[]
+  allowed_download_roles?: string[]
   is_active?: boolean
 }
 
@@ -469,6 +472,7 @@ export interface DocumentClassificationWrite {
   name: string
   description?: string | null
   allowed_role_codes?: string[]
+  allowed_download_role_codes?: string[]
   is_active?: boolean
 }
 
