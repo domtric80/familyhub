@@ -1,13 +1,13 @@
 # FamilyHub
 
-[![Versione](https://img.shields.io/badge/version-1.5.1-7366ff)](CHANGELOG.md)
+[![Versione](https://img.shields.io/badge/version-1.5.2-7366ff)](CHANGELOG.md)
 [![Licenza](https://img.shields.io/badge/license-source--available-orange)](LICENSE.md)
 [![Security](https://img.shields.io/badge/security-policy-success)](SECURITY.md)
 [![Release Process](https://img.shields.io/badge/release-process-blue)](docs/releases/RELEASE-PROCESS.md)
 
 Applicativo gestionale per strutture residenziali e servizi educativi, con backend Laravel, frontend React/Vite e stack infrastrutturale Docker.
 
-Versione corrente: `1.5.1`
+Versione corrente: `1.5.2`
 
 ## Modello del progetto
 
@@ -319,7 +319,7 @@ sudo supervisorctl restart familyhub-worker:*
 - Template .env.prod: infra/env/backend.prod.env.template
 - Primo accesso VPS OVH/Aruba: docs/operations/2026-08-08-ovh-aruba-first-access-checklist.md
 - Changelog: CHANGELOG.md
-- Release notes v1.5.1: docs/releases/2026-08-26-v1.5.1.md
+- Release notes v1.5.2: docs/releases/2026-08-30-v1.5.2.md
 - Disegno storage config + health servizi: docs/architecture/2026-08-08-storage-configuration-and-service-health.md
 
 

@@ -4,6 +4,32 @@ Tutte le modifiche rilevanti di FamilyHub vengono tracciate in questo file.
 
 Formato ispirato a Keep a Changelog e Semantic Versioning.
 
+## [1.5.2] - 2026-08-30
+
+### Changed
+- bloccata la supply chain Docker con digest espliciti per immagini applicative e servizi infrastrutturali
+- resa obbligatoria la firma GPG dei tag creati dalla workflow ufficiale `familyhub-release`
+- aggiornata la documentazione operativa per release firmate, immagini pinned e hardening CI
+- allineata la preparazione produzione per evitare script Composer in fase di build immagine
+- resa esplicita la separazione ABAC tra ruoli ammessi in lettura/preview e ruoli ammessi al download
+
+### Fixed
+- escluso `backend/public/storage` dal contesto Docker per evitare copie non volute di file caricati o link locali
+- corretto il rischio di drift tra documentazione release e workflow automatizzata
+- chiusa la PR security baseline obsoleta e conflittuale, sostituita dalla baseline gia integrata
+- corretto il CRUD delle classificazioni documentali, che ora espone e salva anche `allowed_download_role_codes`
+
+### Security
+- configurati i secrets GitHub Actions `RELEASE_GPG_PRIVATE_KEY` e `RELEASE_GPG_PASSPHRASE`
+- mantenuti controlli obbligatori su test, build, audit Composer, audit npm runtime e firma tag prima della pubblicazione
+- confermato che la release non introduce migrazioni database, reset dati o reseed distruttivi
+- il backend forza la policy download come sottoinsieme della policy lettura
+
+### Notes
+- release patch tecnica con aggiornamento amministrativo ABAC documentale
+- dopo l'aggiornamento ricostruire immagini Docker e rilanciare i controlli health
+- la release GitHub va pubblicata tramite workflow `familyhub-release` con input `1.5.2`
+
 ## [1.5.1] - 2026-08-26
 
 ### Changed
