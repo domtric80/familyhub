@@ -8,10 +8,10 @@ import {
 import { Home, Plus, Info, MessageSquare, Users, X, Archive } from 'react-feather'
 import InfoDrawer from '../../components/common/InfoDrawer'
 import { toast } from 'react-toastify'
-import { internalMessageApi, facilityApi, minorApi, apiError } from '../../services/api'
+import { internalMessageApi, facilityApi, minorApi, lookupsApi, apiError } from '../../services/api'
 import type {
   InternalMessageThread, InternalMessageThreadWrite,
-  MessageParticipantOption, Facility, Minor,
+  MessageParticipantOption, Facility, Minor, DocumentClassification,
 } from '../../types'
 import { useNavigate } from 'react-router-dom'
 import { useUnreadMessages } from '../../contexts/UnreadMessagesContext'
@@ -32,16 +32,46 @@ const THREAD_TYPE_COLOR: Record<string, string> = {
   minor: 'info',
 }
 
-const CLASSIFICATIONS = [
+type MessageClassificationOption = {
+  code: string
+  label: string
+  cls: string
+}
+
+const CLASSIFICATION_BADGE_CLASSES: Record<string, string> = {
+  internal: 'badge-light-secondary',
+  restricted: 'badge-light-warning',
+  clinical: 'badge-light-danger',
+  judicial: 'badge-light-primary',
+}
+
+const DEFAULT_CLASSIFICATIONS: MessageClassificationOption[] = [
   { code: 'internal',   label: 'Interno',      cls: 'badge-light-secondary' },
   { code: 'restricted', label: 'Riservato',     cls: 'badge-light-warning'   },
   { code: 'clinical',   label: 'Clinico',       cls: 'badge-light-danger'    },
   { code: 'judicial',   label: 'Giudiziario',   cls: 'badge-light-primary'   },
 ]
 
-function classificationBadge(code?: string | null) {
-  const c = CLASSIFICATIONS.find((x) => x.code === code) ?? CLASSIFICATIONS[0]
-  return <span className={`badge ${c.cls}`} style={{ fontSize: 10 }}>{c.label}</span>
+function toMessageClassifications(items: DocumentClassification[]): MessageClassificationOption[] {
+  const activeItems = items.filter((item) => item.is_active !== false)
+  if (activeItems.length === 0) return DEFAULT_CLASSIFICATIONS
+
+  return activeItems.map((item) => ({
+    code: item.code,
+    label: item.name || item.code,
+    cls: CLASSIFICATION_BADGE_CLASSES[item.code] ?? 'badge-light-secondary',
+  }))
+}
+
+function classificationBadge(
+  code: string | null | undefined,
+  label: string | null | undefined,
+  classifications: MessageClassificationOption[],
+) {
+  const resolved = classifications.find((x) => x.code === code)
+  const displayLabel = label || resolved?.label || code || DEFAULT_CLASSIFICATIONS[0].label
+  const badgeClass = resolved?.cls || CLASSIFICATION_BADGE_CLASSES[code ?? ''] || 'badge-light-secondary'
+  return <span className={`badge ${badgeClass}`} style={{ fontSize: 10 }}>{displayLabel}</span>
 }
 
 const EMPTY_FORM: InternalMessageThreadWrite = {
@@ -70,6 +100,7 @@ export default function MessaggiPage() {
   // lookup
   const [facilities, setFacilities] = useState<Facility[]>([])
   const [minors, setMinors]         = useState<Minor[]>([])
+  const [classifications, setClassifications] = useState<MessageClassificationOption[]>(DEFAULT_CLASSIFICATIONS)
   const [participants, setParticipants] = useState<MessageParticipantOption[]>([])
   const [loadingParticipants, setLoadingParticipants] = useState(false)
   const [participantsError, setParticipantsError] = useState<string | null>(null)
@@ -122,8 +153,12 @@ export default function MessaggiPage() {
   }
 
   useEffect(() => {
-    Promise.all([facilityApi.list(), minorApi.list()])
-      .then(([facs, mins]) => { setFacilities(facs); setMinors(mins) })
+    Promise.all([facilityApi.list(), minorApi.list(), lookupsApi.documentClassifications()])
+      .then(([facs, mins, cls]) => {
+        setFacilities(facs)
+        setMinors(mins)
+        setClassifications(toMessageClassifications(Array.isArray(cls) ? cls : []))
+      })
       .catch(() => {})
   }, [])
 
@@ -322,7 +357,7 @@ export default function MessaggiPage() {
                   <Input type='select' bsSize='sm' value={filterClassification}
                     onChange={(e) => setFilterClassification(e.target.value)}>
                     <option value=''>Tutte</option>
-                    {CLASSIFICATIONS.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
+                    {classifications.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
                   </Input>
                 </Col>
                 <Col sm='2'>
@@ -380,7 +415,7 @@ export default function MessaggiPage() {
                               <span className={`badge badge-light-${THREAD_TYPE_COLOR[t.thread_type] ?? 'secondary'}`}>
                                 {THREAD_TYPE_LABEL[t.thread_type] ?? t.thread_type}
                               </span>
-                              {classificationBadge(t.classification_code)}
+                              {classificationBadge(t.classification_code, t.classification_label ?? t.document_classification?.name, classifications)}
                             </div>
                           </td>
                           <td className='small'>{t.facility?.name ?? '—'}</td>
@@ -470,7 +505,7 @@ export default function MessaggiPage() {
             <Label className='col-form-label'>Classificazione</Label>
             <Input type='select' value={form.classification_code ?? 'internal'} invalid={!!fe('classification_code')}
               onChange={(e) => { setF('classification_code', e.target.value); setF('participant_user_ids', []) }}>
-              {CLASSIFICATIONS.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
+              {classifications.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
             </Input>
             {fe('classification_code') && <div className='invalid-feedback d-block'>{fe('classification_code')}</div>}
             <div className='form-text'>Cambiando classificazione i partecipanti verranno rifiltrati automaticamente.</div>
@@ -483,7 +518,7 @@ export default function MessaggiPage() {
                 onChange={(e) => { setF('minor_id', e.target.value ? Number(e.target.value) : null); setF('participant_user_ids', []) }}>
                 <option value=''>— Seleziona minore —</option>
                 {minors
-                  .filter((m) => !filterFacilityId || m.facility_id === form.facility_id)
+                  .filter((m) => !form.facility_id || m.facility_id === form.facility_id)
                   .map((m) => (
                     <option key={m.id} value={m.id}>{m.first_name} {m.last_name} ({m.internal_code})</option>
                   ))}
