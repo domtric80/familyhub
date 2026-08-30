@@ -532,7 +532,7 @@ paths:
       operationId: documentClassificationsLookup
       responses:
         '200':
-          description: Classificazioni documentali supportate dal backend
+          description: Classificazioni documentali attive da usare anche per note classificate e messaggistica ABAC. La UI non deve usare enum hardcoded.
           content:
             application/json:
               schema:
@@ -11472,7 +11472,7 @@ components:
         classification_code:
           type: string
           nullable: true
-          description: Se omesso il backend usa `internal` per retrocompatibilità.
+          description: Codice classificazione ABAC ottenuto da `GET /api/lookups/document-classifications`; se omesso il backend usa `internal` per retrocompatibilità.
         participant_user_ids:
           type: array
           items: { type: integer }
@@ -11488,7 +11488,10 @@ components:
       properties:
         facility_id: { type: integer }
         minor_id: { type: integer, nullable: true }
-        classification_code: { type: string, nullable: true }
+        classification_code:
+          type: string
+          nullable: true
+          description: Codice classificazione ABAC ottenuto da `GET /api/lookups/document-classifications`.
         users:
           type: array
           items:
@@ -11517,7 +11520,10 @@ components:
           enum: [facility, minor]
         subject: { type: string }
         topic: { type: string, nullable: true }
-        classification_code: { type: string, nullable: true }
+        classification_code:
+          type: string
+          nullable: true
+          description: Codice classificazione ABAC ottenuto da `GET /api/lookups/document-classifications`.
         classification_label: { type: string, nullable: true }
         document_classification:
           type: object
