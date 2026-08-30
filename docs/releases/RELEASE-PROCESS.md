@@ -4,10 +4,11 @@
 
 Questo documento definisce il processo ufficiale di rilascio di FamilyHub.
 
-Alla data del `2026-08-09`, il progetto usa un processo di release **ibrido e controllato**:
+Alla data del `2026-08-30`, il progetto usa un processo di release **ibrido e controllato**:
 
 - scelta umana del version bump e delle note
 - esecuzione automatizzata del flusso di verifica/tag/release tramite GitHub Actions
+- tag di release firmato con chiave GPG custodita nei secrets GitHub
 
 ## Regole generali
 
@@ -19,7 +20,7 @@ Alla data del `2026-08-09`, il progetto usa un processo di release **ibrido e co
   - aggiornamento `README.md` sulla versione corrente
   - aggiornamento `CHANGELOG.md`
   - file note release in `docs/releases/`
-  - tag Git `vX.Y.Z`
+  - tag Git firmato `vX.Y.Z`
   - release GitHub pubblicata o aggiornata
 
 ## Quando aumentare la versione
@@ -92,6 +93,7 @@ Prima di aprire una release, verificare almeno:
 - `composer audit` senza nuove vulnerabilità accettate inconsapevolmente
 - `npm audit` coerente con lo stack runtime ufficiale
 - verifica dei lockfile tracciati nel repo
+- immagini Docker runtime fissate per digest o eccezione tecnica documentata
 - verifica rapida di `SECURITY.md` se cambia la politica
 
 ### Documentazione
@@ -172,13 +174,22 @@ Il workflow:
 - verifica `CHANGELOG.md`
 - verifica la presenza del file note release in `docs/releases/`
 - esegue bootstrap/test/build/audit con Docker Compose
-- crea il tag `vX.Y.Z`
+- importa la chiave GPG di release dai secrets GitHub
+- crea il tag firmato `vX.Y.Z`
+- verifica la firma del tag prima del push
 - crea una GitHub Release in modalità draft o pubblicata
 
 Input minimi:
 
 - `version`
 - `publish`
+
+Secrets richiesti:
+
+- `RELEASE_GPG_PRIVATE_KEY`: chiave privata GPG ASCII armored usata solo dal workflow release
+- `RELEASE_GPG_PASSPHRASE`: passphrase della chiave GPG
+
+Se uno dei secrets manca, il workflow deve fallire prima della creazione del tag.
 
 Regola:
 
@@ -214,12 +225,26 @@ Il percorso standard raccomandato è:
 
 ## Standard attuale del repository
 
-Alla data del `2026-08-09`, lo standard FamilyHub è:
+Alla data del `2026-08-30`, lo standard FamilyHub è:
 
 - frontend: `npm` + `package-lock.json`
 - backend PHP: `composer.lock`
 - release notes archiviate in `docs/releases/`
 - release GitHub gestita tramite workflow manuale `workflow_dispatch`
+- tag di release firmati e verificati prima del push
+- immagini Docker principali fissate con `tag@sha256:digest`
+
+## Triage aggiornamenti Dependabot
+
+Gli aggiornamenti Dependabot non vanno fusi automaticamente.
+
+Regola operativa:
+
+- patch/minor runtime: review tecnica, build/test/audit e merge se non cambia comportamento
+- major runtime: branch dedicato, verifica locale completa, UAT mirato e release note
+- GitHub Actions: review del changelog dell'action, verifica permessi minimi e test CI
+- immagini Docker: aggiornare anche il digest, non solo il tag
+- PR stale o confliggenti: chiuderle o ricrearle dopo aver verificato che il contenuto sia gia coperto da `master`
 
 ## Evoluzione futura consigliata
 
