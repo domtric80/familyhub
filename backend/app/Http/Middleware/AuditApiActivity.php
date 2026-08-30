@@ -25,11 +25,21 @@ class AuditApiActivity
             return $response;
         }
 
+        $isDeniedResponse = in_array($response->getStatusCode(), [401, 403], true);
+
         $this->auditLogService->record($request, [
+            'action' => $isDeniedResponse ? 'denied' : $this->auditLogService->resolveAction($request),
             'resource_label' => $request->path(),
             'old_values_json' => $beforeSnapshot,
-            'new_values_json' => $this->sanitizePayload($request->all()),
-            'operation_summary' => $this->buildOperationSummary($request, $beforeSnapshot),
+            'new_values_json' => [
+                'status_code' => $response->getStatusCode(),
+                'method' => $request->method(),
+                'path' => $request->path(),
+                'payload' => $this->sanitizePayload($request->all()),
+            ],
+            'operation_summary' => $isDeniedResponse
+                ? $this->buildDeniedOperationSummary($request, $response)
+                : $this->buildOperationSummary($request, $beforeSnapshot),
         ]);
 
         return $response;
@@ -37,7 +47,15 @@ class AuditApiActivity
 
     private function shouldLog(Request $request, Response $response): bool
     {
-        if (! $request->is('api/admin/*', 'api/minors*', 'api/exits*', 'api/activities*')) {
+        if (! $request->is(
+            'api/admin/*',
+            'api/minors*',
+            'api/exits*',
+            'api/activities*',
+            'api/approaches*',
+            'api/journals*',
+            'api/internal-messages*',
+        )) {
             return false;
         }
 
@@ -55,6 +73,16 @@ class AuditApiActivity
             'life_history',
             'clinical_notes_encrypted',
             'diagnosis_notes_encrypted',
+            'message_body',
+            'body',
+            'body_encrypted',
+            'reserved_notes',
+            'reserved_notes_encrypted',
+            'psychologist_notes',
+            'coordinator_notes',
+            'clinical_notes',
+            'diagnosis_notes',
+            'notes',
         ];
 
         return $this->sanitizeValue($payload, $hiddenKeys);
@@ -117,6 +145,23 @@ class AuditApiActivity
         };
     }
 
+    private function buildDeniedOperationSummary(Request $request, Response $response): string
+    {
+        $actor = $this->auditLogService->resolveActorDisplayName($request->user());
+        $resourceType = $this->auditLogService->resolveResourceType($request);
+        $resourceId = $this->auditLogService->resolveResourceId($request);
+        $humanResource = $this->humanizeResourceType($resourceType);
+        $statusCode = $response->getStatusCode();
+
+        return sprintf(
+            '%s ha tentato un accesso non autorizzato. Risorsa: %s%s. Esito HTTP: %d.',
+            $actor,
+            $humanResource,
+            $resourceId ? " #{$resourceId}" : '',
+            $statusCode,
+        );
+    }
+
     private function humanizeResourceType(string $resourceType): string
     {
         return match ($resourceType) {
@@ -136,6 +181,11 @@ class AuditApiActivity
             'minor-statuses', 'minor_statuses' => 'lo stato minore',
             'gender-identities', 'gender_identities' => 'l’identità di genere',
             'biological-sexes', 'biological_sexes' => 'il sesso biologico',
+            'exits' => 'l’uscita del minore',
+            'activities' => 'l’attività del minore',
+            'approaches' => 'l’avvicinamento familiare',
+            'journals' => 'il diario educativo',
+            'internal-messages', 'internal_messages' => 'la conversazione interna',
             default => 'la risorsa '.$resourceType,
         };
     }

@@ -11297,8 +11297,13 @@ components:
         actor_user_id: { type: integer, nullable: true }
         actor_display_name: { type: string }
         actor_role_name: { type: string, nullable: true }
-        action: { type: string }
-        resource_type: { type: string }
+        action:
+          type: string
+          description: Azione audit. Per accessi negati a risorse sensibili il backend usa `denied`.
+          examples: [read, create, update, delete, denied]
+        resource_type:
+          type: string
+          description: Tipo risorsa auditata, inclusi `internal-messages`, `approaches`, `journals`, `minors`, `exits`, `activities`.
         resource_id: { type: string, nullable: true }
         resource_label: { type: string, nullable: true }
         operation_summary: { type: string, nullable: true }

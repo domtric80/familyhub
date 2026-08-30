@@ -43,6 +43,7 @@ Verifiche audit obbligatorie:
 
 - preview/read documento crea evento audit di lettura;
 - download documento crea evento audit di download;
+- accesso negato a documento, nota o conversazione sensibile crea evento audit `denied` senza salvare testi sensibili;
 - nel tab storico del minore compaiono solo eventi del minore interessato;
 - nella pagina Audit admin compare IP, utente, operazione, oggetto e dettagli.
 
@@ -78,6 +79,7 @@ Endpoint coinvolti:
 | M6 | Utente non partecipante apre thread | 403 |
 | M7 | Partecipante autorizzato risponde | 200 e audit update |
 | M8 | Partecipante archivia thread | 200 e audit archive |
+| M9 | Utente partecipante ma non autorizzato ABAC apre thread classificato | 403 e audit `denied` |
 
 ## Test UI richiesti
 
