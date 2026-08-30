@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Facility;
+use App\Models\AuditLog;
 use App\Models\InternalMessageMessage;
 use App\Models\InternalMessageThread;
 use App\Models\InternalMessageThreadParticipant;
@@ -464,6 +465,15 @@ class InternalMessageApiTest extends TestCase
 
         $this->getJson('/api/internal-messages/threads/'.$thread->id)
             ->assertForbidden();
+
+        $auditLog = AuditLog::query()
+            ->where('resource_type', 'internal-messages')
+            ->where('resource_id', (string) $thread->id)
+            ->where('action', 'denied')
+            ->firstOrFail();
+
+        $this->assertStringContainsString('accesso non autorizzato', $auditLog->operation_summary);
+        $this->assertSame(403, $auditLog->new_values_json['status_code'] ?? null);
     }
 
     public function test_participant_can_archive_thread(): void

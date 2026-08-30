@@ -77,7 +77,7 @@ class AuditLogService
 
     public function resolveResourceId(Request $request): ?string
     {
-        foreach (['document', 'contact', 'activity', 'exit', 'minor', 'role', 'facility', 'country', 'region', 'province', 'city', 'user', 'organization'] as $parameter) {
+        foreach (['document', 'contact', 'activity', 'exit', 'approach', 'journal', 'thread', 'minor', 'role', 'facility', 'country', 'region', 'province', 'city', 'user', 'organization'] as $parameter) {
             $value = $request->route($parameter);
 
             if (is_object($value) && isset($value->id)) {
