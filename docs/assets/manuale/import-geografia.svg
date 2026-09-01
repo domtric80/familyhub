@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="190" viewBox="0 0 900 190">
+<rect width="900" height="190" rx="18" fill="#f5f6fb"/>
+<g font-family="Arial, sans-serif" text-anchor="middle"><text x="450" y="32" font-size="18" font-weight="700" fill="#31313d">Import geografico guidato</text>
+<g font-size="14"><rect x="35" y="65" width="165" height="75" rx="12" fill="#7366ff"/><text x="117" y="98" fill="white">1. Provider</text><text x="117" y="120" fill="white">fonte e formato</text>
+<path d="M200 102 H235" stroke="#31313d" stroke-width="3" marker-end="url(#a)"/>
+<rect x="240" y="65" width="165" height="75" rx="12" fill="#36c2e8"/><text x="322" y="98" fill="white">2. Nazione</text><text x="322" y="120" fill="white">scope import</text>
+<path d="M405 102 H440" stroke="#31313d" stroke-width="3" marker-end="url(#a)"/>
+<rect x="445" y="65" width="165" height="75" rx="12" fill="#f6a623"/><text x="527" y="98" fill="white">3. Anteprima</text><text x="527" y="120" fill="white">conteggi e qualità</text>
+<path d="M610 102 H645" stroke="#31313d" stroke-width="3" marker-end="url(#a)"/>
+<rect x="650" y="65" width="215" height="75" rx="12" fill="#4caf50"/><text x="757" y="98" fill="white">4. Importa</text><text x="757" y="120" fill="white">aggiunge senza cancellare</text></g></g>
+<defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#31313d"/></marker></defs></svg>

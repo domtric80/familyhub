@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Container, Row, Col, Card, CardHeader, CardBody } from 'reactstrap'
-import { Home, Shield, AlertTriangle, FileText, Eye, Activity } from 'react-feather'
+import { Home, Shield, AlertTriangle, FileText, Eye, Activity, Info } from 'react-feather'
 import { adminAuditApi, apiError } from '../../services/api'
 import type { AuditKpi } from '../../types'
+import InfoDrawer from '../../components/common/InfoDrawer'
 
 export default function AuditKpiPage() {
+  const [infoOpen, setInfoOpen] = useState(false)
   const [kpi, setKpi] = useState<AuditKpi | null>(null)
   const [loading, setLoading] = useState(true)
   const [apiMissing, setApiMissing] = useState(false)
@@ -74,7 +76,12 @@ export default function AuditKpiPage() {
         <span style={{ color: '#7366ff', fontWeight: 500 }}>KPI Sicurezza</span>
       </div>
 
-      <h4 className='mb-4' style={{ color: '#3d3d3d' }}>KPI Sicurezza</h4>
+      <div className='d-flex align-items-center gap-2 mb-4'>
+        <h4 className='mb-0' style={{ color: '#3d3d3d' }}>KPI Sicurezza</h4>
+        <button className='btn btn-light btn-sm d-flex align-items-center gap-1' onClick={() => setInfoOpen(true)} aria-label='Informazioni su KPI Sicurezza'>
+          <Info size={13} /> Informazioni
+        </button>
+      </div>
 
       {loading && (
         <div className='text-center py-5'>
@@ -228,6 +235,27 @@ export default function AuditKpiPage() {
           </Row>
         </>
       )}
+      <InfoDrawer isOpen={infoOpen} onClose={() => setInfoOpen(false)} title='Guida — KPI Sicurezza'>
+        <p>La pagina mostra gli indicatori chiave di sicurezza aggregati sull'intero sistema.</p>
+        <h6>Riquadri sommario</h6>
+        <ul>
+          <li><strong>Login falliti</strong> — tentativi di autenticazione non riusciti nel periodo.</li>
+          <li><strong>Accessi documenti</strong> — eventi di lettura e download di file.</li>
+          <li><strong>Modifiche permessi</strong> — assegnazioni e revoche di ruolo/ABAC.</li>
+          <li><strong>Letture minori</strong> — aperture schede anagrafiche.</li>
+          <li><strong>Eventi totali</strong> — conteggio complessivo di tutti i log.</li>
+        </ul>
+        <h6>Top attori</h6>
+        <p>Gli utenti con il maggior numero di eventi registrati. Picchi anomali su un singolo account meritano verifica.</p>
+        <h6>Breakdown risorse e azioni</h6>
+        <p>Distribuzione degli eventi per tipo di entità (minore, documento, utente…) e per azione (create, update, delete, denied…).</p>
+        <h6>Serie giornaliera</h6>
+        <p>Andamento degli ultimi 30 giorni. Picchi improvvisi possono indicare attività anomale o test di sistema.</p>
+        <h6>Permessi richiesti</h6>
+        <p>È necessario il permesso <code>audit_logs.read</code>. In assenza del permesso la pagina non carica dati.</p>
+        <h6>In caso di errore</h6>
+        <p>Se i KPI non sono disponibili, il backend non ha ancora attivato l'endpoint <code>/admin/audit-logs/kpis</code>. Contatta il team di sviluppo.</p>
+      </InfoDrawer>
     </Container>
   )
 }

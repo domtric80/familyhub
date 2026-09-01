@@ -4,7 +4,8 @@ import {
   Container, Row, Col, Card, CardBody, CardHeader,
   Alert, Button, Badge,
 } from 'reactstrap'
-import { Home, ArrowLeft, Send, Users, MessageSquare, CheckCircle } from 'react-feather'
+import { Home, ArrowLeft, Send, Users, MessageSquare, CheckCircle, Info } from 'react-feather'
+import InfoDrawer from '../../components/common/InfoDrawer'
 import { toast } from 'react-toastify'
 import { internalMessageApi, apiError } from '../../services/api'
 import { sanitizeRichText } from '../../utils/sanitize'
@@ -93,6 +94,7 @@ export default function MessaggioDetailPage() {
   const { user } = useAuth()
   const { refresh: refreshUnread, getUserName } = useUnreadMessages()
 
+  const [infoOpen, setInfoOpen] = useState(false)
   const [thread, setThread]   = useState<InternalMessageThread | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState<string | null>(null)
@@ -256,6 +258,9 @@ export default function MessaggioDetailPage() {
                 {thread && (
                   <h3 className='mb-0 ms-1' style={{ fontSize: 18 }}>{thread.subject}</h3>
                 )}
+                <button className='btn btn-light btn-sm d-flex align-items-center gap-1' onClick={() => setInfoOpen(true)} aria-label='Informazioni su Messaggistica'>
+                  <Info size={13} /> Informazioni
+                </button>
               </div>
             </Col>
             <Col xs='6'>
@@ -425,6 +430,24 @@ export default function MessaggioDetailPage() {
           </Row>
         )}
       </Container>
+
+      <InfoDrawer isOpen={infoOpen} onClose={() => setInfoOpen(false)} title='Guida — Messaggistica'>
+        <p>Questa pagina mostra il dettaglio di una conversazione interna tra operatori. Le conversazioni sono tracciate nell'audit log.</p>
+        <h6>Oggetto e partecipanti</h6>
+        <p>L'oggetto identifica la conversazione. I partecipanti sono gli utenti inclusi al momento della creazione del thread.</p>
+        <h6>Classificazione ABAC</h6>
+        <p>I messaggi possono essere classificati con tag di riservatezza (es. "Riservato", "Sensibile"). Solo gli utenti con la classificazione corrispondente nel proprio profilo ABAC possono leggerli o scaricarli.</p>
+        <h6>Allegati</h6>
+        <p>Gli allegati al messaggio sono scaricabili solo se il tuo profilo ABAC consente l'accesso alla classificazione del documento. Un'icona di lucchetto indica i documenti a cui non hai accesso.</p>
+        <h6>Risposta</h6>
+        <p>Usa il campo in fondo per rispondere. Puoi formattare il testo con grassetto, corsivo ed elenchi. Il messaggio è inviato a tutti i partecipanti.</p>
+        <h6>Segna come letto</h6>
+        <p>Il sistema aggiorna automaticamente lo stato di lettura all'apertura. Il badge nella sidebar sparisce quando tutti i messaggi sono stati letti.</p>
+        <h6>Permessi richiesti</h6>
+        <p><code>messages.read</code> per visualizzare, <code>messages.reply</code> per rispondere. La classificazione ABAC del thread può aggiungere ulteriori restrizioni.</p>
+        <h6>In caso di errore</h6>
+        <p>Se il thread non si carica, verifica di far parte dei partecipanti oppure che il thread non sia stato archiviato. Contatta l'amministratore se il problema persiste.</p>
+      </InfoDrawer>
     </>
   )
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Card, CardBody, Button, Alert, Badge } from 'reactstrap'
-import { RefreshCw, ChevronDown, ChevronRight } from 'react-feather'
+import { RefreshCw, ChevronDown, ChevronRight, Info } from 'react-feather'
+import InfoDrawer from '../../components/common/InfoDrawer'
 import { toast } from 'react-toastify'
 import { systemHealthApi } from '../../services/api'
 import type { SystemHealthService, SystemHealthSummary } from '../../services/api'
@@ -111,6 +112,7 @@ export default function SistemaHealthPage() {
   const { hasPermission } = useAuth()
   const canRun = hasPermission('system_health.run')
 
+  const [infoOpen, setInfoOpen] = useState(false)
   const [services, setServices] = useState<SystemHealthService[]>([])
   const [summary, setSummary] = useState<SystemHealthSummary>(EMPTY_SUMMARY)
   const [storageSource, setStorageSource] = useState<string | null>(null)
@@ -170,7 +172,12 @@ export default function SistemaHealthPage() {
       {/* Header */}
       <div className='d-flex justify-content-between align-items-center mb-3'>
         <div>
+          <div className='d-flex align-items-center gap-2'>
           <h5 className='fw-bold mb-0' style={{ color: '#7366ff' }}>Health Servizi</h5>
+          <button className='btn btn-light btn-sm d-flex align-items-center gap-1' onClick={() => setInfoOpen(true)} aria-label='Informazioni su Health Servizi'>
+            <Info size={13} /> Informazioni
+          </button>
+        </div>
           {storageSource && (
             <span className='text-muted small'>
               Configurazione storage attuale: <strong>{storageSource}</strong>
@@ -263,6 +270,27 @@ export default function SistemaHealthPage() {
         ))}
         <span className='ms-3 fst-italic'>I dettagli non espongono password, token o chiavi.</span>
       </div>
+
+      <InfoDrawer isOpen={infoOpen} onClose={() => setInfoOpen(false)} title='Guida — Health Servizi'>
+        <p>La pagina mostra lo stato in tempo reale dei servizi infrastrutturali di FamilyHub (database, storage S3/MinIO, code, ecc.).</p>
+        <h6>Indicatori di stato</h6>
+        <ul>
+          <li><strong>Operativo</strong> (verde) — il servizio risponde correttamente.</li>
+          <li><strong>Degradato</strong> (arancione) — il servizio risponde con errori parziali o latenza elevata.</li>
+          <li><strong>Non disponibile</strong> (rosso) — il servizio non è raggiungibile.</li>
+          <li><strong>Non configurato</strong> (grigio) — il servizio non è attivato in questo ambiente.</li>
+        </ul>
+        <h6>Latenza</h6>
+        <p>Il tempo di risposta in millisecondi dell'ultimo controllo. Valori superiori a 500 ms meritano attenzione.</p>
+        <h6>Dettagli tecnici</h6>
+        <p>Cliccando su una riga si espandono metadati diagnostici. Non contengono password, token o chiavi private.</p>
+        <h6>Esegui controllo</h6>
+        <p>Il pulsante "Esegui controllo" forza un nuovo ping a tutti i servizi. Richiede il permesso <code>system_health.run</code>.</p>
+        <h6>Permessi richiesti</h6>
+        <p><code>system_health.read</code> per visualizzare, <code>system_health.run</code> per aggiornare manualmente.</p>
+        <h6>In caso di errore</h6>
+        <p>Se un servizio è costantemente rosso, contatta il team di sistema. Non riavviare servizi direttamente da questa schermata.</p>
+      </InfoDrawer>
     </div>
   )
 }

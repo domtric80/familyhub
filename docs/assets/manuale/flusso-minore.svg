@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="190" viewBox="0 0 900 190">
+<rect width="900" height="190" rx="18" fill="#f5f6fb"/>
+<g font-family="Arial, sans-serif" text-anchor="middle"><text x="450" y="32" font-size="18" font-weight="700" fill="#31313d">Fascicolo del minore</text>
+<g font-size="14"><rect x="35" y="65" width="145" height="75" rx="12" fill="#7366ff"/><text x="107" y="98" fill="white">Anagrafica</text><text x="107" y="120" fill="white">dati certificati</text>
+<path d="M180 102 H215" stroke="#31313d" stroke-width="3" marker-end="url(#a)"/>
+<rect x="220" y="65" width="145" height="75" rx="12" fill="#36c2e8"/><text x="292" y="98" fill="white">Profilo / Caso</text><text x="292" y="120" fill="white">dati protetti</text>
+<path d="M365 102 H400" stroke="#31313d" stroke-width="3" marker-end="url(#a)"/>
+<rect x="405" y="65" width="145" height="75" rx="12" fill="#f6a623"/><text x="477" y="98" fill="white">PEI / Bisogni</text><text x="477" y="120" fill="white">obiettivi e cura</text>
+<path d="M550 102 H585" stroke="#31313d" stroke-width="3" marker-end="url(#a)"/>
+<rect x="590" y="65" width="125" height="75" rx="12" fill="#4caf50"/><text x="652" y="98" fill="white">Documenti</text><text x="652" y="120" fill="white">ABAC</text>
+<path d="M715 102 H750" stroke="#31313d" stroke-width="3" marker-end="url(#a)"/>
+<rect x="755" y="65" width="110" height="75" rx="12" fill="#555765"/><text x="810" y="98" fill="white">Storico</text><text x="810" y="120" fill="white">audit</text></g></g>
+<defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#31313d"/></marker></defs></svg>
