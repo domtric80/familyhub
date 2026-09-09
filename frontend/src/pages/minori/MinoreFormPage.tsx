@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { Container, Row, Col, Card, CardBody, Form, FormGroup, Label } from 'reactstrap'
-import { Save, ArrowLeft, Home } from 'react-feather'
+import { Save, ArrowLeft, Home, Info } from 'react-feather'
+import InfoDrawer from '../../components/common/InfoDrawer'
 import { minorApi, lookupsApi, facilityApi, apiError } from '../../services/api'
 import type { MinorWrite, LookupItem, Facility, City, Country, Region, Province } from '../../types'
 
@@ -10,6 +11,7 @@ export default function MinoreFormPage() {
   const isEdit = Boolean(id)
   const navigate = useNavigate()
 
+  const [infoOpen, setInfoOpen] = useState(false)
   const [form, setForm] = useState<MinorWrite>({
     facility_id: 0,
     internal_code: '',
@@ -155,7 +157,12 @@ export default function MinoreFormPage() {
         <div className='page-title'>
           <Row>
             <Col xs='6'>
-              <h3>{isEdit ? 'Modifica minore' : 'Nuovo minore'}</h3>
+              <div className='d-flex align-items-center gap-2'>
+                <h3 className='mb-0'>{isEdit ? 'Modifica minore' : 'Nuovo minore'}</h3>
+                <button className='btn btn-light btn-sm d-flex align-items-center gap-1' onClick={() => setInfoOpen(true)} aria-label='Informazioni su questa pagina'>
+                  <Info size={13} /> Informazioni
+                </button>
+              </div>
             </Col>
             <Col xs='6'>
               <ol className='breadcrumb'>
@@ -448,6 +455,26 @@ export default function MinoreFormPage() {
           </Col>
         </Row>
       </Container>
+
+      <InfoDrawer isOpen={infoOpen} onClose={() => setInfoOpen(false)} title={isEdit ? 'Guida — Modifica minore' : 'Guida — Nuovo minore'}>
+        <p>{isEdit ? 'Questa pagina permette di aggiornare la scheda anagrafica del minore.' : 'Questa pagina permette di registrare un nuovo minore nel sistema.'}</p>
+        <h6>Struttura di accoglienza</h6>
+        <p>Seleziona la struttura presso cui il minore è accolto. L'elenco mostra solo le strutture a cui sei assegnato.</p>
+        <h6>Codice interno</h6>
+        <p>Identificativo anonimo utilizzato internamente (es. numero di cartella). Non usare nome o cognome reali.</p>
+        <h6>Pseudonimo</h6>
+        <p>Nome di fantasia visualizzato nell'audit log al posto del nome reale. Obbligatorio per garantire la riservatezza nei log.</p>
+        <h6>Dati anagrafici</h6>
+        <p>Data di nascita, genere biologico e genere dell'identità sono campi da lookup: seleziona dall'elenco, non inserire testo libero.</p>
+        <h6>Nazionalità e luogo di nascita</h6>
+        <p>Scegli il paese, poi la regione, la provincia e il comune in sequenza. I menu si aggiornano in base alla selezione precedente.</p>
+        <h6>Stato</h6>
+        <p>Indica la fase del percorso del minore (es. Accoglienza attiva, Dimesso). Modificabile solo dagli utenti con ruolo appropriato.</p>
+        <h6>Permessi richiesti</h6>
+        <p><code>minors.create</code> per registrare un nuovo minore, <code>minors.update</code> per modificarlo. Gli utenti con ruolo COORDINATORE non possono creare né modificare minori.</p>
+        <h6>In caso di errore</h6>
+        <p>Se il salvataggio fallisce, verifica che tutti i campi obbligatori siano compilati e che il codice interno non sia già in uso in questa struttura.</p>
+      </InfoDrawer>
     </>
   )
 }

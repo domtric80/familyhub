@@ -3,7 +3,8 @@ import {
   Card, CardBody, Button, Table, Modal, ModalHeader, ModalBody, ModalFooter,
   FormGroup, Label, Input, Alert, Badge, Row, Col, FormText,
 } from 'reactstrap'
-import { Plus, Edit2, Trash2, Wifi, Zap, AlertTriangle, Eye, EyeOff } from 'react-feather'
+import { Plus, Edit2, Trash2, Wifi, Zap, AlertTriangle, Eye, EyeOff, Info } from 'react-feather'
+import InfoDrawer from '../../components/common/InfoDrawer'
 import { toast } from 'react-toastify'
 import {
   systemStorageApi,
@@ -90,6 +91,7 @@ export default function SistemaStoragePage() {
   const canActivate = hasPermission('system_storage.activate')
   const canDelete   = hasPermission('system_storage.delete')
 
+  const [infoOpen, setInfoOpen] = useState(false)
   const [listData, setListData] = useState<StorageConfigListResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [forbidden, setForbidden] = useState(false)
@@ -261,7 +263,12 @@ export default function SistemaStoragePage() {
     <div className='container-fluid py-3'>
       {/* Header */}
       <div className='d-flex justify-content-between align-items-center mb-3'>
-        <h5 className='fw-bold mb-0' style={{ color: '#7366ff' }}>Configurazione Storage</h5>
+        <div className='d-flex align-items-center gap-2'>
+          <h5 className='fw-bold mb-0' style={{ color: '#7366ff' }}>Configurazione Storage</h5>
+          <button className='btn btn-light btn-sm d-flex align-items-center gap-1' onClick={() => setInfoOpen(true)} aria-label='Informazioni su Configurazione Storage'>
+            <Info size={13} /> Informazioni
+          </button>
+        </div>
         {canCreate && (
           <Button size='sm' color='primary' className='d-flex align-items-center gap-1' onClick={openAdd}>
             <Plus size={14} /> Nuova configurazione
@@ -546,6 +553,28 @@ export default function SistemaStoragePage() {
           </Button>
         </ModalFooter>
       </Modal>
+
+      <InfoDrawer isOpen={infoOpen} onClose={() => setInfoOpen(false)} title='Guida — Configurazione Storage'>
+        <p>Questa pagina permette di gestire le configurazioni dello storage oggetti (S3/MinIO) utilizzate da FamilyHub per archiviare documenti e allegati.</p>
+        <h6>Sorgente attiva</h6>
+        <p>Lo storage attivo può provenire da variabile d'ambiente (<code>.env</code>) o da configurazione amministrativa (DB). Il banner in cima indica la sorgente corrente.</p>
+        <h6>Elenco configurazioni</h6>
+        <ul>
+          <li><strong>Provider</strong> — tipo di storage: MinIO, AWS S3 o S3 compatibile.</li>
+          <li><strong>Bucket</strong> — nome del contenitore di oggetti.</li>
+          <li><strong>Endpoint</strong> — URL del server (solo per provider non-AWS).</li>
+          <li><strong>Path style</strong> — modalità di accesso al bucket richiesta da alcuni provider MinIO.</li>
+          <li><strong>Attiva / Default</strong> — indica se la configurazione è la sorgente runtime principale.</li>
+        </ul>
+        <h6>Test connessione</h6>
+        <p>Il pulsante <em>Wifi</em> verifica la raggiungibilità del bucket senza scrivere dati reali.</p>
+        <h6>Attivazione</h6>
+        <p>Il pulsante <em>Zap</em> promuove una configurazione DB come sorgente runtime. Effetto immediato: i nuovi upload useranno questo storage.</p>
+        <h6>Permessi richiesti</h6>
+        <p><code>system_storage.read</code> per visualizzare, <code>system_storage.create</code>/<code>update</code>/<code>delete</code>/<code>test</code>/<code>activate</code> per le rispettive operazioni.</p>
+        <h6>In caso di errore</h6>
+        <p>Se il test fallisce, verifica credenziali, URL e policy bucket. Non eliminare configurazioni attive senza aver prima attivato un'alternativa funzionante.</p>
+      </InfoDrawer>
     </div>
   )
 }

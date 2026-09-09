@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="250" viewBox="0 0 900 250">
+  <rect width="900" height="250" rx="18" fill="#f5f6fb"/>
+  <g font-family="Arial, sans-serif" text-anchor="middle">
+    <rect x="35" y="70" width="210" height="100" rx="14" fill="#7366ff"/>
+    <text x="140" y="108" fill="white" font-size="20" font-weight="700">RBAC</text>
+    <text x="140" y="136" fill="white" font-size="14">ruolo + permesso</text>
+    <text x="140" y="157" fill="white" font-size="14">struttura + minore</text>
+    <path d="M245 120 H320" stroke="#31313d" stroke-width="3" marker-end="url(#a)"/>
+    <rect x="325" y="70" width="210" height="100" rx="14" fill="#36c2e8"/>
+    <text x="430" y="108" fill="white" font-size="20" font-weight="700">ABAC</text>
+    <text x="430" y="136" fill="white" font-size="14">tag/classificazione</text>
+    <text x="430" y="157" fill="white" font-size="14">policy del ruolo</text>
+    <path d="M535 120 H610" stroke="#31313d" stroke-width="3" marker-end="url(#a)"/>
+    <rect x="615" y="70" width="250" height="100" rx="14" fill="#4caf50"/>
+    <text x="740" y="108" fill="white" font-size="20" font-weight="700">Accesso</text>
+    <text x="740" y="136" fill="white" font-size="14">lettura / modifica</text>
+    <text x="740" y="157" fill="white" font-size="14">audit automatico</text>
+  </g>
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#31313d"/></marker></defs>
+</svg>

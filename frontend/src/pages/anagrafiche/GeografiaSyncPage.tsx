@@ -6,7 +6,8 @@ import {
   Modal, ModalHeader, ModalBody, ModalFooter,
   FormGroup, Label, Input, Alert, Button, Badge,
 } from 'reactstrap'
-import { Home, RefreshCw, Upload, ExternalLink, AlertTriangle } from 'react-feather'
+import { Home, RefreshCw, Upload, ExternalLink, AlertTriangle, Info } from 'react-feather'
+import InfoDrawer from '../../components/common/InfoDrawer'
 import { toast } from 'react-toastify'
 import { adminGeoSyncApi, apiError, errorMessage } from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
@@ -420,6 +421,7 @@ export default function GeografiaSyncPage() {
   const canRun     = hasPermission('geography_sync.run')
   const canPublish = hasPermission('geography_sync.publish')
 
+  const [infoOpen, setInfoOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>('latest')
   const [selectedRun, setSelectedRun] = useState<SyncRun | null>(null)
 
@@ -494,7 +496,14 @@ export default function GeografiaSyncPage() {
       <Container fluid>
         <div className='page-title'>
           <Row>
-            <Col xs='6'><h3>Sincronizzazione geografia</h3></Col>
+            <Col xs='6'>
+              <div className='d-flex align-items-center gap-2'>
+                <h3 className='mb-0'>Sincronizzazione geografia</h3>
+                <button className='btn btn-light btn-sm d-flex align-items-center gap-1' onClick={() => setInfoOpen(true)} aria-label='Informazioni su Sincronizzazione geografia'>
+                  <Info size={13} /> Informazioni
+                </button>
+              </div>
+            </Col>
             <Col xs='6'>
               <ol className='breadcrumb'>
                 <li className='breadcrumb-item'><Link to='/dashboard'><Home size={14} /></Link></li>
@@ -665,6 +674,24 @@ export default function GeografiaSyncPage() {
           </Button>
         </ModalFooter>
       </Modal>
+
+      <InfoDrawer isOpen={infoOpen} onClose={() => setInfoOpen(false)} title='Guida — Sincronizzazione geografia'>
+        <p>Questa pagina permette di avviare e monitorare le sincronizzazioni dei dati geografici (comuni, province, regioni, paesi) da provider esterni.</p>
+        <h6>Ultima sincronizzazione</h6>
+        <p>Mostra l'esito dell'ultimo run: stato, durata, numero di record elaborati e anomalie rilevate.</p>
+        <h6>Storico run</h6>
+        <p>Elenco di tutti i run precedenti con data, scope e stato. Cliccando su un run si visualizzano i dettagli e le issue trovate.</p>
+        <h6>Avvia verifica</h6>
+        <p>Esegue un run in modalità <em>dry-run</em>: analizza le differenze tra il provider e il database locale senza applicare modifiche. Utile per controllare prima di pubblicare.</p>
+        <h6>Pubblica</h6>
+        <p>Applica le modifiche rilevate nell'ultimo run verificato al database di produzione. L'operazione è irreversibile: verifica le issue prima di procedere.</p>
+        <h6>Issue e decisioni</h6>
+        <p>Le issue segnalano record con anomalie (es. comuni duplicati, codici non trovati). Per ogni issue puoi registrare una decisione (accetta, rifiuta, correggi).</p>
+        <h6>Permessi richiesti</h6>
+        <p><code>geography_sync.read</code> per visualizzare, <code>geography_sync.run</code> per avviare verifiche, <code>geography_sync.publish</code> per applicare le modifiche.</p>
+        <h6>In caso di errore</h6>
+        <p>Se il run fallisce, controlla il messaggio di errore nella scheda dettaglio. Problemi di connettività al provider esterno sono la causa più comune.</p>
+      </InfoDrawer>
     </>
   )
 }

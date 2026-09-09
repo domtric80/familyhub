@@ -6,7 +6,8 @@ import {
   Modal, ModalHeader, ModalBody, ModalFooter,
   FormGroup, Label, Input, Alert, Button, Badge,
 } from 'reactstrap'
-import { Home, ArrowLeft, Upload, Edit2, Archive, Download, Eye, Plus, Trash2, Save } from 'react-feather'
+import { Home, ArrowLeft, Upload, Edit2, Archive, Download, Eye, Plus, Trash2, Save, Info } from 'react-feather'
+import InfoDrawer from '../../components/common/InfoDrawer'
 import { toast } from 'react-toastify'
 import {
   staffMemberApi, staffMemberDocumentApi, staffProfessionalProfileApi,
@@ -53,6 +54,7 @@ export default function EducatoreDetailPage() {
   const staffId = Number(id)
   const navigate = useNavigate()
 
+  const [infoOpen, setInfoOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('anagrafica')
   const [staff, setStaff] = useState<StaffMember | null>(null)
   const [loadingStaff, setLoadingStaff] = useState(true)
@@ -86,6 +88,9 @@ export default function EducatoreDetailPage() {
                 <Button color='light' size='sm' onClick={() => navigate('/educatori')}><ArrowLeft size={13} /></Button>
                 <h3 className='mb-0'>{staff.display_name ?? `${staff.last_name} ${staff.first_name}`}</h3>
                 <span className='badge badge-light-primary'>{staff.employee_code}</span>
+                <button className='btn btn-light btn-sm d-flex align-items-center gap-1' onClick={() => setInfoOpen(true)} aria-label='Informazioni su questo educatore'>
+                  <Info size={13} /> Informazioni
+                </button>
               </div>
             </Col>
             <Col xs='6'>
@@ -139,6 +144,23 @@ export default function EducatoreDetailPage() {
           </CardBody>
         </Card>
       </Container>
+      <InfoDrawer isOpen={infoOpen} onClose={() => setInfoOpen(false)} title='Guida — Dettaglio educatore'>
+        <p>Questa pagina raccoglie il profilo completo dell'operatore: anagrafica, documenti, qualifiche, certificazioni e valutazioni.</p>
+        <h6>Tab Anagrafica</h6>
+        <p>Dati personali e di contatto, stato contrattuale e struttura di assegnazione principale. Il codice operatore è l'identificativo univoco nel sistema.</p>
+        <h6>Tab Documenti</h6>
+        <p>Elenco dei documenti caricati per l'operatore (contratti, titoli di studio, attestati). Ogni documento ha una classificazione che ne controlla la visibilità.</p>
+        <h6>Tab Qualifiche</h6>
+        <p>Qualifiche professionali registrate, con data di conseguimento e scadenza eventuale. Le qualifiche scadute appaiono con badge rosso.</p>
+        <h6>Tab Certificazioni</h6>
+        <p>Certificazioni specifiche con date di validità. Tieni aggiornate le certificazioni in scadenza.</p>
+        <h6>Tab Valutazioni</h6>
+        <p>Schede di valutazione periodica inserite dai supervisori. Non accessibili all'operatore valutato.</p>
+        <h6>Archiviazione</h6>
+        <p>L'archiviazione rende inattivo il profilo senza eliminarlo. I dati storici rimangono consultabili.</p>
+        <h6>Permessi richiesti</h6>
+        <p><code>staff_members.read</code> per visualizzare. Le operazioni di modifica richiedono permessi aggiuntivi.</p>
+      </InfoDrawer>
     </>
   )
 }
@@ -1212,6 +1234,7 @@ function ValutazioniTab({ staffId }: { staffId: number }) {
           <Button color='light' onClick={() => setArchiveTarget(null)}>Annulla</Button>
         </ModalFooter>
       </Modal>
+
     </div>
   )
 }

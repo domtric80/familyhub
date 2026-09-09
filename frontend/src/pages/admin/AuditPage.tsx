@@ -347,14 +347,19 @@ export default function AuditPage() {
                   </tr>
                 ) : (
                   logs.map((log) => (
-                    <tr key={log.id}>
+                    <tr key={log.id} style={log.action === 'denied' ? { background: '#fff5f5' } : undefined}>
                       <td style={{ whiteSpace: 'nowrap', fontSize: 12 }}>
                         {new Date(log.occurred_at_utc).toLocaleString('it-IT')}
                       </td>
                       <td style={{ fontSize: 12 }}>{log.ip_address ?? '—'}</td>
                       <td style={{ fontSize: 13 }}>{log.actor_display_name ?? '—'}</td>
                       <td style={{ fontSize: 12 }}>{log.actor_role_name ?? '—'}</td>
-                      <td style={{ fontSize: 13 }}>{log.operation_summary ?? log.action ?? '—'}</td>
+                      <td style={{ fontSize: 13 }}>
+                        {log.action === 'denied' && (
+                          <span className='badge bg-danger me-1' style={{ fontSize: 10 }}>Accesso negato</span>
+                        )}
+                        {log.operation_summary ?? log.action ?? '—'}
+                      </td>
                       <td style={{ fontSize: 12 }}>
                         {log.resource_label
                           ? `${log.resource_type}: ${log.resource_label}`
@@ -442,7 +447,11 @@ export default function AuditPage() {
                 <Col sm={4} style={{ color: '#8d8d8d' }}>Azione</Col>
                 <Col sm={8}>
                   {displayLog.action
-                    ? <Badge color='secondary' className='text-uppercase' style={{ fontSize: 11 }}>{displayLog.action}</Badge>
+                    ? <Badge
+                        color={displayLog.action === 'denied' ? 'danger' : 'secondary'}
+                        className='text-uppercase'
+                        style={{ fontSize: 11 }}
+                      >{displayLog.action === 'denied' ? 'Accesso negato' : displayLog.action}</Badge>
                     : '—'}
                 </Col>
               </Row>
@@ -509,6 +518,34 @@ export default function AuditPage() {
                 )
               })()}
 
+              {/* Dettaglio accesso negato */}
+              {displayLog.action === 'denied' && displayLog.new_values_json && (() => {
+                const d = displayLog.new_values_json as Record<string, unknown>
+                return (
+                  <div className='mt-3 border rounded p-3' style={{ background: '#fff5f5' }}>
+                    <div style={{ fontWeight: 600, marginBottom: 8, color: '#c0392b' }}>Dettaglio accesso negato</div>
+                    {d.status_code !== undefined && (
+                      <Row className='mb-2'>
+                        <Col sm={4} style={{ color: '#8d8d8d', fontSize: 13 }}>Codice HTTP</Col>
+                        <Col sm={8} style={{ fontSize: 13 }}><Badge color='danger'>{String(d.status_code)}</Badge></Col>
+                      </Row>
+                    )}
+                    {d.method !== undefined && (
+                      <Row className='mb-2'>
+                        <Col sm={4} style={{ color: '#8d8d8d', fontSize: 13 }}>Metodo</Col>
+                        <Col sm={8} style={{ fontSize: 13 }}>{String(d.method)}</Col>
+                      </Row>
+                    )}
+                    {d.path !== undefined && (
+                      <Row className='mb-2'>
+                        <Col sm={4} style={{ color: '#8d8d8d', fontSize: 13 }}>Risorsa</Col>
+                        <Col sm={8} style={{ fontSize: 12, fontFamily: 'monospace', wordBreak: 'break-all' }}>{String(d.path)}</Col>
+                      </Row>
+                    )}
+                  </div>
+                )
+              })()}
+
               {/* Prima / Dopo */}
               {displayLog.old_values_json && (
                 <div className='mt-3'>
@@ -517,7 +554,8 @@ export default function AuditPage() {
                     fontSize: 11, background: '#fff5f5', border: '1px solid #fdd',
                     borderRadius: 6, padding: '8px 12px', overflowX: 'auto', maxHeight: 300,
                   }}>
-                    {JSON.stringify(displayLog.old_values_json, null, 2)}
+                    {JSON.stringify(displayLog.old_values_json, null, 2)
+                      .replace(/"(\*\*\*redacted\*\*\*)"/g, '"[contenuto oscurato]"')}
                   </pre>
                 </div>
               )}
@@ -528,7 +566,8 @@ export default function AuditPage() {
                     fontSize: 11, background: '#f5fff8', border: '1px solid #dfd',
                     borderRadius: 6, padding: '8px 12px', overflowX: 'auto', maxHeight: 300,
                   }}>
-                    {JSON.stringify(displayLog.new_values_json, null, 2)}
+                    {JSON.stringify(displayLog.new_values_json, null, 2)
+                      .replace(/"(\*\*\*redacted\*\*\*)"/g, '"[contenuto oscurato]"')}
                   </pre>
                 </div>
               )}

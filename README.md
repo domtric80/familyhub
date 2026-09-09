@@ -25,6 +25,8 @@ Documenti chiave:
 - `LICENSE.md`  termini di licenza del repository
 - `COMMERCIAL.md`  modello commerciale e servizi professionali
 - `docs/deliverables/2026-08-11-familyhub-manifesto-etico-commerciale.md`  manifesto etico-commerciale del progetto
+- `docs/manuale/2026-08-30-manuale-operativo-familyhub-v1.5.2.md`  manuale operativo per utenti finali
+- `docs/manuale/README.md`  indice della documentazione utente e tecnica
 
 Documenti di governance:
 
