@@ -3,6 +3,7 @@
 [![Versione](https://img.shields.io/badge/version-1.5.2-7366ff)](CHANGELOG.md)
 [![Licenza](https://img.shields.io/badge/license-source--available-orange)](LICENSE.md)
 [![Security](https://img.shields.io/badge/security-policy-success)](SECURITY.md)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/domtric80/familyhub/badge)](https://securityscorecards.dev/viewer/?uri=github.com/domtric80/familyhub)
 [![Release Process](https://img.shields.io/badge/release-process-blue)](docs/releases/RELEASE-PROCESS.md)
 
 Applicativo gestionale per strutture residenziali e servizi educativi, con backend Laravel, frontend React/Vite e stack infrastrutturale Docker.

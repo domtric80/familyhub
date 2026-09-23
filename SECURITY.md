@@ -6,10 +6,10 @@ FamilyHub tratta dati personali e sanitari particolarmente sensibili. Le segnala
 
 | Versione | Supporto |
 | --- | --- |
-| `1.4.x` | Supportata con fix funzionali e di sicurezza |
-| `< 1.4.0` | Non supportata; aggiornamento raccomandato |
+| `1.5.x` | Supportata con fix funzionali e di sicurezza |
+| `< 1.5.0` | Non supportata; aggiornamento raccomandato |
 
-La versione corrente è indicata nel file `VERSION` e nel `CHANGELOG.md`.
+La versione corrente è indicata nel file `VERSION` e nel `CHANGELOG.md`. Alla data di questo documento è `1.5.2`.
 
 ## Segnalare una vulnerabilità
 
