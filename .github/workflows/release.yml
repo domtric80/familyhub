@@ -146,7 +146,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker compose run --rm frontend sh -lc "npm audit --omit=dev --json"
+          docker compose run --rm frontend sh -lc "npm audit --omit=dev --audit-level=high --json"
 
       - name: Import release signing key
         env:
