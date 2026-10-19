@@ -82,8 +82,7 @@ jobs:
         run: npm ci
       - name: Build frontend
         run: npm run build
-      # Mammoth's browser API does not bundle its vulnerable CLI-only
-      # argparse/sprintf-js path. Keep moderate findings visible while
-      # continuing to block high and critical advisories until upstream fixes it.
-      - name: Audit npm dependencies (block high and critical)
-        run: npm audit --audit-level=high
+      - name: Verify fail-closed npm audit policy
+        run: node --test ../.github/scripts/npm-audit-gate.test.mjs
+      - name: Audit all npm dependencies (scoped, expiring CLI exception)
+        run: node ../.github/scripts/npm-audit-gate.mjs

@@ -142,11 +142,11 @@ jobs:
           set -euo pipefail
           docker compose run --rm app sh -lc "composer audit --format=json"
 
-      - name: Run frontend runtime audit
+      - name: Run frontend security audit
         shell: bash
         run: |
           set -euo pipefail
-          docker compose run --rm frontend sh -lc "npm audit --omit=dev --audit-level=high --json"
+          docker compose run --rm -v "$PWD/.github/scripts:/security-audit:ro" frontend node /security-audit/npm-audit-gate.mjs
 
       - name: Import release signing key
         env:
