@@ -1,0 +1,18 @@
+# Explicit opt-in overlay for disposable Linux amd64 CI runners only.
+# Production/development compose files and storage semantics stay unchanged.
+services:
+  minio:
+    image: familyhub-ci-minio:2025-09-07
+    platform: linux/amd64
+    ports: !reset []
+    build:
+      context: .github/docker
+      dockerfile: minio.Dockerfile
+      target: minio
+  mc:
+    image: familyhub-ci-mc:2025-08-13
+    platform: linux/amd64
+    build:
+      context: .github/docker
+      dockerfile: minio.Dockerfile
+      target: mc
