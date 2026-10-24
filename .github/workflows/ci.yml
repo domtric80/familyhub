@@ -21,6 +21,7 @@ jobs:
     timeout-minutes: 45
     env:
       COMPOSE_PROJECT_NAME: familyhub-ci
+      COMPOSE_FILE: docker-compose.yml:.github/compose.ci.yml
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -47,6 +48,8 @@ jobs:
           FAMILYHUB_LOCAL_ADMIN_EMAIL=admin@familyhub.local
           FAMILYHUB_LOCAL_ADMIN_PASSWORD=password
           ENV
+      - name: Build checksum-verified upstream storage tools (CI only)
+        run: docker compose build minio mc
       - name: Start isolated dependencies
         run: docker compose up -d postgres redis minio clamav mc
       - name: Initialize backend
@@ -79,5 +82,7 @@ jobs:
         run: npm ci
       - name: Build frontend
         run: npm run build
-      - name: Audit all npm dependencies
-        run: npm audit --audit-level=low
+      - name: Verify fail-closed npm audit policy
+        run: node --test ../.github/scripts/npm-audit-gate.test.mjs
+      - name: Audit all npm dependencies (no exceptions)
+        run: node ../.github/scripts/npm-audit-gate.mjs

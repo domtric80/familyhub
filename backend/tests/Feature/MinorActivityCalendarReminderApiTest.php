@@ -8,6 +8,7 @@ use App\Models\Minor;
 use App\Models\MinorActivity;
 use App\Models\MinorStatus;
 use App\Models\User;
+use Carbon\Carbon;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -18,6 +19,8 @@ class MinorActivityCalendarReminderApiTest extends TestCase
 
     public function test_calendar_and_personal_reminder_flow_are_scoped_and_audited(): void
     {
+        Carbon::setTestNow('2026-09-01 00:00:00');
+
         $this->seed(DatabaseSeeder::class);
         $token = (string) $this->postJson('/api/auth/login', ['email' => 'admin@familyhub.local', 'password' => 'password', 'device_name' => 'phpunit-activity-calendar'])->assertOk()->json('access_token');
         $user = User::query()->where('email', 'admin@familyhub.local')->firstOrFail();
