@@ -84,5 +84,5 @@ jobs:
         run: npm run build
       - name: Verify fail-closed npm audit policy
         run: node --test ../.github/scripts/npm-audit-gate.test.mjs
-      - name: Audit all npm dependencies (scoped, expiring CLI exception)
+      - name: Audit all npm dependencies (no exceptions)
         run: node ../.github/scripts/npm-audit-gate.mjs

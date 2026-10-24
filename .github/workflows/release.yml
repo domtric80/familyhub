@@ -134,7 +134,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker compose run --rm frontend sh -lc "npm install && npm run build"
+          docker compose run --rm frontend sh -lc "npm ci && npm run build"
 
       - name: Run backend audit
         shell: bash

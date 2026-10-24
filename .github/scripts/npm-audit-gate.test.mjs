@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { inspectAudit } from './npm-audit-gate.mjs';
 
-const now = new Date('2026-10-19T00:00:00Z');
+// Historical report used to ensure the removed CLI exception cannot return.
 function fixture() {
   const fixAvailable = { name: 'mammoth', version: '0.3.29', isSemVerMajor: true };
   return {
@@ -20,54 +20,56 @@ function fixture() {
   };
 }
 
-test('only the exact known three-node CLI chain is excepted and remains visible', () => {
-  assert.deepEqual(inspectAudit(fixture(), now), { allowed: ['sprintf-js', 'argparse', 'mammoth'], blocked: [] });
+test('the historical CLI chain has no exception if it appears in a report', () => {
+  assert.deepEqual(inspectAudit(fixture()), { blocked: ['sprintf-js', 'argparse', 'mammoth'] });
 });
 test('clean report passes without an exception', () => {
   const report = fixture();
   report.vulnerabilities = {};
   report.metadata.vulnerabilities = { info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0 };
-  assert.deepEqual(inspectAudit(report, now), { allowed: [], blocked: [] });
+  assert.deepEqual(inspectAudit(report), { blocked: [] });
 });
-for (const severity of ['low', 'moderate', 'high', 'critical']) {
-  test(`new ${severity} advisory blocks instead of being covered by the exception`, () => {
+for (const severity of ['info', 'low', 'moderate', 'high', 'critical']) {
+  test(`every ${severity} advisory blocks`, () => {
     const report = fixture();
     report.vulnerabilities.other = { name: 'other', severity, via: [] };
     report.metadata.vulnerabilities[severity]++;
     report.metadata.vulnerabilities.total++;
-    assert.deepEqual(inspectAudit(report, now).blocked, ['other']);
+    assert.deepEqual(inspectAudit(report).blocked, ['sprintf-js', 'argparse', 'mammoth', 'other']);
   });
 }
 test('a second upstream advisory blocks the entire affected chain', () => {
   const report = fixture();
   report.vulnerabilities['sprintf-js'].via.push({ url: 'https://github.com/advisories/NEW' });
-  assert.equal(inspectAudit(report, now).blocked.length, 3);
+  assert.equal(inspectAudit(report).blocked.length, 3);
 });
 test('a changed dependency route is not excepted', () => {
   const report = fixture();
   report.vulnerabilities.mammoth.via.push('other');
-  assert.deepEqual(inspectAudit(report, now).blocked, ['mammoth']);
+  assert.deepEqual(inspectAudit(report).blocked, ['sprintf-js', 'argparse', 'mammoth']);
 });
 test('a changed severity is not excepted', () => {
   const report = fixture();
   report.vulnerabilities.mammoth.severity = 'high';
   report.metadata.vulnerabilities.moderate--;
   report.metadata.vulnerabilities.high++;
-  assert.deepEqual(inspectAudit(report, now).blocked, ['mammoth']);
+  assert.deepEqual(inspectAudit(report).blocked, ['sprintf-js', 'argparse', 'mammoth']);
 });
 test('a changed fix or installation path requires review', () => {
   const report = fixture();
   report.vulnerabilities.mammoth.fixAvailable = true;
   report.vulnerabilities.argparse.nodes.push('node_modules/another/argparse');
-  assert.deepEqual(inspectAudit(report, now).blocked, ['argparse', 'mammoth']);
+  assert.deepEqual(inspectAudit(report).blocked, ['sprintf-js', 'argparse', 'mammoth']);
 });
-test('the exception automatically expires', () => {
-  assert.equal(inspectAudit(fixture(), new Date('2026-11-18T00:00:00Z')).blocked.length, 3);
+test('an unknown severity fails closed', () => {
+  const report = fixture();
+  report.vulnerabilities.mammoth.severity = 'unknown';
+  assert.throws(() => inspectAudit(report));
 });
 test('network errors, malformed reports and inconsistent totals fail closed', () => {
-  assert.throws(() => inspectAudit({ error: { code: 'ENETUNREACH' } }, now));
-  assert.throws(() => inspectAudit({}, now));
+  assert.throws(() => inspectAudit({ error: { code: 'ENETUNREACH' } }));
+  assert.throws(() => inspectAudit({}));
   const report = fixture();
   report.metadata.vulnerabilities.total = 0;
-  assert.throws(() => inspectAudit(report, now));
+  assert.throws(() => inspectAudit(report));
 });

@@ -15,7 +15,7 @@ La versione corrente è indicata nel file `VERSION` e nel `CHANGELOG.md`.
 
 Non aprire issue pubbliche contenenti dettagli tecnici, credenziali, dati personali o proof of concept sfruttabili.
 
-Usare come canale principale **GitHub Private Vulnerability Reporting** nella sezione `Security` del repository `domtric80/familyhub`.
+Usare come canale principale [GitHub Private Vulnerability Reporting](https://github.com/domtric80/familyhub/security/advisories/new), attivo nella sezione `Security` del repository `domtric80/familyhub`.
 
 Il report dovrebbe includere:
 
