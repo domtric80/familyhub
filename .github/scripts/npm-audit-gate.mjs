@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url';
 // Invalid or incomplete reports also fail closed.
 export function inspectAudit(report) {
   if (report?.auditReportVersion !== 2 || report.error
-      || !report.vulnerabilities || Array.isArray(report.vulnerabilities)
+      || !report.vulnerabilities || typeof report.vulnerabilities !== 'object'
+      || Array.isArray(report.vulnerabilities)
       || !report.metadata?.vulnerabilities) {
     throw new Error('Missing or invalid npm audit report; refusing to pass.');
   }
@@ -36,6 +37,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const { blocked } = inspectAudit(report);
     if (blocked.length) {
       throw new Error(`Vulnerabilities must be remediated: ${blocked.join(', ')}`);
+    }
+    if (result.status !== 0) {
+      throw new Error('npm audit failed without a usable vulnerability finding; refusing to pass.');
     }
   } catch (error) {
     console.error(error.message);

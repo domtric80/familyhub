@@ -66,6 +66,14 @@ test('an unknown severity fails closed', () => {
   report.vulnerabilities.mammoth.severity = 'unknown';
   assert.throws(() => inspectAudit(report));
 });
+test('a scalar or array cannot masquerade as an empty vulnerability collection', () => {
+  for (const value of [true, 1, 'invalid', [], null]) {
+    const report = fixture();
+    report.vulnerabilities = value;
+    report.metadata.vulnerabilities = { info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0 };
+    assert.throws(() => inspectAudit(report));
+  }
+});
 test('network errors, malformed reports and inconsistent totals fail closed', () => {
   assert.throws(() => inspectAudit({ error: { code: 'ENETUNREACH' } }));
   assert.throws(() => inspectAudit({}));
